@@ -1,0 +1,25 @@
+:root {
+  --bg-surface: #16213e;
+  --border: #2a2a4a;
+  --text: #e0e0e0;
+  --text-heading: #ffffff;
+  --accent: #7c5cbf;
+  --accent-hover: #a07de0;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: #1a1a2e;
+  color: #e0e0e0;
+  font-family: 'Segoe UI', sans-serif;
+  min-height: 100vh;
+}
+
+button {
+  cursor: pointer;
+}

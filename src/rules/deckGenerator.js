@@ -1,0 +1,462 @@
+import { getSelectedCommander, getCollection } from '../utils/localStorage'
+import { avgCmc, isLand, isBasicLand, getBasicLandsForCommander } from '../utils/cardHelpers'
+import { fetchSpellbookCombos } from '../utils/commanderSpellbook'
+import { fetchEdhrecCommander } from '../utils/edhrecApi'
+import { filterLegalCards } from './commanderRules'
+import { assignRoles } from './cardRoles'
+import { isBracketAllowed, computeActualBracket, targetLandCount, targetRoleCounts, BRACKET_LABELS } from './bracketRules'
+import { scoreCard } from './deckScorer'
+import { detectCombos, registerCombos, getAllCombos } from './comboRules'
+import { detectArchetypes, anchorNamesFor, themesToArchetypes, mergeArchetypes } from './archetypeRules'
+import { validateDeck, countRoles } from './deckValidator'
+
+export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
+  const commander = getSelectedCommander()
+  if (!commander) return { error: 'No commander selected.' }
+
+  const rawCollection = getCollection()
+  if (rawCollection.length === 0) return { error: 'Your collection is empty.' }
+
+  // 1. Filter legal cards
+  const { legal, excluded: illegalExcluded } = filterLegalCards(rawCollection, commander)
+
+  // 2. Fetch EDHREC data for the commander (top cards + themes). Best-effort —
+  //    failures degrade the generator to regex-only archetype detection.
+  const explanation = []
+  let edhrec = { topCards: [], themes: [] }
+  try {
+    edhrec = await fetchEdhrecCommander(commander)
+    if (edhrec.topCards.length > 0) {
+      explanation.push(`Loaded ${edhrec.topCards.length} EDHREC top cards for ${commander.name}.`)
+    }
+  } catch {
+    // edhrecApi already logs; just continue without the data
+  }
+
+  // 3. Detect commander archetypes — regex-based first, then merge in EDHREC themes.
+  const regexArchetypes = detectArchetypes(commander)
+  const themeArchetypes = themesToArchetypes(edhrec.themes)
+  const archetypes      = mergeArchetypes(regexArchetypes, themeArchetypes)
+  const anchorNames     = anchorNamesFor(archetypes)
+  const commanderTypes  = extractCreatureSubtypes(commander)
+
+  // 3. Annotate every card with roles/tags, then apply bracket filter
+  const annotated = legal.map(card => {
+    const { roles, tags } = assignRoles(card, commander, { anchorNames, commanderTypes })
+    return { ...card, roles, tags }
+  })
+
+  const bracketExcluded = []
+  const candidates = annotated.filter(card => {
+    if (!isBracketAllowed(card, bracket)) {
+      bracketExcluded.push({ ...card, excludeReason: `Excluded for bracket ${bracket} target` })
+      return false
+    }
+    return true
+  })
+
+  // 4. Pull additional combos from Commander Spellbook (best-effort, cached)
+  try {
+    const spellbookCombos = await fetchSpellbookCombos(commander, legal)
+    if (spellbookCombos.length > 0) {
+      registerCombos(spellbookCombos)
+      explanation.push(`Loaded ${spellbookCombos.length} extra combo${spellbookCombos.length !== 1 ? 's' : ''} from Commander Spellbook.`)
+    }
+  } catch {
+    // commanderSpellbook already logs failures; degrade silently
+  }
+
+  if (archetypes.length > 0) {
+    explanation.push(
+      `Commander archetypes detected: ${archetypes.map(a => a.label).join(', ')}.`
+    )
+    if (primaryArchetypeId) {
+      const primary = archetypes.find(a => a.id === primaryArchetypeId)
+      if (primary) {
+        explanation.push(`Primary strategy: ${primary.label} (others reduced to 40% weight).`)
+      }
+    }
+  }
+
+  // 5. Set up scoring context. pickedNames is mutated as we add cards, so the
+  //    scorer sees an ever-growing partner set when we re-score between passes.
+  const usedNames = new Set([commander.name.toLowerCase()])
+  const allCombos = getAllCombos()
+  // Trim combos to ones that could actually involve cards in our candidate pool
+  // (or the commander) — keeps the scorer's inner loop tight.
+  const candidateNames = new Set(candidates.map(c => c.name.toLowerCase()))
+  candidateNames.add(commander.name.toLowerCase())
+  const relevantCombos = allCombos.filter(combo =>
+    combo.cards.some(name => candidateNames.has(name.toLowerCase()))
+  )
+
+  // EDHREC top cards → name → rank Map. Lower rank = more important.
+  const edhrecRank = new Map()
+  edhrec.topCards.forEach((c, i) => edhrecRank.set(c.name, i + 1))
+
+  // Scoring breakdowns are written into this Map by scoreCard each pass.
+  // Last write wins, so the diagnostics reflect the final scoring state.
+  const breakdowns = new Map()
+
+  const scoringContext = {
+    archetypes,
+    primaryArchetypeId: archetypes.some(a => a.id === primaryArchetypeId) ? primaryArchetypeId : null,
+    combos: relevantCombos,
+    pickedNames: usedNames,
+    edhrecRank,
+    edhrecRankTotal: Math.max(edhrec.topCards.length, 1),
+    breakdowns,
+  }
+
+  const rescore = (cards) => cards.map(card => ({
+    ...card,
+    score: scoreCard(card, card.roles[0] ?? 'filler', commander, bracket, scoringContext),
+  }))
+
+  // 6. Initial scoring + bucket build
+  let scored = rescore(candidates)
+  let buckets = buildBuckets(scored)
+
+  // 7. Fill: lands, then utility roles in priority order, then filler.
+  //    Re-score before each pass so combo-completion bonuses snap on the moment
+  //    a partner card lands in usedNames.
+  const deck = []
+  const targetCounts = targetRoleCounts(bracket, commander, archetypes)
+  const landTarget = targetLandCount(bracket)
+
+  fillLands(deck, usedNames, buckets, commander, landTarget, explanation)
+
+  const roleOrder = ['ramp', 'draw', 'removal', 'wipe', 'protection', 'win_condition', 'tutor', 'synergy']
+  for (const role of roleOrder) {
+    const target = targetCounts[role] ?? 0
+    if (target === 0) continue
+
+    scored = rescore(candidates)
+    buckets = buildBuckets(scored)
+
+    const added = fillRole(deck, usedNames, buckets, role, target, explanation)
+    if (added < target) {
+      explanation.push(`Could only find ${added} ${role} cards in your collection (wanted ${target}).`)
+    }
+  }
+
+  // Filler last — re-score so leftovers favor archetype + combo fit
+  const remaining = 99 - deck.length
+  if (remaining > 0) {
+    scored = rescore(candidates)
+    buckets = buildBuckets(scored)
+    const fillerAdded = fillRole(deck, usedNames, buckets, 'filler', remaining, explanation)
+    if (fillerAdded < remaining) {
+      // Pull from any role bucket as overflow so we still hit 99
+      for (const role of roleOrder) {
+        if (deck.length >= 99) break
+        fillRole(deck, usedNames, buckets, role, 99 - deck.length, explanation)
+      }
+    }
+    if (deck.length < 99) {
+      explanation.push(`Collection too small to fill all ${99 - deck.length} remaining slots.`)
+    }
+  }
+
+  while (deck.length > 99) deck.pop()
+
+  // ── EDHREC replacement pass ──
+  // Any EDHREC match in collection that didn't land tries to swap in for the
+  // lowest-scored non-EDHREC pick currently in the deck. This rescues mid-tier
+  // EDHREC cards (Talismans, Greaves, etc.) that lost saturated role buckets.
+  // Iterate until no more improvements possible.
+  {
+    const isInDeck = (name) => deck.some(c => c.name === name)
+    const isEdhrec = (name) => edhrecRank.has(name)
+    let pass = 0
+    const MAX_PASSES = 50
+    while (pass++ < MAX_PASSES) {
+      // Highest-priority EDHREC card not yet in deck (lowest rank wins)
+      const bestMissByRank = edhrec.topCards.find(c =>
+        !isInDeck(c.name) &&
+        candidates.some(card => card.name === c.name)
+      )
+      if (!bestMissByRank) break
+
+      const replacement = candidates.find(card => card.name === bestMissByRank.name)
+      if (!replacement) break
+      const replacementIsLand = (replacement.roles ?? []).includes('land')
+      const replacementScore = scoreCard(
+        replacement,
+        replacement.roles?.[0] ?? 'filler',
+        commander, bracket, scoringContext,
+      )
+
+      // Replace the lowest-scored non-EDHREC slot. Lock the swap to category:
+      //   - non-land replacement → only kick out a non-land deck card
+      //   - land replacement     → only kick out a non-EDHREC, non-basic land
+      // This preserves the 37-land count exactly.
+      let weakestIdx = -1
+      let weakestScore = Infinity
+      for (let i = 0; i < deck.length; i++) {
+        const c = deck[i]
+        if (c.isBasicLand) continue
+        if (isEdhrec(c.name)) continue
+        const cIsLand = (c.roles ?? []).includes('land') || isLand(c)
+        if (replacementIsLand !== cIsLand) continue
+        if ((c.score ?? 0) < weakestScore) {
+          weakestScore = c.score ?? 0
+          weakestIdx = i
+        }
+      }
+      if (weakestIdx === -1) break
+      if (replacementScore <= weakestScore) break
+
+      // Commit the swap
+      const removed = deck[weakestIdx]
+      usedNames.delete(removed.name.toLowerCase())
+      deck[weakestIdx] = { ...replacement, score: replacementScore, quantity: 1 }
+      usedNames.add(replacement.name.toLowerCase())
+    }
+    if (pass > 1) explanation.push(`Replacement pass swapped ${pass - 1} card${pass - 1 !== 1 ? 's' : ''} for higher-priority EDHREC picks.`)
+  }
+
+  // 8. Post-processing
+  const combos = detectCombos(deck.map(c => c.name))
+  const { actualBracket, flaggedCards } = computeActualBracket(deck, combos)
+  const { errors, warnings: validationWarnings } = validateDeck(deck, commander)
+
+  const bracketWarnings = []
+  if (actualBracket > bracket) {
+    bracketWarnings.push(
+      `Deck is actually bracket ${actualBracket} (${BRACKET_LABELS[actualBracket]}), ` +
+      `but you targeted bracket ${bracket} (${BRACKET_LABELS[bracket]}). ` +
+      `Flagged cards: ${flaggedCards.join(', ') || 'none'}.`
+    )
+  }
+
+  const comboWarnings = combos.map(
+    c => `Combo detected: ${c.cards.join(' + ')} — ${c.description}`
+  )
+
+  const allWarnings = [
+    ...errors.map(e => ({ severity: 'error', message: e })),
+    ...validationWarnings.map(w => ({ severity: 'warning', message: w })),
+    ...bracketWarnings.map(w => ({ severity: 'warning', message: w })),
+    ...comboWarnings.map(w => ({ severity: 'info', message: w })),
+  ]
+
+  const allExcluded = [
+    ...illegalExcluded,
+    ...bracketExcluded,
+    ...getUnused(scored, usedNames),
+  ]
+
+  const roleCounts = countRoles(deck)
+  const stats = {
+    totalCards: deck.length + 1,
+    landCount: roleCounts.land,
+    roleCounts,
+    avgCmc: avgCmc(deck),
+    colorBreakdown: colorBreakdown(deck),
+  }
+
+  // ── Diagnostics ──────────────────────────────────────────────────────────
+  // Every legal candidate gets a record: final score, the role we evaluated for,
+  // its breakdown, and (if not picked) which cards beat it for that role bucket.
+  const pickedDeckNames = new Set(deck.map(c => c.name.toLowerCase()))
+  const finalScored = rescore(candidates)  // one more pass with full picked-set state
+  const finalBuckets = buildBuckets(finalScored)
+  const cardDiagnostics = finalScored.map(card => {
+    const role = card.roles?.[0] ?? 'filler'
+    const breakdown = breakdowns.get(`${card.name}:${role}`) ?? []
+    const picked = pickedDeckNames.has(card.name.toLowerCase())
+    let beatBy = []
+    if (!picked) {
+      const bucket = finalBuckets[role] ?? []
+      const myIdx = bucket.findIndex(c => c.name === card.name)
+      const target = (role === 'land') ? landTarget : (targetCounts[role] ?? 0)
+      // Cards above me in the sorted bucket that DID get picked (within target slots)
+      beatBy = bucket
+        .slice(0, Math.max(myIdx, target))
+        .filter(c => pickedDeckNames.has(c.name.toLowerCase()) && c.name !== card.name)
+        .slice(0, 5)
+        .map(c => ({ name: c.name, score: c.score }))
+    }
+    return {
+      name: card.name,
+      role,
+      score: card.score,
+      breakdown,
+      picked,
+      edhrecRank: edhrecRank.get(card.name) ?? null,
+      beatBy,
+    }
+  })
+
+  // EDHREC coverage: how many of EDHREC's top cards do we actually have in the
+  // legal candidate pool? Low coverage with high topCardCount means name-matching
+  // is broken (DFC formatting, accents, etc.) — surface it so we can fix it.
+  const candidateNameSet = new Set(candidates.map(c => c.name))
+  const collectionNameSet = new Set(legal.map(c => c.name))
+  const deckNameSet = new Set(deck.map(c => c.name))
+  const bracketExcludedNameSet = new Set(bracketExcluded.map(c => c.name))
+
+  const edhrecMatchedInCollection = edhrec.topCards.filter(c => collectionNameSet.has(c.name)).length
+  const edhrecCollectionMatches = edhrec.topCards.filter(c => collectionNameSet.has(c.name)).map(c => c.name)
+  const edhrecPickedFromTop = deck.filter(c => edhrec.topCards.some(t => t.name === c.name)).length
+
+  // EDHREC matches that did NOT land in the deck — with the most likely reason.
+  // This is the "why is Thassa's Oracle missing?" question, fully answered.
+  const BASIC_LAND_NAMES = new Set(['Plains', 'Island', 'Swamp', 'Mountain', 'Forest', 'Wastes'])
+  const edhrecMisses = edhrec.topCards
+    .filter(c => collectionNameSet.has(c.name) && !deckNameSet.has(c.name))
+    .filter(c => !BASIC_LAND_NAMES.has(c.name))   // synthesized basics are in deck under fresh IDs
+    .map(c => {
+      let reason = 'Lost to higher-scored picks in its role bucket'
+      if (bracketExcludedNameSet.has(c.name)) reason = `Excluded by bracket ${bracket} filter`
+      else if (!candidateNameSet.has(c.name))  reason = 'Not in candidate pool (legality / data issue)'
+      const candidate = candidates.find(card => card.name === c.name)
+      const role = candidate?.roles?.[0] ?? 'unknown'
+      return { name: c.name, rank: edhrec.topCards.findIndex(t => t.name === c.name) + 1, role, reason }
+    })
+    .slice(0, 30)
+
+  const dataSources = {
+    edhrec: {
+      loaded: edhrec.topCards.length > 0,
+      topCardCount: edhrec.topCards.length,
+      themeCount: edhrec.themes.length,
+      matchedInCollection: edhrecMatchedInCollection,
+      pickedFromTop: edhrecPickedFromTop,
+      sampleMatches: edhrecCollectionMatches.slice(0, 8),
+      misses: edhrecMisses,
+    },
+    spellbook: { combosRegistered: relevantCombos.length },
+  }
+
+  const diagnostics = {
+    dataSources,
+    archetypes,
+    primaryArchetypeId: scoringContext.primaryArchetypeId,
+    bracketTargets: { lands: landTarget, ...targetCounts },
+    cardDiagnostics,
+    deckSize: deck.length + 1,
+  }
+
+  return {
+    commander,
+    mainDeck: deck,
+    diagnostics,
+    excludedCards: allExcluded,
+    warnings: allWarnings,
+    stats,
+    bracketAnalysis: { targetBracket: bracket, actualBracket, flaggedCards },
+    combos,
+    archetypes,
+    explanation,
+  }
+}
+
+// ─── helpers ────────────────────────────────────────────────────────────────
+
+// "Legendary Creature — Serpent God" → ['serpent', 'god']
+// Used so commander creature subtypes count as synergy keywords (Koma's Serpent
+// theme catches generic serpent payoffs even when oracle text overlap is thin).
+function extractCreatureSubtypes(commander) {
+  const tl = commander?.type_line ?? ''
+  const dashIdx = tl.indexOf('—')
+  if (dashIdx === -1) return []
+  return tl.slice(dashIdx + 1).trim().toLowerCase().split(/\s+/).filter(Boolean)
+}
+
+function buildBuckets(cards) {
+  const buckets = {}
+  for (const card of cards) {
+    for (const role of (card.roles ?? ['filler'])) {
+      if (!buckets[role]) buckets[role] = []
+      buckets[role].push(card)
+    }
+  }
+  for (const role of Object.keys(buckets)) {
+    buckets[role].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+  }
+  return buckets
+}
+
+function fillLands(deck, usedNames, buckets, commander, target, explanation) {
+  const nonBasicLands = (buckets['land'] ?? []).filter(c => !isBasicLand(c))
+  let added = 0
+  let nonBasicCount = 0
+
+  for (const card of nonBasicLands) {
+    if (deck.length >= 99) break
+    if (added >= target) break
+    if (usedNames.has(card.name.toLowerCase())) continue
+    // Force qty 1 — Commander allows only one copy of any non-basic regardless
+    // of how many the user owns in their collection.
+    deck.push({ ...card, quantity: 1 })
+    usedNames.add(card.name.toLowerCase())
+    added++
+    nonBasicCount++
+  }
+
+  const basicNames = getBasicLandsForCommander(commander)
+  let basicCount = 0
+  if (basicNames.length > 0) {
+    let basicIdx = 0
+    while (added < target && deck.length < 99) {
+      const basicName = basicNames[basicIdx % basicNames.length]
+      deck.push({
+        id: `basic_${basicName.toLowerCase().replace(/\s/g, '_')}_${added}`,
+        name: basicName,
+        type_line: 'Basic Land',
+        oracle_text: '',
+        mana_cost: '',
+        cmc: 0,
+        colors: [],
+        color_identity: [],
+        legalities: { commander: 'legal' },
+        image_uris: null,
+        card_faces: null,
+        isBasicLand: true,
+        roles: ['land'],
+        tags: [],
+        quantity: 1,
+      })
+      basicIdx++
+      added++
+      basicCount++
+    }
+  }
+
+  explanation.push(`Added ${added} lands (${nonBasicCount} non-basic, ${basicCount} basic).`)
+  return added
+}
+
+function fillRole(deck, usedNames, buckets, role, target, explanation) {
+  const pool = buckets[role] ?? []
+  let added = 0
+  for (const card of pool) {
+    if (deck.length >= 99) break
+    if (added >= target) break
+    if (usedNames.has(card.name.toLowerCase())) continue
+    // Singleton format — qty 1 regardless of collection ownership count.
+    deck.push({ ...card, quantity: 1 })
+    usedNames.add(card.name.toLowerCase())
+    added++
+  }
+  if (added > 0) explanation.push(`Added ${added} ${role} card${added !== 1 ? 's' : ''}.`)
+  return added
+}
+
+function getUnused(allCards, usedNames) {
+  return allCards
+    .filter(c => !usedNames.has(c.name.toLowerCase()) && !isBasicLand(c))
+    .map(c => ({ ...c, excludeReason: 'Not selected — slot targets already met' }))
+}
+
+function colorBreakdown(deck) {
+  const counts = { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0 }
+  for (const card of deck) {
+    const colors = card.colors ?? []
+    if (colors.length === 0 && !isLand(card)) counts.C++
+    for (const c of colors) { if (c in counts) counts[c]++ }
+  }
+  return counts
+}

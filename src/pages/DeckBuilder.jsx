@@ -1,0 +1,1352 @@
+import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { getSelectedCommander, saveDeck, getDeck } from '../utils/localStorage'
+import { getCardImage } from '../utils/scryfallApi'
+import { generateDeck } from '../rules/deckGenerator'
+import { buildPass1ForCurrentSelection, buildPass2ForCurrentSelection } from '../services/llmDeckOrchestrator'
+import { BRACKET_LABELS } from '../rules/bracketRules'
+
+const COLOR_PIPS = {
+  W: { bg: '#f5f0e8', color: '#4a3728' },
+  U: { bg: '#1a6fb0', color: '#fff'    },
+  B: { bg: '#2c2c2c', color: '#c0c0c0' },
+  R: { bg: '#d43f1e', color: '#fff'    },
+  G: { bg: '#1a7a3a', color: '#fff'    },
+}
+
+const ROLE_LABELS = {
+  land:          'Lands',
+  ramp:          'Ramp',
+  draw:          'Card Draw',
+  removal:       'Removal',
+  wipe:          'Board Wipes',
+  protection:    'Protection',
+  win_condition: 'Win Conditions',
+  tutor:         'Tutors',
+  synergy:       'Synergy',
+  filler:        'Other',
+}
+
+const ROLE_ORDER = ['land', 'ramp', 'draw', 'removal', 'wipe', 'protection', 'win_condition', 'tutor', 'synergy', 'filler']
+
+const SEVERITY_COLORS = { error: '#ef4444', warning: '#f59e0b', info: '#60a5fa' }
+
+export default function DeckBuilder() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const loadDeckId = location.state?.loadDeckId ?? null
+
+  // Hydrate state lazily from the deck-to-load (if any) so we don't bounce through useEffect+setState.
+  const initialDeck = loadDeckId ? getDeck(loadDeckId) : null
+
+  const [bracket, setBracket]         = useState(3)
+  const [result, setResult]           = useState(() => initialDeck ? deckToResult(initialDeck, 3) : null)
+  const [generating, setGenerating]   = useState(false)
+  const [showExcluded, setShowExcluded] = useState(false)
+  const [showExplanation, setShowExplanation] = useState(false)
+  const [hoveredCard, setHoveredCard] = useState(null)
+  const [loadedDeck, setLoadedDeck]   = useState(initialDeck)
+  const [saveName, setSaveName]       = useState(initialDeck?.name ?? '')
+  const [showSaveDialog, setShowSaveDialog] = useState(false)
+  const [saveToast, setSaveToast]     = useState(null)
+  const [primaryArchetype, setPrimaryArchetype] = useState(null)
+  // Two-pass prompt flow state. Shape:
+  //   null                                                    — modal closed
+  //   { stage: 'pass1', text, tokens, ... }                   — showing Pass 1 prompt to copy
+  //   { stage: 'paste', pass1Raw, parseError? }               — pasting Pass 1 output
+  //   { stage: 'pass2', text, tokens, ..., pass1Output }      — showing Pass 2 prompt to copy
+  //   { stage: 'error', error }                               — top-level error (no commander, empty collection)
+  const [promptPreview, setPromptPreview]   = useState(null)
+
+  const commander = loadedDeck?.commander ?? getSelectedCommander()
+
+  // Clear the location state so a refresh doesn't re-load the same deck.
+  useEffect(() => {
+    if (loadDeckId) navigate(location.pathname, { replace: true, state: null })
+  }, [loadDeckId, navigate, location.pathname])
+
+  const handleGenerate = useCallback(() => {
+    setGenerating(true)
+    setResult(null)
+    setLoadedDeck(null)
+    setSaveName('')
+    setTimeout(async () => {
+      try {
+        const deck = await generateDeck(bracket, primaryArchetype)
+        setResult(deck)
+      } catch (err) {
+        setResult({ error: `Generation failed: ${err?.message ?? err}` })
+      } finally {
+        setGenerating(false)
+      }
+    }, 0)
+  }, [bracket, primaryArchetype])
+
+  const handleOpenSave = useCallback(() => {
+    if (!saveName) setSaveName(commander ? `${commander.name} deck` : 'Untitled deck')
+    setShowSaveDialog(true)
+  }, [saveName, commander])
+
+  const handleConfirmSave = useCallback(() => {
+    const name = saveName.trim()
+    if (!name || !result || !commander) return
+    let saved
+    try {
+      saved = saveDeck({
+        id:        loadedDeck?.id,
+        name,
+        commander,
+        mainDeck:  result.mainDeck,
+      })
+    } catch (err) {
+      const msg = err?.userMessage ?? `Save failed: ${err?.message ?? err}`
+      setSaveToast(msg)
+      setTimeout(() => setSaveToast(curr => (curr === msg ? null : curr)), 5000)
+      return
+    }
+    setLoadedDeck(saved)
+    setShowSaveDialog(false)
+    setSaveToast(`Saved "${saved.name}"`)
+    setTimeout(() => setSaveToast(curr => (curr === `Saved "${saved.name}"` ? null : curr)), 2500)
+  }, [saveName, result, commander, loadedDeck])
+
+  // Open the modal at Pass 1 — builds the strategy/core-engine prompt.
+  const handleStartPass1 = useCallback(() => {
+    const result = buildPass1ForCurrentSelection({ bracket, primaryArchetypeId: primaryArchetype })
+    if (result.error) {
+      setPromptPreview({ stage: 'error', error: result.error })
+      return
+    }
+    setPromptPreview({
+      stage: 'pass1',
+      text: formatPromptForClipboard(result.prompt),
+      tokens: result.promptTokens,
+      poolSize: result.poolSize,
+      commanderName: result.commanderName,
+      bracket: result.bracket,
+    })
+  }, [bracket, primaryArchetype])
+
+  // Advance from Pass 1 prompt → paste-Pass-1-output stage.
+  const handleAdvanceToPaste = useCallback(() => {
+    setPromptPreview(curr => {
+      if (curr?.stage !== 'pass1' && curr?.stage !== 'pass2') return curr
+      return { stage: 'paste', pass1Raw: '', parseError: null }
+    })
+  }, [])
+
+  // Parse the pasted Pass 1 JSON, then build Pass 2 prompt.
+  const handleBuildPass2 = useCallback(() => {
+    setPromptPreview(curr => {
+      if (curr?.stage !== 'paste') return curr
+      const raw = (curr.pass1Raw ?? '').trim()
+      if (!raw) {
+        return { ...curr, parseError: 'Paste the Pass 1 JSON output from ChatGPT before continuing.' }
+      }
+      let parsed
+      try {
+        parsed = JSON.parse(raw)
+      } catch (err) {
+        return { ...curr, parseError: `Pass 1 output isn't valid JSON: ${err.message}` }
+      }
+      const result = buildPass2ForCurrentSelection({ bracket, pass1Output: parsed })
+      if (result.error) {
+        return { ...curr, parseError: result.error }
+      }
+      return {
+        stage: 'pass2',
+        text: formatPromptForClipboard(result.prompt),
+        tokens: result.promptTokens,
+        poolSize: result.poolSize,
+        commanderName: result.commanderName,
+        bracket: result.bracket,
+        pass1Output: parsed,
+      }
+    })
+  }, [bracket])
+
+  // Go back to Pass 1 (rebuild the prompt with current settings).
+  const handleBackToPass1 = useCallback(() => {
+    handleStartPass1()
+  }, [handleStartPass1])
+
+  const handleCopyPrompt = useCallback(async () => {
+    if (!promptPreview?.text) return
+    try {
+      await navigator.clipboard.writeText(promptPreview.text)
+      const which = promptPreview.stage === 'pass1' ? 'Pass 1' : 'Pass 2'
+      setSaveToast(`${which} prompt copied — paste into ChatGPT`)
+    } catch {
+      window.prompt('Copy prompt (Cmd/Ctrl+C):', promptPreview.text)
+      setSaveToast('Use the dialog to copy manually')
+    }
+    setTimeout(() => setSaveToast(curr => (curr?.endsWith('paste into ChatGPT') || curr?.startsWith('Use the dialog') ? null : curr)), 2500)
+  }, [promptPreview])
+
+  const handleCopyDeck = useCallback(async () => {
+    if (!result || !commander) return
+    const text = formatDeckForClipboard(commander, result.mainDeck)
+    try {
+      await navigator.clipboard.writeText(text)
+      setSaveToast('Deck copied to clipboard')
+    } catch {
+      // Fallback: surface the text in a prompt so the user can copy manually
+      window.prompt('Copy deck (Cmd/Ctrl+C):', text)
+      setSaveToast('Use the dialog to copy manually')
+    }
+    setTimeout(() => setSaveToast(curr => (curr?.startsWith('Deck copied') || curr?.startsWith('Use the dialog') ? null : curr)), 2500)
+  }, [result, commander])
+
+  const handleDownloadDeck = useCallback(() => {
+    if (!result || !commander) return
+    const text = formatDeckForClipboard(commander, result.mainDeck)
+    const safeName = (loadedDeck?.name ?? `${commander.name} deck`).replace(/[^a-z0-9-_ ]/gi, '_').trim() || 'deck'
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${safeName}.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    setSaveToast(`Downloaded ${safeName}.txt`)
+    setTimeout(() => setSaveToast(curr => (curr?.startsWith('Downloaded') ? null : curr)), 2500)
+  }, [result, commander, loadedDeck])
+
+  if (!commander) {
+    return (
+      <div style={styles.page}>
+        <h2 style={styles.heading}>Deck Builder</h2>
+        <div style={styles.emptyState}>
+          No commander selected. Go to the Commander page and pick one first.
+        </div>
+      </div>
+    )
+  }
+
+  const groupedDeck = result && !result.error ? groupByPrimaryRole(result.mainDeck) : null
+
+  return (
+    <div style={styles.page}>
+      <h2 style={styles.heading}>Deck Builder</h2>
+
+      {/* Commander strip */}
+      <CommanderStrip commander={commander} />
+
+      {/* Bracket selector */}
+      <div style={styles.section}>
+        <div style={styles.sectionLabel}>Target Bracket</div>
+        <div style={styles.bracketRow}>
+          {[1, 2, 3, 4, 5].map(b => (
+            <button
+              key={b}
+              onClick={() => setBracket(b)}
+              style={{ ...styles.bracketBtn, ...(bracket === b ? styles.bracketBtnActive : {}) }}
+            >
+              <span style={styles.bracketNum}>{b}</span>
+              <span style={styles.bracketLabel}>{BRACKET_LABELS[b]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Generate button */}
+      <button
+        style={{ ...styles.generateBtn, ...(generating ? styles.generateBtnDisabled : {}) }}
+        onClick={handleGenerate}
+        disabled={generating}
+      >
+        {generating ? 'Generating…' : result ? 'Regenerate Deck' : 'Generate Deck'}
+      </button>
+
+      {/* Two-pass prompt flow — Pass 1 (strategy + core engine) → user pastes ChatGPT
+          response back → Pass 2 (build 99 around locked Pass 1). Better than single-pass
+          because the model can't waffle on strategy mid-build. */}
+      <button style={styles.showPromptBtn} onClick={handleStartPass1}>
+        Two-Pass Prompt for ChatGPT
+      </button>
+
+      {result?.error && (
+        <div style={styles.errorBanner}>{result.error}</div>
+      )}
+
+      {result && !result.error && (
+        <>
+          {/* Save / copy row */}
+          <div style={styles.saveRow}>
+            <button style={styles.saveBtn} onClick={handleOpenSave}>
+              {loadedDeck ? `Update "${loadedDeck.name}"` : 'Save Deck'}
+            </button>
+            <button style={styles.copyBtn} onClick={handleCopyDeck}>
+              Copy Deck
+            </button>
+            <button style={styles.copyBtn} onClick={handleDownloadDeck}>
+              Download .txt
+            </button>
+            {loadedDeck && (
+              <span style={styles.savedHint}>
+                Last saved {formatDate(loadedDeck.updatedAt)}
+              </span>
+            )}
+          </div>
+
+          {/* Detected archetypes — click one to lock it as the primary strategy
+              (others get reduced weight). Click the active chip again to clear. */}
+          {result.archetypes?.length > 0 && (
+            <div style={styles.archetypeRow}>
+              <span style={styles.archetypeLabel}>Strategy:</span>
+              <button
+                style={primaryArchetype === null ? styles.archetypeChipActive : styles.archetypeChipBtn}
+                onClick={() => setPrimaryArchetype(null)}
+                title="Use all detected archetypes equally"
+              >
+                Balanced
+              </button>
+              {result.archetypes.map(a => (
+                <button
+                  key={a.id}
+                  style={primaryArchetype === a.id ? styles.archetypeChipActive : styles.archetypeChipBtn}
+                  onClick={() =>
+                    setPrimaryArchetype(curr => (curr === a.id ? null : a.id))
+                  }
+                  title={`Lock ${a.label} as the primary strategy`}
+                >
+                  {a.label}
+                </button>
+              ))}
+              <span style={styles.archetypeHint}>
+                {primaryArchetype
+                  ? 'Click Regenerate to apply the new focus.'
+                  : 'Pick one to focus the deck on a single strategy.'}
+              </span>
+            </div>
+          )}
+
+          {/* LLM strategy panel — only shown when AI Assisted mode produced a result */}
+          {result.llmStrategy && (
+            <div style={styles.llmPanel}>
+              <div style={styles.panelTitle}>
+                AI Strategy
+                <span style={styles.llmModePill}>mode: {result.llmStrategy.mode ?? 'unknown'}</span>
+              </div>
+
+              {result.llmStrategy.chosenStrategy && (
+                <div style={styles.llmChosenStrategy}>{result.llmStrategy.chosenStrategy}</div>
+              )}
+              {result.llmStrategy.primaryStrategy && (
+                <div style={styles.llmStrategyRow}>
+                  <span style={styles.llmStrategyLabel}>Primary:</span>
+                  <span style={styles.llmStrategyValue}>{result.llmStrategy.primaryStrategy}</span>
+                </div>
+              )}
+              {result.llmStrategy.secondaryStrategy && (
+                <div style={styles.llmStrategyRow}>
+                  <span style={styles.llmStrategyLabel}>Secondary:</span>
+                  <span style={styles.llmStrategyValue}>{result.llmStrategy.secondaryStrategy}</span>
+                </div>
+              )}
+              {result.llmStrategy.winPlan && (
+                <div style={styles.llmStrategyRow}>
+                  <span style={styles.llmStrategyLabel}>Win plan:</span>
+                  <span style={styles.llmStrategyValue}>{result.llmStrategy.winPlan}</span>
+                </div>
+              )}
+
+              {result.llmValidation && result.llmValidation.invalidCount > 0 && (
+                <div style={styles.llmRejected}>
+                  Rejected {result.llmValidation.invalidCount} card{result.llmValidation.invalidCount === 1 ? '' : 's'}
+                  {' '}suggested by the LLM (see Excluded Cards below).
+                  {result.llmValidation.missingCount > 0 &&
+                    ` ${result.llmValidation.missingCount} slot${result.llmValidation.missingCount === 1 ? '' : 's'} filled by the heuristic fallback.`}
+                </div>
+              )}
+
+              {result.llmStrategy.deckStats && (
+                <div style={styles.llmStatsBlock}>
+                  <div style={styles.llmSubLabel}>Deck stats (LLM self-reported):</div>
+                  <div style={styles.llmStatsRow}>
+                    {Object.entries(result.llmStrategy.deckStats).map(([k, v]) => (
+                      <span key={k} style={styles.llmStatPill}>
+                        <span style={styles.llmStatKey}>{formatStatKey(k)}</span>
+                        <span style={styles.llmStatVal}>{k === 'strategyDensityEstimate' ? `${v}%` : v}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {result.llmStrategy.coreEngine?.length > 0 && (
+                <div style={styles.llmCoreEngine}>
+                  <div style={styles.llmSubLabel}>Core engine ({result.llmStrategy.coreEngine.length}):</div>
+                  {result.llmStrategy.coreEngine.slice(0, 25).map((c, i) => (
+                    <div key={i} style={styles.llmUpgradeRow}>
+                      <span style={styles.llmUpgradeName}>{c.name}</span>
+                      <span style={styles.llmUpgradeReason}>{c.reason}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {result.llmStrategy.winConditionDetails?.length > 0 && (
+                <div style={styles.llmWinConditions}>
+                  <div style={styles.llmSubLabel}>Win conditions (proof):</div>
+                  {result.llmStrategy.winConditionDetails.map((w, i) => (
+                    <div key={i} style={styles.llmWinConditionBlock}>
+                      <div style={styles.llmWinConditionName}>
+                        {w.name}
+                        {typeof w.estimatedTurnsToWin === 'number' && w.estimatedTurnsToWin > 0 && (
+                          <span style={styles.llmWinConditionTurns}> · ~{w.estimatedTurnsToWin} turns</span>
+                        )}
+                      </div>
+                      {w.howItWins && (
+                        <div style={styles.llmWinConditionRow}><strong>How: </strong>{w.howItWins}</div>
+                      )}
+                      {w.requiredBoardState && (
+                        <div style={styles.llmWinConditionRow}><strong>Board state: </strong>{w.requiredBoardState}</div>
+                      )}
+                      {w.keySupportingCards?.length > 0 && (
+                        <div style={styles.llmWinConditionRow}><strong>Key cards: </strong>{w.keySupportingCards.join(', ')}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {result.llmStrategy.weakIncludes?.length > 0 && (
+                <div style={styles.llmWeakIncludes}>
+                  <div style={styles.llmSubLabel}>Weak includes (LLM forced these in):</div>
+                  {result.llmStrategy.weakIncludes.slice(0, 10).map((c, i) => (
+                    <div key={i} style={styles.llmUpgradeRow}>
+                      <span style={styles.llmUpgradeName}>{c.name}</span>
+                      <span style={styles.llmUpgradeReason}>{c.reason}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Deck summary — strategy + how it wins */}
+          <DeckSummary
+            mainDeck={result.mainDeck}
+            combos={result.combos ?? []}
+            archetypes={result.archetypes ?? []}
+            primaryArchetypeId={primaryArchetype}
+          />
+
+          {/* Stats bar */}
+          <div style={styles.statsBar}>
+            <StatPill label="Total Cards" value={result.stats.totalCards} />
+            <StatPill label="Lands" value={result.stats.landCount} />
+            <StatPill label="Avg CMC" value={result.stats.avgCmc} />
+            <StatPill
+              label="Actual Bracket"
+              value={`${result.bracketAnalysis.actualBracket} — ${BRACKET_LABELS[result.bracketAnalysis.actualBracket]}`}
+              highlight={result.bracketAnalysis.actualBracket > result.bracketAnalysis.targetBracket}
+            />
+          </div>
+
+          {/* Warnings */}
+          {result.warnings.length > 0 && (
+            <div style={styles.warningsPanel}>
+              <div style={styles.panelTitle}>Warnings & Notes</div>
+              {result.warnings.map((w, i) => (
+                <div key={i} style={{ ...styles.warningRow, color: SEVERITY_COLORS[w.severity] ?? '#fff' }}>
+                  <span style={styles.warningIcon}>
+                    {w.severity === 'error' ? '✕' : w.severity === 'warning' ? '⚠' : 'ℹ'}
+                  </span>
+                  {w.message}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Combos */}
+          {result.combos.length > 0 && (
+            <div style={styles.combosPanel}>
+              <div style={styles.panelTitle}>Combos Detected ({result.combos.length})</div>
+              {result.combos.map((combo, i) => (
+                <div key={i} style={styles.comboRow}>
+                  <div style={styles.comboCards}>{combo.cards.join(' + ')}</div>
+                  <div style={styles.comboDesc}>{combo.description}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Deck list grouped by role */}
+          <div style={styles.deckSection}>
+            <div style={styles.panelTitle}>
+              Deck — {result.mainDeck.length} cards + commander
+            </div>
+            {ROLE_ORDER.map(role => {
+              const cards = groupedDeck[role]
+              if (!cards || cards.length === 0) return null
+              return (
+                <div key={role} style={styles.roleGroup}>
+                  <div style={styles.roleHeader}>
+                    {ROLE_LABELS[role]} ({cards.length})
+                  </div>
+                  <div style={styles.cardList}>
+                    {cards.map(card => (
+                      <CardRow
+                        key={card.id ?? card.name}
+                        card={card}
+                        hovered={hoveredCard?.name === card.name}
+                        onHover={setHoveredCard}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Explanation */}
+          <div style={styles.collapsible}>
+            <button style={styles.collapsibleBtn} onClick={() => setShowExplanation(p => !p)}>
+              {showExplanation ? '▾' : '▸'} Generation Log ({result.explanation.length} notes)
+            </button>
+            {showExplanation && (
+              <ul style={styles.explanationList}>
+                {result.explanation.map((line, i) => <li key={i} style={styles.explanationItem}>{line}</li>)}
+              </ul>
+            )}
+          </div>
+
+          {/* Excluded cards */}
+          <div style={styles.collapsible}>
+            <button style={styles.collapsibleBtn} onClick={() => setShowExcluded(p => !p)}>
+              {showExcluded ? '▾' : '▸'} Excluded Cards ({result.excludedCards.length})
+            </button>
+            {showExcluded && (
+              <div style={styles.excludedList}>
+                {result.excludedCards.map((card, i) => (
+                  <div key={i} style={styles.excludedRow}>
+                    <span style={styles.excludedName}>{card.name}</span>
+                    <span style={styles.excludedReason}>{card.excludeReason}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Diagnostics */}
+          {result.diagnostics && (
+            <DiagnosticsPanel diagnostics={result.diagnostics} />
+          )}
+        </>
+      )}
+
+      {/* Card image tooltip */}
+      {hoveredCard && getCardImage(hoveredCard) && (
+        <div style={styles.tooltip}>
+          <img src={getCardImage(hoveredCard)} alt={hoveredCard.name} style={styles.tooltipImg} />
+        </div>
+      )}
+
+      {/* Save dialog */}
+      {showSaveDialog && (
+        <div style={styles.modalBackdrop} onClick={() => setShowSaveDialog(false)}>
+          <div style={styles.modal} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalTitle}>{loadedDeck ? 'Update Deck' : 'Save Deck'}</div>
+            <input
+              type="text"
+              value={saveName}
+              onChange={e => setSaveName(e.target.value)}
+              placeholder="Deck name"
+              autoFocus
+              onKeyDown={e => { if (e.key === 'Enter') handleConfirmSave() }}
+              style={styles.modalInput}
+            />
+            <div style={styles.modalActions}>
+              <button style={styles.modalCancel} onClick={() => setShowSaveDialog(false)}>Cancel</button>
+              <button style={styles.modalConfirm} onClick={handleConfirmSave} disabled={!saveName.trim()}>
+                {loadedDeck ? 'Update' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Two-pass prompt dialog — multi-stage flow */}
+      {promptPreview && (
+        <div style={styles.modalBackdrop} onClick={() => setPromptPreview(null)}>
+          <div style={{ ...styles.modal, ...styles.promptModal }} onClick={e => e.stopPropagation()}>
+
+            {/* Top-level error (no commander, empty collection) */}
+            {promptPreview.stage === 'error' && (
+              <>
+                <div style={styles.modalTitle}>Cannot Build Prompt</div>
+                <div style={styles.errorBanner}>{promptPreview.error}</div>
+                <div style={styles.modalActions}>
+                  <button style={styles.modalCancel} onClick={() => setPromptPreview(null)}>Close</button>
+                </div>
+              </>
+            )}
+
+            {/* Stage 1 — show Pass 1 prompt */}
+            {promptPreview.stage === 'pass1' && (
+              <>
+                <div style={styles.modalTitle}>
+                  Pass 1: Strategy &amp; Core Engine
+                  <span style={styles.stageBadge}>Step 1 of 2</span>
+                </div>
+                <div style={styles.promptStageHint}>
+                  Copy this prompt → paste into ChatGPT → ChatGPT returns JSON with strategy + 15-25 core cards. Then click <strong>Next</strong> to paste that JSON back.
+                </div>
+                <div style={styles.promptMeta}>
+                  Commander: <strong>{promptPreview.commanderName}</strong> · Bracket {promptPreview.bracket} ·
+                  Pool: {promptPreview.poolSize} cards · ~{promptPreview.tokens.toLocaleString()} tokens
+                </div>
+                <textarea
+                  readOnly
+                  value={promptPreview.text}
+                  style={styles.promptTextarea}
+                  onFocus={e => e.target.select()}
+                />
+                <div style={styles.modalActions}>
+                  <button style={styles.modalCancel} onClick={() => setPromptPreview(null)}>Close</button>
+                  <button style={styles.modalSecondary} onClick={handleCopyPrompt}>Copy Prompt</button>
+                  <button style={styles.modalConfirm} onClick={handleAdvanceToPaste}>Next: Paste ChatGPT's Response →</button>
+                </div>
+              </>
+            )}
+
+            {/* Stage 2 — paste Pass 1 output */}
+            {promptPreview.stage === 'paste' && (
+              <>
+                <div style={styles.modalTitle}>
+                  Paste Pass 1 Output
+                  <span style={styles.stageBadge}>Step 1.5 of 2</span>
+                </div>
+                <div style={styles.promptStageHint}>
+                  Paste the JSON ChatGPT returned for Pass 1. We'll fold it into Pass 2 as locked input.
+                </div>
+                <textarea
+                  value={promptPreview.pass1Raw}
+                  onChange={e => setPromptPreview(curr => curr?.stage === 'paste' ? { ...curr, pass1Raw: e.target.value, parseError: null } : curr)}
+                  placeholder='{ "chosenStrategy": "...", "coreEngine": [...], ... }'
+                  style={styles.promptTextarea}
+                  autoFocus
+                />
+                {promptPreview.parseError && (
+                  <div style={styles.errorBanner}>{promptPreview.parseError}</div>
+                )}
+                <div style={styles.modalActions}>
+                  <button style={styles.modalCancel} onClick={handleBackToPass1}>← Back to Pass 1</button>
+                  <button style={styles.modalConfirm} onClick={handleBuildPass2}>Build Pass 2 Prompt →</button>
+                </div>
+              </>
+            )}
+
+            {/* Stage 3 — show Pass 2 prompt */}
+            {promptPreview.stage === 'pass2' && (
+              <>
+                <div style={styles.modalTitle}>
+                  Pass 2: Build the 99
+                  <span style={styles.stageBadge}>Step 2 of 2</span>
+                </div>
+                <div style={styles.promptStageHint}>
+                  Copy this prompt → paste into ChatGPT (a fresh chat is fine) → ChatGPT returns the full deck. Pass 1 is locked in as constraints — the model must include your core engine and follow the chosen strategy.
+                </div>
+                <div style={styles.promptMeta}>
+                  Commander: <strong>{promptPreview.commanderName}</strong> · Bracket {promptPreview.bracket} ·
+                  Pool: {promptPreview.poolSize} cards · ~{promptPreview.tokens.toLocaleString()} tokens ·
+                  Core engine: {promptPreview.pass1Output?.coreEngine?.length ?? 0} cards locked
+                </div>
+                <textarea
+                  readOnly
+                  value={promptPreview.text}
+                  style={styles.promptTextarea}
+                  onFocus={e => e.target.select()}
+                />
+                <div style={styles.modalActions}>
+                  <button style={styles.modalCancel} onClick={() => setPromptPreview(null)}>Close</button>
+                  <button style={styles.modalSecondary} onClick={() => setPromptPreview(curr => curr?.stage === 'pass2' ? { stage: 'paste', pass1Raw: JSON.stringify(curr.pass1Output, null, 2), parseError: null } : curr)}>
+                    ← Edit Pass 1 Output
+                  </button>
+                  <button style={styles.modalConfirm} onClick={handleCopyPrompt}>Copy Prompt</button>
+                </div>
+              </>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {saveToast && (
+        <div style={styles.saveToast}>★ {saveToast}</div>
+      )}
+    </div>
+  )
+}
+
+// ─── sub-components ──────────────────────────────────────────────────────────
+
+function CommanderStrip({ commander }) {
+  const image = getCardImage(commander)
+  return (
+    <div style={styles.commanderStrip}>
+      {image && <img src={image} alt={commander.name} style={styles.commanderImg} />}
+      <div>
+        <div style={styles.commanderName}>{commander.name}</div>
+        <div style={styles.commanderType}>{commander.type_line}</div>
+        <div style={styles.pips}>
+          {commander.color_identity.length > 0
+            ? commander.color_identity.map(c => (
+                <span key={c} style={{ ...styles.pip, background: COLOR_PIPS[c]?.bg, color: COLOR_PIPS[c]?.color }}>
+                  {c}
+                </span>
+              ))
+            : <span style={styles.colorless}>Colorless</span>
+          }
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function StatPill({ label, value, highlight }) {
+  return (
+    <div style={{ ...styles.statPill, ...(highlight ? styles.statPillHighlight : {}) }}>
+      <div style={styles.statLabel}>{label}</div>
+      <div style={styles.statValue}>{value}</div>
+    </div>
+  )
+}
+
+function DeckSummary({ mainDeck, combos, archetypes, primaryArchetypeId }) {
+  // Win conditions are ONLY cards that close out a game by themselves —
+  // i.e. cards explicitly tagged with the win_condition role (which covers the
+  // hardcoded WIN_CONDITIONS list + the "you win the game" / "opponents lose
+  // the game" regex). Combo enablers like Doubling Season belong in COMBO LINES,
+  // not here, because they need a partner to do anything.
+  const winCons = mainDeck.filter(c => (c.roles ?? []).includes('win_condition'))
+
+  const primary = archetypes.find(a => a.id === primaryArchetypeId)
+  const strategyText = primary
+    ? primary.label
+    : archetypes.length > 0
+      ? archetypes.map(a => a.label).join(' + ')
+      : 'No clear strategy detected'
+
+  // The deck has *some* path to victory if either standalone win cons OR combos exist.
+  const hasWinPath = winCons.length > 0 || combos.length > 0
+
+  return (
+    <div style={summaryStyles.panel}>
+      <div style={summaryStyles.row}>
+        <span style={summaryStyles.label}>STRATEGY</span>
+        <span style={summaryStyles.value}>{strategyText}</span>
+      </div>
+
+      <div style={summaryStyles.row}>
+        <span style={summaryStyles.label}>WIN CONDITIONS</span>
+        {winCons.length === 0 ? (
+          <span style={combos.length > 0 ? summaryStyles.muted : summaryStyles.warning}>
+            {combos.length > 0
+              ? 'No standalone finisher — wins through the combo lines below.'
+              : '⚠ No win conditions or combo lines detected. Deck has no clear path to victory.'}
+          </span>
+        ) : (
+          <div style={summaryStyles.winConList}>
+            {winCons.map(c => (
+              <span key={c.name} style={summaryStyles.winConChip}>{c.name}</span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {combos.length > 0 && (
+        <div style={summaryStyles.row}>
+          <span style={summaryStyles.label}>COMBO LINES</span>
+          <div style={summaryStyles.comboList}>
+            {combos.map((combo, i) => (
+              <div key={i} style={summaryStyles.comboLine}>
+                <span style={summaryStyles.comboCards}>{combo.cards.join(' + ')}</span>
+                <span style={summaryStyles.comboDesc}> — {combo.description}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!hasWinPath && (
+        <div style={summaryStyles.bottomWarning}>
+          ⚠ This deck has no detected win path. Add cards like Craterhoof Behemoth, Aetherflux Reservoir, or a known combo to give it a way to close.
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DiagnosticsPanel({ diagnostics }) {
+  const [expanded, setExpanded] = useState(false)
+  const [query, setQuery]       = useState('')
+
+  const allCards = diagnostics.cardDiagnostics ?? []
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return []
+    return allCards
+      .filter(c => c.name.toLowerCase().includes(q))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 12)
+  }, [allCards, query])
+
+  const selected = matches.length > 0 && query.trim() && allCards.find(
+    c => c.name.toLowerCase() === query.trim().toLowerCase()
+  )
+
+  const ds = diagnostics.dataSources ?? {}
+  const targets = diagnostics.bracketTargets ?? {}
+
+  return (
+    <div style={diagStyles.collapsible}>
+      <button style={diagStyles.collapsibleBtn} onClick={() => setExpanded(p => !p)}>
+        {expanded ? '▾' : '▸'} Diagnostics — see why each card was picked or skipped
+      </button>
+      {expanded && (
+        <div style={diagStyles.body}>
+          {/* Data sources */}
+          <div style={diagStyles.section}>
+            <div style={diagStyles.sectionTitle}>Data Sources</div>
+            <div style={diagStyles.row}>
+              <span style={ds.edhrec?.loaded ? diagStyles.statusOk : diagStyles.statusFail}>
+                {ds.edhrec?.loaded ? '✓' : '✕'} EDHREC
+              </span>
+              <span style={diagStyles.statusDetail}>
+                {ds.edhrec?.loaded
+                  ? `${ds.edhrec.topCardCount} top cards · ${ds.edhrec.themeCount} themes`
+                  : 'No data loaded — likely CORS or fetch failure (check browser console).'}
+              </span>
+            </div>
+            {ds.edhrec?.loaded && (
+              <>
+                <div style={diagStyles.row}>
+                  <span style={
+                    ds.edhrec.matchedInCollection > 30 ? diagStyles.statusOk
+                    : ds.edhrec.matchedInCollection > 5 ? diagStyles.statusWarn
+                    : diagStyles.statusFail
+                  }>
+                    {ds.edhrec.matchedInCollection > 30 ? '✓'
+                     : ds.edhrec.matchedInCollection > 5 ? '!' : '✕'} EDHREC ↔ Collection
+                  </span>
+                  <span style={diagStyles.statusDetail}>
+                    {ds.edhrec.matchedInCollection} of {ds.edhrec.topCardCount} EDHREC top cards are in your collection.
+                    {ds.edhrec.matchedInCollection <= 5 && ' If your collection has these cards, name matching is failing (likely DFC names or special characters).'}
+                  </span>
+                </div>
+                <div style={diagStyles.row}>
+                  <span style={diagStyles.statusOk}>→ Picked from top</span>
+                  <span style={diagStyles.statusDetail}>
+                    {ds.edhrec.pickedFromTop} of {ds.edhrec.matchedInCollection} matched cards landed in the deck.
+                  </span>
+                </div>
+                {ds.edhrec.sampleMatches?.length > 0 && (
+                  <div style={diagStyles.statusDetail}>
+                    Sample matches: {ds.edhrec.sampleMatches.join(', ')}
+                  </div>
+                )}
+                {ds.edhrec.misses?.length > 0 && (
+                  <div style={diagStyles.missList}>
+                    <div style={diagStyles.subTitle}>EDHREC top cards in your collection that did NOT land in the deck</div>
+                    <table style={diagStyles.breakdownTable}>
+                      <tbody>
+                        {ds.edhrec.misses.map(m => (
+                          <tr key={m.name}>
+                            <td style={diagStyles.missName}>{m.name}</td>
+                            <td style={diagStyles.missRank}>#{m.rank}</td>
+                            <td style={diagStyles.missRole}>{m.role}</td>
+                            <td style={diagStyles.missReason}>{m.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+            <div style={diagStyles.row}>
+              <span style={diagStyles.statusOk}>✓ Combo DB</span>
+              <span style={diagStyles.statusDetail}>
+                {ds.spellbook?.combosRegistered ?? 0} combos relevant to this collection
+              </span>
+            </div>
+          </div>
+
+          {/* Archetypes */}
+          <div style={diagStyles.section}>
+            <div style={diagStyles.sectionTitle}>Detected Archetypes</div>
+            {(diagnostics.archetypes ?? []).length === 0 ? (
+              <div style={diagStyles.empty}>No archetypes detected.</div>
+            ) : (
+              <div style={diagStyles.archChips}>
+                {diagnostics.archetypes.map(a => (
+                  <span key={a.id} style={diagStyles.archChip}>
+                    {a.label} <span style={diagStyles.archStrength}>str {a.strength}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Bracket targets */}
+          <div style={diagStyles.section}>
+            <div style={diagStyles.sectionTitle}>Bracket Targets</div>
+            <div style={diagStyles.targets}>
+              {Object.entries(targets).map(([role, count]) => (
+                <span key={role} style={diagStyles.targetChip}>
+                  {role}: <strong>{count}</strong>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Card inspector */}
+          <div style={diagStyles.section}>
+            <div style={diagStyles.sectionTitle}>Why this card?</div>
+            <input
+              type="text"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Type a card name from your collection…"
+              style={diagStyles.input}
+              list="diag-card-names"
+            />
+            <datalist id="diag-card-names">
+              {allCards.map(c => <option key={c.name} value={c.name} />)}
+            </datalist>
+
+            {!selected && matches.length > 0 && (
+              <div style={diagStyles.suggestions}>
+                {matches.map(m => (
+                  <div
+                    key={m.name}
+                    style={diagStyles.suggestion}
+                    onClick={() => setQuery(m.name)}
+                  >
+                    <span>{m.name}</span>
+                    <span style={diagStyles.smallScore}>score {m.score} · {m.role}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {selected && <CardDetail card={selected} />}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CardDetail({ card }) {
+  return (
+    <div style={diagStyles.detail}>
+      <div style={diagStyles.detailHeader}>
+        <span style={diagStyles.detailName}>{card.name}</span>
+        <span style={card.picked ? diagStyles.pickedBadge : diagStyles.unpickedBadge}>
+          {card.picked ? '✓ Picked' : '✕ Not Picked'}
+        </span>
+      </div>
+      <div style={diagStyles.detailMeta}>
+        Role: <strong>{card.role}</strong>
+        {' · '}
+        Score: <strong>{card.score}</strong>
+        {card.edhrecRank != null && <> {' · '} EDHREC rank: <strong>#{card.edhrecRank}</strong></>}
+      </div>
+
+      {card.breakdown.length > 0 && (
+        <>
+          <div style={diagStyles.subTitle}>Score breakdown</div>
+          <table style={diagStyles.breakdownTable}>
+            <tbody>
+              {card.breakdown.map(([reason, delta], i) => (
+                <tr key={i}>
+                  <td style={diagStyles.breakdownReason}>{reason}</td>
+                  <td style={delta >= 0 ? diagStyles.deltaPos : diagStyles.deltaNeg}>
+                    {delta >= 0 ? '+' : ''}{delta}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      {!card.picked && card.beatBy.length > 0 && (
+        <>
+          <div style={diagStyles.subTitle}>Beaten by (in {card.role} bucket)</div>
+          <div style={diagStyles.beatList}>
+            {card.beatBy.map(b => (
+              <div key={b.name} style={diagStyles.beatRow}>
+                <span>{b.name}</span>
+                <span style={diagStyles.smallScore}>{b.score}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {!card.picked && card.beatBy.length === 0 && (
+        <div style={diagStyles.empty}>
+          Not picked despite no higher-scoring competition in this role — likely the bucket's target was already filled by then, or the card was an overflow case. Try regenerating; ordering between role passes can shift this.
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CardRow({ card, hovered, onHover }) {
+  return (
+    <div
+      style={{ ...styles.cardRow, ...(hovered ? styles.cardRowHovered : {}) }}
+      onMouseEnter={() => onHover(card)}
+      onMouseLeave={() => onHover(null)}
+    >
+      <span style={styles.cardName}>{card.name}</span>
+      {card.mana_cost && <span style={styles.cardMana}>{card.mana_cost}</span>}
+      {card.type_line && <span style={styles.cardType}>{card.type_line}</span>}
+    </div>
+  )
+}
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+// Builds a Moxfield/Archidekt-compatible decklist string. Aggregates by name so
+// the 12 separate basic-Swamp entries the generator emits collapse to "12 Swamp".
+// Non-basic cards are clamped to qty 1 — Commander is singleton — even if older
+// saved decks (from before the singleton fix) carried collection-level quantities.
+function formatPromptForClipboard({ system, user }) {
+  return `${system}\n\n---\n\n${JSON.stringify(user, null, 2)}`
+}
+
+function formatStatKey(key) {
+  if (key === 'strategyDensityEstimate') return 'Synergy %'
+  if (key === 'boardWipes') return 'Wipes'
+  if (key === 'winConditions') return 'Wincons'
+  return key.charAt(0).toUpperCase() + key.slice(1)
+}
+
+function formatDeckForClipboard(commander, mainDeck) {
+  const counts = new Map()
+  for (const card of mainDeck) {
+    const key = card.name
+    const isBasic = (card.type_line ?? '').toLowerCase().includes('basic') &&
+                    (card.type_line ?? '').toLowerCase().includes('land')
+    const qty = isBasic ? (card.quantity ?? 1) : 1
+    counts.set(key, (counts.get(key) ?? 0) + qty)
+  }
+  const mainLines = [...counts.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([name, qty]) => `${qty} ${name}`)
+  return [
+    'Commander',
+    `1 ${commander.name}`,
+    '',
+    'Deck',
+    ...mainLines,
+  ].join('\n')
+}
+
+function deckToResult(deck, bracket) {
+  return {
+    mainDeck:        deck.mainDeck,
+    excludedCards:   [],
+    warnings:        [],
+    combos:          [],
+    explanation:     [`Loaded saved deck "${deck.name}".`],
+    stats:           computeStats(deck.mainDeck),
+    bracketAnalysis: { targetBracket: bracket, actualBracket: bracket, flaggedCards: [] },
+  }
+}
+
+function computeStats(cards) {
+  const totalCards = cards.reduce((s, c) => s + (c.quantity ?? 1), 0)
+  const landCount  = cards
+    .filter(c => (c.type_line ?? '').toLowerCase().includes('land'))
+    .reduce((s, c) => s + (c.quantity ?? 1), 0)
+  const nonland    = cards.filter(c => !(c.type_line ?? '').toLowerCase().includes('land'))
+  const cmcSum     = nonland.reduce((s, c) => s + ((c.cmc ?? 0) * (c.quantity ?? 1)), 0)
+  const nonlandQty = nonland.reduce((s, c) => s + (c.quantity ?? 1), 0)
+  const avgCmc     = nonlandQty > 0 ? (cmcSum / nonlandQty).toFixed(2) : '0'
+  return { totalCards, landCount, avgCmc }
+}
+
+function formatDate(iso) {
+  if (!iso) return ''
+  try {
+    const d = new Date(iso)
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  } catch {
+    return ''
+  }
+}
+
+function groupByPrimaryRole(cards) {
+  const groups = {}
+  for (const card of cards) {
+    const role = (card.roles ?? ['filler'])[0]
+    if (!groups[role]) groups[role] = []
+    groups[role].push(card)
+  }
+  return groups
+}
+
+// ─── styles ──────────────────────────────────────────────────────────────────
+
+const styles = {
+  page:            { maxWidth: '900px', margin: '0 auto', padding: '24px 16px', position: 'relative' },
+  heading:         { color: '#c084fc', marginBottom: '24px' },
+  emptyState:      { padding: '40px', border: '1px dashed #4a2c6e', borderRadius: '8px', color: '#6060a0', textAlign: 'center' },
+  section:         { marginBottom: '24px' },
+  sectionLabel:    { color: '#a0a0c0', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' },
+
+  commanderStrip:  { display: 'flex', gap: '16px', alignItems: 'center', background: '#16213e', border: '2px solid #c084fc', borderRadius: '10px', padding: '16px', marginBottom: '24px' },
+  commanderImg:    { width: '70px', borderRadius: '6px', flexShrink: 0 },
+  commanderName:   { fontWeight: '700', fontSize: '1.1rem', color: '#fff', marginBottom: '4px' },
+  commanderType:   { color: '#a0a0c0', fontSize: '0.85rem', fontStyle: 'italic', marginBottom: '8px' },
+  pips:            { display: 'flex', gap: '4px', flexWrap: 'wrap' },
+  pip:             { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '50%', fontSize: '0.7rem', fontWeight: '700' },
+  colorless:       { fontSize: '0.82rem', color: '#777' },
+
+  modeRow:         { display: 'flex', gap: '10px', flexWrap: 'wrap' },
+  modeBtn:         { flex: '1', minWidth: '180px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px', padding: '12px 14px', background: '#1a1a2e', border: '1px solid #3a2a5e', borderRadius: '8px', cursor: 'pointer', color: '#a0a0c0', textAlign: 'left' },
+  modeBtnActive:   { background: '#2d1b4e', border: '2px solid #c084fc', color: '#fff' },
+  modeName:        { fontSize: '0.95rem', fontWeight: '700', color: '#c084fc', display: 'inline-flex', alignItems: 'center', gap: '8px' },
+  modeDesc:        { fontSize: '0.75rem', color: '#7070a0' },
+  betaPill:        { background: '#7c3aed', color: '#fff', fontSize: '0.6rem', fontWeight: '700', padding: '2px 6px', borderRadius: '8px', letterSpacing: '0.05em' },
+
+  bracketRow:      { display: 'flex', gap: '10px', flexWrap: 'wrap' },
+  bracketBtn:      { flex: '1', minWidth: '90px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '10px 8px', background: '#1a1a2e', border: '1px solid #3a2a5e', borderRadius: '8px', cursor: 'pointer', color: '#a0a0c0', transition: 'all 0.15s' },
+  bracketBtnActive:{ background: '#2d1b4e', border: '2px solid #c084fc', color: '#fff' },
+  bracketNum:      { fontSize: '1.1rem', fontWeight: '700', color: '#c084fc' },
+  bracketLabel:    { fontSize: '0.72rem', textAlign: 'center' },
+
+  generateBtn:     { display: 'block', width: '100%', padding: '14px', background: '#7c3aed', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '1rem', fontWeight: '700', cursor: 'pointer', marginBottom: '12px', letterSpacing: '0.03em' },
+  generateBtnDisabled: { background: '#4a2c6e', cursor: 'not-allowed', opacity: 0.7 },
+  showPromptBtn:   { display: 'block', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #4a2c6e', borderRadius: '8px', color: '#a0a0c0', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer', marginBottom: '24px' },
+  promptModal:     { width: '760px', maxWidth: '92vw', maxHeight: '88vh', display: 'flex', flexDirection: 'column' },
+  promptMeta:      { color: '#a0a0c0', fontSize: '0.78rem', marginBottom: '10px' },
+  promptStageHint: { color: '#c0c0e0', fontSize: '0.85rem', lineHeight: '1.5', marginBottom: '12px', padding: '10px 12px', background: '#1a1a2e', border: '1px solid #3a2a5e', borderRadius: '6px' },
+  promptTextarea:  { flex: 1, minHeight: '320px', maxHeight: '55vh', width: '100%', boxSizing: 'border-box', padding: '12px', background: '#0a0e1a', border: '1px solid #2a1a4e', borderRadius: '6px', color: '#c0c0e0', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.78rem', lineHeight: '1.4', marginBottom: '14px', resize: 'vertical' },
+  stageBadge:      { marginLeft: '12px', background: '#1e3a8a', color: '#93c5fd', fontSize: '0.65rem', fontWeight: '700', padding: '3px 9px', borderRadius: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' },
+  modalSecondary:  { padding: '8px 16px', background: 'transparent', border: '1px solid #6b46c1', color: '#c084fc', borderRadius: '6px', cursor: 'pointer', fontSize: '0.88rem', fontWeight: '600' },
+  errorBanner:     { background: '#3b0000', border: '1px solid #ef4444', borderRadius: '8px', color: '#ef4444', padding: '14px', marginBottom: '20px' },
+
+  statsBar:        { display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '20px' },
+  statPill:        { flex: '1', minWidth: '100px', background: '#16213e', border: '1px solid #3a2a5e', borderRadius: '8px', padding: '10px 14px' },
+  statPillHighlight: { border: '1px solid #f59e0b' },
+  statLabel:       { color: '#7070a0', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '4px' },
+  statValue:       { color: '#fff', fontWeight: '700', fontSize: '0.95rem' },
+
+  llmPanel:        { background: '#0f1a2e', border: '1px solid #1e40af', borderRadius: '8px', padding: '14px', marginBottom: '16px' },
+  llmModePill:     { marginLeft: '10px', background: '#1e3a8a', color: '#93c5fd', fontSize: '0.65rem', fontWeight: '600', padding: '2px 8px', borderRadius: '8px', textTransform: 'lowercase', letterSpacing: '0.05em' },
+  llmChosenStrategy:{ background: '#1e3a8a', border: '1px solid #93c5fd', borderRadius: '6px', padding: '10px 14px', color: '#e0e8ff', fontSize: '0.95rem', fontWeight: '600', lineHeight: '1.5', marginBottom: '12px' },
+  llmStrategyRow:  { display: 'flex', gap: '8px', marginBottom: '6px', fontSize: '0.88rem', lineHeight: '1.5' },
+  llmStrategyLabel:{ color: '#93c5fd', fontWeight: '700', minWidth: '80px', flexShrink: 0 },
+  llmStrategyValue:{ color: '#c0d4f0' },
+  llmRejected:     { color: '#f59e0b', fontSize: '0.82rem', marginTop: '8px', marginBottom: '8px', fontStyle: 'italic' },
+  llmStatsBlock:   { marginTop: '10px', borderTop: '1px solid #1e3a8a', paddingTop: '10px' },
+  llmStatsRow:     { display: 'flex', flexWrap: 'wrap', gap: '6px' },
+  llmStatPill:     { display: 'inline-flex', gap: '6px', alignItems: 'baseline', background: '#16213e', border: '1px solid #1e3a8a', borderRadius: '6px', padding: '4px 10px', fontSize: '0.78rem' },
+  llmStatKey:      { color: '#7090b0' },
+  llmStatVal:      { color: '#e0e0ff', fontWeight: '700' },
+  llmCoreEngine:   { marginTop: '10px', borderTop: '1px solid #1e3a8a', paddingTop: '8px' },
+  llmWinConditions:{ marginTop: '10px', borderTop: '1px solid #1e3a8a', paddingTop: '8px' },
+  llmWinConditionBlock: { background: '#0a1428', border: '1px solid #1e3a8a', borderRadius: '6px', padding: '8px 12px', marginBottom: '6px' },
+  llmWinConditionName: { color: '#e0e8ff', fontWeight: '700', fontSize: '0.88rem', marginBottom: '4px' },
+  llmWinConditionTurns: { color: '#7090b0', fontWeight: '500', fontSize: '0.78rem' },
+  llmWinConditionRow: { color: '#a0b0d0', fontSize: '0.78rem', lineHeight: '1.45', marginTop: '2px' },
+  llmWeakIncludes: { marginTop: '10px', borderTop: '1px solid #78350f', paddingTop: '8px' },
+  llmSubLabel:     { color: '#93c5fd', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' },
+  llmUpgradeRow:   { display: 'flex', gap: '12px', marginBottom: '4px', fontSize: '0.82rem' },
+  llmUpgradeName:  { color: '#e0e0ff', fontWeight: '600', minWidth: '180px' },
+  llmUpgradeReason:{ color: '#a0b0d0' },
+
+  warningsPanel:   { background: '#1a1208', border: '1px solid #78350f', borderRadius: '8px', padding: '14px', marginBottom: '16px' },
+  combosPanel:     { background: '#0d1a2e', border: '1px solid #1e40af', borderRadius: '8px', padding: '14px', marginBottom: '16px' },
+  panelTitle:      { color: '#c084fc', fontWeight: '700', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' },
+  warningRow:      { display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '6px', fontSize: '0.88rem', lineHeight: '1.4' },
+  warningIcon:     { flexShrink: 0, fontWeight: '700', width: '16px' },
+  comboRow:        { marginBottom: '10px' },
+  comboCards:      { color: '#93c5fd', fontWeight: '600', fontSize: '0.88rem' },
+  comboDesc:       { color: '#7090b0', fontSize: '0.82rem', marginTop: '2px' },
+
+  deckSection:     { marginBottom: '16px' },
+  roleGroup:       { marginBottom: '20px' },
+  roleHeader:      { color: '#c084fc', fontWeight: '700', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px', paddingBottom: '4px', borderBottom: '1px solid #2a1a4e' },
+  cardList:        { display: 'flex', flexDirection: 'column', gap: '2px' },
+  cardRow:         { display: 'flex', gap: '12px', alignItems: 'center', padding: '5px 8px', borderRadius: '5px', cursor: 'default', transition: 'background 0.1s' },
+  cardRowHovered:  { background: '#1e1040' },
+  cardName:        { color: '#e8e8ff', fontSize: '0.88rem', flex: '1' },
+  cardMana:        { color: '#c084fc', fontSize: '0.78rem', flexShrink: 0 },
+  cardType:        { color: '#6070a0', fontSize: '0.78rem', flexShrink: 0, minWidth: '120px', textAlign: 'right' },
+
+  collapsible:     { marginBottom: '12px', border: '1px solid #2a1a4e', borderRadius: '8px', overflow: 'hidden' },
+  collapsibleBtn:  { width: '100%', background: '#16213e', border: 'none', color: '#a0a0c0', padding: '12px 16px', textAlign: 'left', cursor: 'pointer', fontSize: '0.88rem', fontWeight: '600' },
+  explanationList: { margin: 0, padding: '12px 16px 12px 32px', background: '#0f0f1e' },
+  explanationItem: { color: '#8090b0', fontSize: '0.84rem', marginBottom: '6px', lineHeight: '1.4' },
+  excludedList:    { padding: '8px 0', background: '#0f0f1e' },
+  excludedRow:     { display: 'flex', gap: '16px', padding: '6px 16px', alignItems: 'flex-start' },
+  excludedName:    { color: '#8080a0', fontSize: '0.84rem', flex: '1' },
+  excludedReason:  { color: '#4a4a6a', fontSize: '0.78rem', textAlign: 'right', maxWidth: '260px' },
+
+  tooltip:         { position: 'fixed', bottom: '24px', right: '24px', zIndex: 1000, pointerEvents: 'none' },
+  tooltipImg:      { width: '200px', borderRadius: '10px', boxShadow: '0 8px 32px rgba(0,0,0,0.8)' },
+
+  archetypeRow:    { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' },
+  archetypeLabel:  { color: '#7070a0', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.06em' },
+  archetypeChip:   { background: '#2a1a4e', color: '#c084fc', fontSize: '0.78rem', fontWeight: '600', borderRadius: '12px', padding: '3px 10px', border: '1px solid #4a2c6e' },
+  archetypeChipBtn:    { background: '#1a1a2e', color: '#a0a0c0', fontSize: '0.78rem', fontWeight: '600', borderRadius: '12px', padding: '4px 12px', border: '1px solid #3a2a5e', cursor: 'pointer', transition: 'all 0.15s' },
+  archetypeChipActive: { background: '#7c3aed', color: '#fff',    fontSize: '0.78rem', fontWeight: '700', borderRadius: '12px', padding: '4px 12px', border: '1px solid #c084fc', cursor: 'pointer' },
+  archetypeHint:       { color: '#6070a0', fontSize: '0.75rem', fontStyle: 'italic', marginLeft: '6px' },
+
+  saveRow:         { display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px', flexWrap: 'wrap' },
+  saveBtn:         { padding: '10px 20px', background: '#2d1b4e', border: '1px solid #c084fc', color: '#c084fc', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem', fontWeight: '600' },
+  copyBtn:         { padding: '10px 20px', background: 'transparent', border: '1px solid #4a2c6e', color: '#a0a0c0', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem', fontWeight: '600' },
+  savedHint:       { color: '#7070a0', fontSize: '0.8rem', fontStyle: 'italic' },
+
+  modalBackdrop:   { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 },
+  modal:           { background: '#16213e', border: '2px solid #c084fc', borderRadius: '12px', padding: '24px', minWidth: '320px', maxWidth: '90vw' },
+  modalTitle:      { color: '#c084fc', fontWeight: '700', fontSize: '1rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '14px' },
+  modalInput:      { width: '100%', boxSizing: 'border-box', padding: '10px 14px', background: '#0f1526', border: '1px solid #4a2c6e', borderRadius: '8px', color: '#e8e8ff', fontSize: '0.95rem', outline: 'none', marginBottom: '16px' },
+  modalActions:    { display: 'flex', gap: '10px', justifyContent: 'flex-end' },
+  modalCancel:     { padding: '8px 16px', background: 'transparent', border: '1px solid #4a2c6e', color: '#a0a0c0', borderRadius: '6px', cursor: 'pointer', fontSize: '0.88rem' },
+  modalConfirm:    { padding: '8px 16px', background: '#7c3aed', border: 'none', color: '#fff', borderRadius: '6px', cursor: 'pointer', fontSize: '0.88rem', fontWeight: '600' },
+
+  saveToast:       { position: 'fixed', top: '20px', right: '20px', background: '#2d1b4e', border: '1px solid #c084fc', color: '#fff', padding: '12px 18px', borderRadius: '8px', fontSize: '0.9rem', fontWeight: '600', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 100 },
+}
+
+const summaryStyles = {
+  panel: {
+    background: '#1a1428',
+    border: '1px solid #4a2c6e',
+    borderRadius: '10px',
+    padding: '14px 16px',
+    marginBottom: '20px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+  },
+  row: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: '12px',
+    flexWrap: 'wrap',
+  },
+  label: {
+    color: '#7070a0',
+    fontSize: '0.7rem',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+    minWidth: '120px',
+    flexShrink: 0,
+  },
+  value: {
+    color: '#e0e0e0',
+    fontSize: '0.92rem',
+    fontWeight: '600',
+  },
+  warning: {
+    color: '#f59e0b',
+    fontSize: '0.85rem',
+    background: '#2d1f00',
+    border: '1px solid #92400e',
+    borderRadius: '6px',
+    padding: '6px 10px',
+  },
+  muted: {
+    color: '#a0a0c0',
+    fontSize: '0.85rem',
+    fontStyle: 'italic',
+  },
+  bottomWarning: {
+    color: '#f59e0b',
+    fontSize: '0.85rem',
+    background: '#2d1f00',
+    border: '1px solid #92400e',
+    borderRadius: '6px',
+    padding: '8px 12px',
+    marginTop: '4px',
+  },
+  winConList: {
+    display: 'flex',
+    gap: '6px',
+    flexWrap: 'wrap',
+  },
+  winConChip: {
+    background: '#14532d',
+    color: '#4ade80',
+    border: '1px solid #16a34a',
+    borderRadius: '12px',
+    padding: '3px 10px',
+    fontSize: '0.78rem',
+    fontWeight: '600',
+  },
+  comboList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    flex: 1,
+    minWidth: '60%',
+  },
+  comboLine: {
+    color: '#a0a0c0',
+    fontSize: '0.82rem',
+    lineHeight: '1.4',
+  },
+  comboCards: {
+    color: '#93c5fd',
+    fontWeight: '600',
+  },
+  comboDesc: {
+    color: '#7090b0',
+  },
+}
+
+const diagStyles = {
+  collapsible:    { marginBottom: '12px', border: '1px solid #2a1a4e', borderRadius: '8px', overflow: 'hidden' },
+  collapsibleBtn: { width: '100%', background: '#16213e', border: 'none', color: '#a0a0c0', padding: '12px 16px', textAlign: 'left', cursor: 'pointer', fontSize: '0.88rem', fontWeight: '600' },
+  body:           { padding: '14px 16px', background: '#0f0f1e', display: 'flex', flexDirection: 'column', gap: '18px' },
+  section:        { display: 'flex', flexDirection: 'column', gap: '6px' },
+  sectionTitle:   { color: '#c084fc', fontSize: '0.78rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em' },
+  row:            { display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' },
+  statusOk:       { color: '#4ade80', fontWeight: '700', fontSize: '0.85rem' },
+  statusWarn:     { color: '#f59e0b', fontWeight: '700', fontSize: '0.85rem' },
+  statusFail:     { color: '#ef4444', fontWeight: '700', fontSize: '0.85rem' },
+  statusDetail:   { color: '#a0a0c0', fontSize: '0.82rem' },
+  empty:          { color: '#7070a0', fontSize: '0.82rem', fontStyle: 'italic' },
+  archChips:      { display: 'flex', gap: '6px', flexWrap: 'wrap' },
+  archChip:       { background: '#2a1a4e', border: '1px solid #4a2c6e', color: '#c084fc', borderRadius: '12px', padding: '3px 10px', fontSize: '0.78rem', fontWeight: '600' },
+  archStrength:   { color: '#7070a0', marginLeft: '6px', fontWeight: '500' },
+  targets:        { display: 'flex', gap: '6px', flexWrap: 'wrap' },
+  targetChip:     { background: '#16213e', border: '1px solid #3a2a5e', color: '#a0a0c0', borderRadius: '6px', padding: '3px 8px', fontSize: '0.78rem' },
+  input:          { width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: '#0f1526', border: '1px solid #4a2c6e', borderRadius: '6px', color: '#e8e8ff', fontSize: '0.88rem', outline: 'none' },
+  suggestions:    { display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '6px', maxHeight: '240px', overflowY: 'auto' },
+  suggestion:     { display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: '#16213e', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem', color: '#e0e0e0' },
+  smallScore:     { color: '#7070a0', fontSize: '0.78rem' },
+  detail:         { background: '#16213e', border: '1px solid #4a2c6e', borderRadius: '8px', padding: '12px', marginTop: '8px' },
+  detailHeader:   { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' },
+  detailName:     { color: '#fff', fontWeight: '700', fontSize: '0.95rem' },
+  pickedBadge:    { background: '#14532d', color: '#4ade80', border: '1px solid #16a34a', borderRadius: '4px', padding: '2px 8px', fontSize: '0.75rem', fontWeight: '700' },
+  unpickedBadge:  { background: '#3b0000', color: '#ef4444', border: '1px solid #ef4444', borderRadius: '4px', padding: '2px 8px', fontSize: '0.75rem', fontWeight: '700' },
+  detailMeta:     { color: '#a0a0c0', fontSize: '0.82rem', marginBottom: '10px' },
+  subTitle:       { color: '#c084fc', fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: '8px', marginBottom: '4px' },
+  breakdownTable: { width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' },
+  breakdownReason:{ color: '#c0c0e0', padding: '3px 0' },
+  deltaPos:       { color: '#4ade80', fontWeight: '700', textAlign: 'right', padding: '3px 0', width: '60px' },
+  deltaNeg:       { color: '#f87171', fontWeight: '700', textAlign: 'right', padding: '3px 0', width: '60px' },
+  beatList:       { display: 'flex', flexDirection: 'column', gap: '2px' },
+  beatRow:        { display: 'flex', justifyContent: 'space-between', padding: '3px 8px', background: '#0f1526', borderRadius: '4px', fontSize: '0.82rem', color: '#e0e0e0' },
+  missList:       { marginTop: '8px', maxHeight: '320px', overflowY: 'auto', border: '1px solid #2a1a4e', borderRadius: '6px', padding: '8px' },
+  missName:       { color: '#e0e0e0', padding: '3px 8px', fontSize: '0.82rem' },
+  missRank:       { color: '#7070a0', padding: '3px 8px', fontSize: '0.78rem', whiteSpace: 'nowrap' },
+  missRole:       { color: '#c084fc', padding: '3px 8px', fontSize: '0.78rem', whiteSpace: 'nowrap' },
+  missReason:     { color: '#a0a0c0', padding: '3px 8px', fontSize: '0.78rem' },
+}
