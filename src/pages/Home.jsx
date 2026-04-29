@@ -1,16 +1,15 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getCollection, getSelectedCommander, getDecks } from '../utils/localStorage'
+import { useDataStore } from '../lib/dataStore'
 
 export default function Home() {
-  // Read progress from localStorage once at mount via lazy initial state so
-  // onboarding cards show real status. The user's flow is page-by-page, so
-  // we don't need a live subscription here.
-  const [progress] = useState(() => ({
-    collection: getCollection().length,
-    commander:  getSelectedCommander(),
-    decks:      getDecks().length,
-  }))
+  // Live read from dataStore so onboarding cards stay current when the user
+  // adds cards / picks a commander / saves decks on other pages.
+  const data = useDataStore()
+  const progress = {
+    collection: data.collection.length,
+    commander:  data.commander,
+    decks:      data.decks.length,
+  }
 
   const hasCards     = progress.collection > 0
   const hasCommander = !!progress.commander

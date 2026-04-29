@@ -1,139 +1,35 @@
-const KEY = 'selectedCommander'
-const COLLECTION_KEY = 'cardCollection'
-const DECKS_KEY = 'savedDecks'
+// Storage layer.
+//
+// Historically backed by browser localStorage; now backed by Supabase. The
+// file name is kept so existing imports don't have to change. Reads come from
+// the in-memory dataStore (hydrated by DataContext on sign-in). Writes are
+// optimistic: update dataStore immediately for instant UI feedback, then
+// persist to Supabase in the background. Failures are logged to the console;
+// for the polish phase we'll add toast feedback + retry queueing.
+//
+// The single async exception is `addImportedCardsToCollection`. A 10k-card
+// import is a real round-trip we shouldn't fire-and-forget — callers await it.
 
-// Custom error thrown when localStorage runs out of space.
-// Most browsers throw a DOMException with name 'QuotaExceededError' or code 22,
-// but the exact shape varies (Safari uses NS_ERROR_DOM_QUOTA_REACHED, Firefox
-// uses NS_ERROR_DOM_QUOTA_REACHED, etc.). We normalize.
+import { supabase } from '../lib/supabase'
+import * as dataStore from '../lib/dataStore'
+
+// Kept for back-compat with any callers that still catch it. localStorage's
+// quota constraint is gone, but if Supabase ever returns a quota-style error
+// in the future we can re-throw this.
 export class StorageQuotaError extends Error {
   constructor(action) {
-    super(`Browser storage is full. Could not ${action}. Try removing some saved decks or shrinking your collection.`)
+    super(`Could not ${action}.`)
     this.name = 'StorageQuotaError'
     this.userMessage = this.message
   }
 }
 
-function isQuotaError(err) {
-  if (!err) return false
-  if (err.name === 'QuotaExceededError') return true
-  if (err.name === 'NS_ERROR_DOM_QUOTA_REACHED') return true
-  if (err.code === 22 || err.code === 1014) return true
-  return false
-}
+// ─────────────────────────────────────────────────────────────────────────
+// SHAPE HELPERS
+// ─────────────────────────────────────────────────────────────────────────
 
-// Safe setItem wrapper. Throws StorageQuotaError on quota failure so callers
-// can show a clear user-visible message instead of crashing the UI.
-function setItemSafe(key, value, action = 'save') {
-  try {
-    localStorage.setItem(key, value)
-  } catch (err) {
-    if (isQuotaError(err)) {
-      throw new StorageQuotaError(action)
-    }
-    throw err
-  }
-}
-
-export function getSelectedCommander() {
-  try {
-    const raw = localStorage.getItem(KEY)
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
-
-export function saveSelectedCommander(card) {
-  const data = {
-    id:             card.id,
-    name:           card.name,
-    type_line:      card.type_line,
-    oracle_text:    card.oracle_text    ?? '',
-    mana_cost:      card.mana_cost      ?? '',
-    cmc:            card.cmc            ?? 0,
-    color_identity: card.color_identity ?? [],
-    colors:         card.colors         ?? [],
-    image_uris:     card.image_uris     ?? null,
-    card_faces:     card.card_faces     ?? null,
-    legalities:     card.legalities     ?? null,
-  }
-  setItemSafe(KEY, JSON.stringify(data), 'save your selected commander')
-}
-
-export function clearSelectedCommander() {
-  localStorage.removeItem(KEY)
-}
-
-export function getCollection() {
-  try {
-    const raw = localStorage.getItem(COLLECTION_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
-  }
-}
-
-export function addToCollection(card) {
-  const collection = getCollection()
-  if (collection.some(c => c.id === card.id)) return false
-  const data = {
-    id:             card.id,
-    name:           card.name,
-    type_line:      card.type_line,
-    oracle_text:    card.oracle_text    ?? '',
-    mana_cost:      card.mana_cost      ?? '',
-    cmc:            card.cmc            ?? 0,
-    color_identity: card.color_identity ?? [],
-    colors:         card.colors         ?? [],
-    image_uris:     card.image_uris     ?? null,
-    card_faces:     card.card_faces     ?? null,
-    legalities:     card.legalities     ?? null,
-    rarity:         card.rarity         ?? null,
-    addedAt:        new Date().toISOString(),
-  }
-  setItemSafe(COLLECTION_KEY, JSON.stringify([...collection, data]), 'add card to collection')
-  return true
-}
-
-export function removeFromCollection(cardId) {
-  const collection = getCollection().filter(c => c.id !== cardId)
-  setItemSafe(COLLECTION_KEY, JSON.stringify(collection), 'remove card from collection')
-}
-
-// Drops every card flagged as not found on Scryfall.
-// Returns the number removed so the UI can show feedback.
-export function removeFailedCards() {
-  const before = getCollection()
-  const after = before.filter(c => !c.validationFailed)
-  setItemSafe(COLLECTION_KEY, JSON.stringify(after), 'clean failed cards')
-  return before.length - after.length
-}
-
-export function isInCollection(cardId) {
-  return getCollection().some(c => c.id === cardId)
-}
-
-export function updateCollectionCard(cardId, updates) {
-  const collection = getCollection()
-  const idx = collection.findIndex(c => c.id === cardId)
-  if (idx === -1) return
-  collection[idx] = { ...collection[idx], ...updates }
-  setItemSafe(COLLECTION_KEY, JSON.stringify(collection), 'update card')
-}
-
-// Single write — use this when updating many cards at once to avoid
-// re-parsing/re-serializing the entire collection thousands of times.
-export function saveCollection(cards) {
-  setItemSafe(COLLECTION_KEY, JSON.stringify(cards), 'save collection')
-}
-
-export function clearCollection() {
-  localStorage.removeItem(COLLECTION_KEY)
-}
-
-// Strips Scryfall response down to just the fields the app uses.
-// Cuts ~70% of per-card storage (legalities has 25 keys, image_uris has 6 sizes).
+// Strips Scryfall response down to just the fields the app uses. Big wins:
+// legalities goes from 25 keys to 1, image_uris from 6 sizes to 2.
 export function trimScryfallCard(data) {
   return {
     name:           data.name,
@@ -162,17 +58,37 @@ export function trimScryfallCard(data) {
   }
 }
 
-export function getDecks() {
-  try {
-    const raw = localStorage.getItem(DECKS_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
+function trimCommander(card) {
+  return {
+    id:             card.id,
+    name:           card.name,
+    type_line:      card.type_line   ?? '',
+    oracle_text:    card.oracle_text ?? '',
+    mana_cost:      card.mana_cost   ?? '',
+    cmc:            card.cmc         ?? 0,
+    color_identity: card.color_identity ?? [],
+    colors:         card.colors      ?? [],
+    image_uris:     card.image_uris  ?? null,
+    card_faces:     card.card_faces  ?? null,
+    legalities:     card.legalities  ?? null,
   }
 }
 
-export function getDeck(id) {
-  return getDecks().find(d => d.id === id) ?? null
+function trimCollectionCard(card) {
+  return {
+    id:             card.id,
+    name:           card.name,
+    type_line:      card.type_line   ?? '',
+    oracle_text:    card.oracle_text ?? '',
+    mana_cost:      card.mana_cost   ?? '',
+    cmc:            card.cmc         ?? 0,
+    color_identity: card.color_identity ?? [],
+    colors:         card.colors      ?? [],
+    image_uris:     card.image_uris  ?? null,
+    card_faces:     card.card_faces  ?? null,
+    legalities:     card.legalities  ?? null,
+    rarity:         card.rarity      ?? null,
+  }
 }
 
 function trimDeckCard(card) {
@@ -192,91 +108,416 @@ function trimDeckCard(card) {
   }
 }
 
-// Upsert by id. New decks get a generated id + createdAt; updatedAt is always refreshed.
-// Returns the saved deck (with id/timestamps).
-export function saveDeck({ id, name, commander, mainDeck }) {
-  const decks = getDecks()
-  const now = new Date().toISOString()
-  const trimmedCards = (mainDeck ?? []).map(trimDeckCard)
-  const trimmedCommander = commander ? {
-    id:             commander.id,
-    name:           commander.name,
-    type_line:      commander.type_line   ?? '',
-    mana_cost:      commander.mana_cost   ?? '',
-    cmc:            commander.cmc         ?? 0,
-    color_identity: commander.color_identity ?? [],
-    colors:         commander.colors      ?? [],
-    image_uris:     commander.image_uris  ?? null,
-    card_faces:     commander.card_faces  ?? null,
-  } : null
+// Build the Supabase row payload for a collection card. The JSONB `data`
+// column holds the trimmed Scryfall blob; the regular columns hold metadata
+// the schema indexes (name) or that we filter on (validation flags).
+function collectionRowFor(card, userId) {
+  return {
+    user_id:           userId,
+    card_id:           card.id,
+    name:              card.name,
+    quantity:          card.quantity ?? 1,
+    data:              trimCollectionCard(card),
+    needs_validation:  card.needsValidation  ?? false,
+    validation_failed: card.validationFailed ?? false,
+  }
+}
 
-  const existingIdx = id ? decks.findIndex(d => d.id === id) : -1
-  if (existingIdx !== -1) {
-    const next = {
-      ...decks[existingIdx],
-      name,
-      commander: trimmedCommander,
-      mainDeck: trimmedCards,
-      updatedAt: now,
+// ─────────────────────────────────────────────────────────────────────────
+// SELECTED COMMANDER
+// ─────────────────────────────────────────────────────────────────────────
+
+export function getSelectedCommander() {
+  return dataStore.getState().commander
+}
+
+export function saveSelectedCommander(card) {
+  const trimmed = trimCommander(card)
+
+  // Optimistic local update — the Commander page redraws instantly.
+  dataStore.setState({ commander: trimmed })
+
+  // Persist to profile in the background.
+  const userId = dataStore.getState().userId
+  if (!userId) return
+  supabase
+    .from('profiles')
+    .update({
+      selected_commander_id:   trimmed.id,
+      selected_commander_data: trimmed,
+    })
+    .eq('id', userId)
+    .then(({ error }) => {
+      if (error) console.error('saveSelectedCommander failed:', error)
+    })
+}
+
+export function clearSelectedCommander() {
+  dataStore.setState({ commander: null })
+
+  const userId = dataStore.getState().userId
+  if (!userId) return
+  supabase
+    .from('profiles')
+    .update({ selected_commander_id: null, selected_commander_data: null })
+    .eq('id', userId)
+    .then(({ error }) => {
+      if (error) console.error('clearSelectedCommander failed:', error)
+    })
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// COLLECTION
+// ─────────────────────────────────────────────────────────────────────────
+
+export function getCollection() {
+  return dataStore.getState().collection
+}
+
+export function isInCollection(cardId) {
+  return dataStore.getState().collection.some(c => c.id === cardId)
+}
+
+// Returns true if added, false if already present (mirrors original behavior
+// so existing CommanderCard logic doesn't change).
+export function addToCollection(card) {
+  const state = dataStore.getState()
+  if (state.collection.some(c => c.id === card.id)) return false
+
+  const trimmed = {
+    ...trimCollectionCard(card),
+    quantity:        1,
+    addedAt:         new Date().toISOString(),
+    needsValidation: false,
+    validationFailed: false,
+  }
+
+  // Optimistic local
+  dataStore.setState(s => ({ ...s, collection: [...s.collection, trimmed] }))
+
+  // Async persist
+  const userId = state.userId
+  if (userId) {
+    supabase
+      .from('collections')
+      .insert(collectionRowFor(trimmed, userId))
+      .then(({ error }) => {
+        if (error) console.error('addToCollection failed:', error)
+      })
+  }
+
+  return true
+}
+
+export function removeFromCollection(cardId) {
+  dataStore.setState(s => ({
+    ...s,
+    collection: s.collection.filter(c => c.id !== cardId),
+  }))
+
+  const userId = dataStore.getState().userId
+  if (!userId) return
+  supabase
+    .from('collections')
+    .delete()
+    .eq('user_id', userId)
+    .eq('card_id', cardId)
+    .then(({ error }) => {
+      if (error) console.error('removeFromCollection failed:', error)
+    })
+}
+
+// Drop every card flagged as not found on Scryfall. Returns the count removed.
+export function removeFailedCards() {
+  const state = dataStore.getState()
+  const failedIds = state.collection.filter(c => c.validationFailed).map(c => c.id)
+
+  if (failedIds.length === 0) return 0
+
+  dataStore.setState(s => ({
+    ...s,
+    collection: s.collection.filter(c => !c.validationFailed),
+  }))
+
+  if (state.userId) {
+    supabase
+      .from('collections')
+      .delete()
+      .eq('user_id', state.userId)
+      .in('card_id', failedIds)
+      .then(({ error }) => {
+        if (error) console.error('removeFailedCards failed:', error)
+      })
+  }
+
+  return failedIds.length
+}
+
+export function updateCollectionCard(cardId, updates) {
+  const state = dataStore.getState()
+  const idx = state.collection.findIndex(c => c.id === cardId)
+  if (idx === -1) return
+
+  const next = { ...state.collection[idx], ...updates }
+  dataStore.setState(s => ({
+    ...s,
+    collection: s.collection.map(c => (c.id === cardId ? next : c)),
+  }))
+
+  if (state.userId) {
+    supabase
+      .from('collections')
+      .update({
+        name:              next.name,
+        quantity:          next.quantity ?? 1,
+        data:              trimCollectionCard(next),
+        needs_validation:  next.needsValidation  ?? false,
+        validation_failed: next.validationFailed ?? false,
+      })
+      .eq('user_id', state.userId)
+      .eq('card_id', cardId)
+      .then(({ error }) => {
+        if (error) console.error('updateCollectionCard failed:', error)
+      })
+  }
+}
+
+// Replaces the entire collection with `cards`. Used by the validation pass
+// after Scryfall enrichment — the function callers pass in the full updated
+// array. We diff and upsert/delete to keep things efficient even at 10k cards.
+export function saveCollection(cards) {
+  const state = dataStore.getState()
+  const prevById  = new Map(state.collection.map(c => [c.id, c]))
+  const nextById  = new Map(cards.map(c => [c.id, c]))
+  const toUpsert  = []
+  const toDelete  = []
+
+  for (const card of cards) {
+    const prev = prevById.get(card.id)
+    // Upsert anything new or whose data changed.
+    if (!prev || JSON.stringify(prev) !== JSON.stringify(card)) {
+      toUpsert.push(card)
     }
-    decks[existingIdx] = next
-    setItemSafe(DECKS_KEY, JSON.stringify(decks), 'save deck')
-    return next
+  }
+  for (const id of prevById.keys()) {
+    if (!nextById.has(id)) toDelete.push(id)
   }
 
-  const newDeck = {
-    id:        (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `deck_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    name,
-    commander: trimmedCommander,
-    mainDeck:  trimmedCards,
-    createdAt: now,
-    updatedAt: now,
+  // Optimistic local — replace fully. Subscribers re-render once.
+  dataStore.setState(s => ({ ...s, collection: cards }))
+
+  if (!state.userId) return
+
+  // Persist deletes
+  if (toDelete.length > 0) {
+    supabase
+      .from('collections')
+      .delete()
+      .eq('user_id', state.userId)
+      .in('card_id', toDelete)
+      .then(({ error }) => {
+        if (error) console.error('saveCollection (delete) failed:', error)
+      })
   }
-  decks.push(newDeck)
-  setItemSafe(DECKS_KEY, JSON.stringify(decks), 'save deck')
-  return newDeck
+
+  // Persist upserts in batches of 500 — Supabase recommends keeping payloads
+  // under ~1MB; at ~1KB per card row, 500 keeps us comfortably under.
+  for (let i = 0; i < toUpsert.length; i += 500) {
+    const chunk = toUpsert.slice(i, i + 500).map(c => collectionRowFor(c, state.userId))
+    supabase
+      .from('collections')
+      .upsert(chunk, { onConflict: 'user_id,card_id' })
+      .then(({ error }) => {
+        if (error) console.error('saveCollection (upsert) failed:', error)
+      })
+  }
 }
 
-export function deleteDeck(id) {
-  const decks = getDecks().filter(d => d.id !== id)
-  setItemSafe(DECKS_KEY, JSON.stringify(decks), 'save deck')
+export function clearCollection() {
+  dataStore.setState(s => ({ ...s, collection: [] }))
+
+  const userId = dataStore.getState().userId
+  if (!userId) return
+  supabase
+    .from('collections')
+    .delete()
+    .eq('user_id', userId)
+    .then(({ error }) => {
+      if (error) console.error('clearCollection failed:', error)
+    })
 }
 
-// TODO: Before inserting, validate each name against Scryfall /cards/named?exact=
-// to enrich with full card data. needsValidation: true marks cards for later enrichment.
-export function addImportedCardsToCollection(importedCards) {
-  const collection = getCollection()
+// Bulk import — async because thousands of inserts shouldn't be fire-and-forget.
+// Caller should await and show a loading state.
+export async function addImportedCardsToCollection(importedCards) {
+  const state = dataStore.getState()
+  const collection = [...state.collection]
   let added = 0
   let updated = 0
+  const updatedRows = []
+  const newRows     = []
 
   for (const card of importedCards) {
     const existingIdx = collection.findIndex(
       c => c.name.toLowerCase() === card.name.toLowerCase()
     )
     if (existingIdx !== -1) {
-      collection[existingIdx].quantity = (collection[existingIdx].quantity ?? 1) + card.quantity
+      const next = {
+        ...collection[existingIdx],
+        quantity: (collection[existingIdx].quantity ?? 1) + card.quantity,
+      }
+      collection[existingIdx] = next
       updated++
+      updatedRows.push(next)
     } else {
-      collection.push({
-        id:             'imported_' + card.name.toLowerCase().replace(/[^a-z0-9]/g, '_'),
-        name:           card.name,
-        quantity:       card.quantity,
-        needsValidation: true,
-        addedAt:        new Date().toISOString(),
-        type_line:      '',
-        oracle_text:    '',
-        mana_cost:      '',
-        cmc:            0,
-        color_identity: [],
-        colors:         [],
-        image_uris:     null,
-        card_faces:     null,
-        legalities:     null,
-      })
+      const newCard = {
+        id:               'imported_' + card.name.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+        name:             card.name,
+        quantity:         card.quantity,
+        needsValidation:  true,
+        validationFailed: false,
+        addedAt:          new Date().toISOString(),
+        type_line:        '',
+        oracle_text:      '',
+        mana_cost:        '',
+        cmc:              0,
+        color_identity:   [],
+        colors:           [],
+        image_uris:       null,
+        card_faces:       null,
+        legalities:       null,
+      }
+      collection.push(newCard)
       added++
+      newRows.push(newCard)
     }
   }
 
-  setItemSafe(COLLECTION_KEY, JSON.stringify(collection), 'import cards')
+  // Local update first — the Collection page renders the full set immediately
+  // even while server inserts are still in flight.
+  dataStore.setState(s => ({ ...s, collection }))
+
+  if (state.userId) {
+    const allRows = [...updatedRows, ...newRows].map(c => collectionRowFor(c, state.userId))
+    // Batched upsert. Each batch is awaited so the user sees errors if storage
+    // ever throws (e.g., RLS misconfig).
+    for (let i = 0; i < allRows.length; i += 500) {
+      const chunk = allRows.slice(i, i + 500)
+      const { error } = await supabase
+        .from('collections')
+        .upsert(chunk, { onConflict: 'user_id,card_id' })
+      if (error) {
+        console.error('addImportedCardsToCollection batch failed:', error)
+        throw new Error(error.message)
+      }
+    }
+  }
+
   return { added, updated }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// DECKS
+// ─────────────────────────────────────────────────────────────────────────
+
+export function getDecks() {
+  return dataStore.getState().decks
+}
+
+export function getDeck(id) {
+  return dataStore.getState().decks.find(d => d.id === id) ?? null
+}
+
+// Upsert by id. New decks get a client-generated UUID + createdAt; updatedAt
+// is always refreshed. Returns the saved deck (with id/timestamps) so callers
+// can navigate to it without awaiting the server round-trip.
+export function saveDeck({ id, name, commander, mainDeck }) {
+  const state = dataStore.getState()
+  const now = new Date().toISOString()
+  const trimmedCards = (mainDeck ?? []).map(trimDeckCard)
+  const trimmedCommander = commander ? trimCommander(commander) : null
+
+  const isUpdate = !!id && state.decks.some(d => d.id === id)
+  const deckId   = id ?? newUuid()
+
+  const deck = isUpdate
+    ? {
+        ...state.decks.find(d => d.id === id),
+        name,
+        commander: trimmedCommander,
+        mainDeck:  trimmedCards,
+        updatedAt: now,
+      }
+    : {
+        id:        deckId,
+        name,
+        commander: trimmedCommander,
+        mainDeck:  trimmedCards,
+        createdAt: now,
+        updatedAt: now,
+      }
+
+  dataStore.setState(s => ({
+    ...s,
+    decks: isUpdate
+      ? s.decks.map(d => (d.id === id ? deck : d))
+      : [deck, ...s.decks],
+  }))
+
+  if (state.userId) {
+    if (isUpdate) {
+      supabase
+        .from('decks')
+        .update({
+          name,
+          commander_data: trimmedCommander,
+          main_deck:      trimmedCards,
+        })
+        .eq('id', deckId)
+        .eq('user_id', state.userId)
+        .then(({ error }) => {
+          if (error) console.error('saveDeck (update) failed:', error)
+        })
+    } else {
+      supabase
+        .from('decks')
+        .insert({
+          id:             deckId,
+          user_id:        state.userId,
+          name,
+          commander_data: trimmedCommander,
+          main_deck:      trimmedCards,
+        })
+        .then(({ error }) => {
+          if (error) console.error('saveDeck (insert) failed:', error)
+        })
+    }
+  }
+
+  return deck
+}
+
+export function deleteDeck(id) {
+  dataStore.setState(s => ({
+    ...s,
+    decks: s.decks.filter(d => d.id !== id),
+  }))
+
+  const userId = dataStore.getState().userId
+  if (!userId) return
+  supabase
+    .from('decks')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', userId)
+    .then(({ error }) => {
+      if (error) console.error('deleteDeck failed:', error)
+    })
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+
+function newUuid() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+  return `deck_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }

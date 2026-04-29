@@ -159,10 +159,11 @@ function ImportSection({ onImportComplete }) {
     setImportResult(null)
   }
 
-  function handleConfirmImport() {
+  async function handleConfirmImport() {
     let result
     try {
-      result = addImportedCardsToCollection(parsedCards)
+      // Async now — bulk imports of 5k+ cards round-trip to Supabase in batches.
+      result = await addImportedCardsToCollection(parsedCards)
     } catch (err) {
       setParseError(err.userMessage ?? `Import failed: ${err.message ?? err}`)
       return

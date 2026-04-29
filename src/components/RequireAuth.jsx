@@ -5,12 +5,18 @@
 
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useDataStore } from '../lib/dataStore'
 
 export default function RequireAuth({ children }) {
-  const { user, loading } = useAuth()
+  const { user, loading: authLoading } = useAuth()
+  const data = useDataStore()
   const location = useLocation()
 
-  if (loading) {
+  // Two layers to wait for: auth (do we know if user is logged in?) and data
+  // (have we hydrated their collection/decks from Supabase yet?). Without the
+  // second wait, pages render with empty state for a frame and then snap to
+  // their real content — looks like a glitch.
+  if (authLoading || (user && !data.ready)) {
     return (
       <div style={styles.loading}>
         <div style={styles.spinner} />
@@ -19,7 +25,6 @@ export default function RequireAuth({ children }) {
   }
 
   if (!user) {
-    // Preserve the attempted path so we can send the user back after login.
     return <Navigate to="/login" replace state={{ from: location }} />
   }
 
