@@ -1,5 +1,27 @@
 const BASE_URL = '/api/scryfall'
 
+// POST /cards/collection with retry on transient failures. Retries 429 and 5xx
+// responses up to 3 times with exponential backoff (0.5s, 1s, 2s). Throws on
+// permanent failures (4xx other than 429) or after exhausting retries.
+async function fetchBatchWithRetry(chunk, { retries = 3 } = {}) {
+  let lastStatus = 0
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const res = await fetch(`${BASE_URL}/cards/collection`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifiers: chunk.map(n => ({ name: n })) }),
+    })
+    if (res.ok) return res.json()
+    lastStatus = res.status
+    const transient = res.status === 429 || res.status >= 500
+    if (!transient || attempt === retries) {
+      throw new Error(`Scryfall collection fetch failed: ${res.status}`)
+    }
+    await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)))
+  }
+  throw new Error(`Scryfall collection fetch failed: ${lastStatus}`)
+}
+
 export async function searchCards(query) {
   const res = await fetch(`${BASE_URL}/cards/search?q=${encodeURIComponent(query)}`)
   if (!res.ok) throw new Error('Scryfall search failed')
@@ -41,17 +63,27 @@ export async function getCardsByNames(names, { onBatchDone, onProgress, maxFuzzy
     }
   }
 
-  // First pass: batch exact-name lookup
+  // First pass: batch exact-name lookup. Each batch is retried on transient
+  // failures (429 / 5xx) with exponential backoff. If a batch still fails
+  // after retries, its names fall through to the per-card fuzzy phase rather
+  // than killing the whole import — Scryfall + Vercel's shared egress IP can
+  // get rate-limited mid-import on large collections, and a single bad batch
+  // shouldn't lose the user's progress on the other 90%.
   for (let i = 0; i < names.length; i += CHUNK) {
-    if (i > 0) await new Promise(r => setTimeout(r, 100))
+    if (i > 0) await new Promise(r => setTimeout(r, 150))
     const chunk = names.slice(i, i + CHUNK)
-    const res = await fetch(`${BASE_URL}/cards/collection`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifiers: chunk.map(n => ({ name: n })) }),
-    })
-    if (!res.ok) throw new Error(`Scryfall collection fetch failed: ${res.status}`)
-    const data = await res.json()
+
+    let data
+    try {
+      data = await fetchBatchWithRetry(chunk)
+    } catch (err) {
+      // Permanent failure — push the whole chunk to fuzzy fallback instead
+      // of throwing. The UI will show partial results rather than nothing.
+      console.warn(`Scryfall batch failed for ${chunk.length} cards, falling through to per-card lookup:`, err.message)
+      for (const name of chunk) batchNotFound.push(name)
+      reportProgress(Math.min(i + CHUNK, names.length), names.length, 'batch')
+      continue
+    }
 
     const byCanonical = {}
     for (const card of (data.data ?? [])) {
