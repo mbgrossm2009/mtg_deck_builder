@@ -202,6 +202,10 @@ a {
   border-color: var(--danger);
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Hover lift for clickable card panels */
 .card-hover {
   transition: transform var(--transition-base),

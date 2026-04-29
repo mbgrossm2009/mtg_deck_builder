@@ -1,6 +1,7 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 
-const links = [
+const appLinks = [
   { label: 'Home',         to: '/' },
   { label: 'Collection',   to: '/collection' },
   { label: 'Commander',    to: '/commander' },
@@ -9,6 +10,18 @@ const links = [
 ]
 
 export default function NavBar() {
+  const { user, signOut, loading } = useAuth()
+  const navigate = useNavigate()
+
+  async function handleSignOut() {
+    try {
+      await signOut()
+      navigate('/', { replace: true })
+    } catch (err) {
+      console.error('Sign out failed:', err)
+    }
+  }
+
   return (
     <header style={styles.header}>
       <div style={styles.inner}>
@@ -17,21 +30,41 @@ export default function NavBar() {
           <span style={styles.brandWord}>Brewbench</span>
         </NavLink>
 
-        <nav style={styles.nav}>
-          {links.map(link => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              end={link.to === '/'}
-              style={({ isActive }) => ({
-                ...styles.link,
-                ...(isActive ? styles.linkActive : {}),
-              })}
-            >
-              {link.label}
-            </NavLink>
+        {/* Show full app nav only when signed in. Visitors see a clean nav. */}
+        {user && (
+          <nav style={styles.nav}>
+            {appLinks.map(link => (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                end={link.to === '/'}
+                style={({ isActive }) => ({
+                  ...styles.link,
+                  ...(isActive ? styles.linkActive : {}),
+                })}
+              >
+                {link.label}
+              </NavLink>
+            ))}
+          </nav>
+        )}
+
+        <div style={styles.right}>
+          {!loading && (user ? (
+            <div style={styles.userArea}>
+              <span style={styles.userEmail} title={user.email}>
+                {user.email}
+              </span>
+              <button className="btn btn-ghost" style={styles.signOutBtn} onClick={handleSignOut}>
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <Link to="/login" className="btn btn-primary" style={styles.signInBtn}>
+              Sign in
+            </Link>
           ))}
-        </nav>
+        </div>
       </div>
     </header>
   )
@@ -55,7 +88,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 'var(--space-6)',
+    gap: 'var(--space-4)',
   },
   brand: {
     display: 'inline-flex',
@@ -87,6 +120,8 @@ const styles = {
     display: 'flex',
     flexWrap: 'wrap',
     gap: 'var(--space-1)',
+    flex: 1,
+    justifyContent: 'center',
   },
   link: {
     padding: '8px 14px',
@@ -102,5 +137,32 @@ const styles = {
     background: 'var(--accent-soft)',
     color: 'var(--text)',
     fontWeight: 600,
+  },
+  right: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 'var(--space-3)',
+  },
+  userArea: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 'var(--space-2)',
+  },
+  userEmail: {
+    color: 'var(--text-muted)',
+    fontSize: 'var(--text-xs)',
+    maxWidth: 160,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  signOutBtn: {
+    padding: '6px 10px',
+    fontSize: 'var(--text-xs)',
+  },
+  signInBtn: {
+    padding: '8px 16px',
+    fontSize: 'var(--text-sm)',
+    textDecoration: 'none',
   },
 }

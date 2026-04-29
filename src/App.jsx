@@ -1,7 +1,10 @@
-import React from 'react'
 import { Routes, Route } from 'react-router-dom'
 import NavBar from './components/NavBar'
+import RequireAuth from './components/RequireAuth'
+import { useAuth } from './contexts/AuthContext'
 import Home from './pages/Home'
+import Marketing from './pages/Marketing'
+import Login from './pages/Login'
 import Collection from './pages/Collection'
 import Commander from './pages/Commander'
 import DeckBuilder from './pages/DeckBuilder'
@@ -13,15 +16,28 @@ function App() {
       <NavBar />
       <main style={styles.main}>
         <Routes>
-          <Route path="/"             element={<Home />} />
-          <Route path="/collection"   element={<Collection />} />
-          <Route path="/commander"    element={<Commander />} />
-          <Route path="/deck-builder" element={<DeckBuilder />} />
-          <Route path="/my-decks"     element={<MyDecks />} />
+          {/* Conditional landing: Marketing for visitors, Home (onboarding) for users. */}
+          <Route path="/" element={<RootRoute />} />
+
+          <Route path="/login" element={<Login />} />
+
+          {/* Gated routes — RequireAuth bounces visitors to /login. */}
+          <Route path="/collection"   element={<RequireAuth><Collection /></RequireAuth>} />
+          <Route path="/commander"    element={<RequireAuth><Commander /></RequireAuth>} />
+          <Route path="/deck-builder" element={<RequireAuth><DeckBuilder /></RequireAuth>} />
+          <Route path="/my-decks"     element={<RequireAuth><MyDecks /></RequireAuth>} />
         </Routes>
       </main>
     </div>
   )
+}
+
+function RootRoute() {
+  const { user, loading } = useAuth()
+  // Avoid flashing Marketing for the split second between mount and session
+  // resolution when the user is actually logged in.
+  if (loading) return null
+  return user ? <Home /> : <Marketing />
 }
 
 const styles = {
