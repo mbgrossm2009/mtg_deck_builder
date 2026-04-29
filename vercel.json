@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/api/scryfall/:path*", "destination": "/api/scryfall?path=:path*" },
     { "source": "/((?!api/|@|.*\\..*).*)", "destination": "/index.html" }
   ]
 }
