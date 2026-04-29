@@ -1,11 +1,82 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   DESIGN TOKENS
+   Single source of truth for color, spacing, type, radii, shadows.
+   Inline styles in components reference these via var(--token).
+   ───────────────────────────────────────────────────────────────────────── */
+
 :root {
-  --bg-surface: #16213e;
-  --border: #2a2a4a;
-  --text: #e0e0e0;
-  --text-heading: #ffffff;
-  --accent: #7c5cbf;
-  --accent-hover: #a07de0;
+  /* Surface colors — dark dashboard, blue-leaning neutrals */
+  --bg-app:        #0a0d18;
+  --surface-1:     #11162a;   /* card / panel */
+  --surface-2:     #1a2040;   /* elevated, hover */
+  --surface-3:     #232a52;   /* active row, selected */
+
+  /* Borders */
+  --border:        #232a4a;
+  --border-strong: #3a4470;
+
+  /* Text */
+  --text:          #e8eaf2;
+  --text-muted:    #a0a8c0;
+  --text-subtle:   #6b7188;
+
+  /* Brand / accent */
+  --accent:        #8b5cf6;
+  --accent-hover:  #a78bfa;
+  --accent-soft:   rgba(139, 92, 246, 0.14);
+  --accent-ring:   rgba(139, 92, 246, 0.35);
+
+  /* Status */
+  --success:       #10b981;
+  --warning:       #f59e0b;
+  --danger:        #ef4444;
+  --info:          #3b82f6;
+
+  /* Spacing scale (multiples of 4) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.30);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.40);
+
+  /* Type scale */
+  --text-xs:  0.75rem;     /* 12 */
+  --text-sm:  0.875rem;    /* 14 */
+  --text-base: 1rem;       /* 16 */
+  --text-lg:  1.125rem;    /* 18 */
+  --text-xl:  1.25rem;     /* 20 */
+  --text-2xl: 1.5rem;      /* 24 */
+  --text-3xl: 1.875rem;    /* 30 */
+  --text-4xl: 2.25rem;     /* 36 */
+
+  /* Layout */
+  --content-max-width: 1100px;
+  --nav-height: 64px;
+
+  /* Motion */
+  --transition-fast: 120ms ease;
+  --transition-base: 180ms ease;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   RESET + BASE
+   ───────────────────────────────────────────────────────────────────────── */
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -13,13 +84,132 @@
   padding: 0;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
-  background-color: #1a1a2e;
-  color: #e0e0e0;
-  font-family: 'Segoe UI', sans-serif;
+  background-color: var(--bg-app);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: var(--text-base);
+  font-weight: 400;
+  line-height: 1.5;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--text);
 }
 
 button {
+  font-family: inherit;
   cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+input, textarea, select {
+  font-family: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   REUSABLE BUTTON CLASSES
+   Inline styles can't express :hover/:focus, so any button that needs
+   interactive feedback should add one of these classes alongside its style.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  letter-spacing: 0.01em;
+  border: 1px solid transparent;
+  transition: background-color var(--transition-fast),
+              border-color var(--transition-fast),
+              color var(--transition-fast),
+              transform var(--transition-fast),
+              box-shadow var(--transition-fast);
+  user-select: none;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.btn-primary:disabled {
+  opacity: 0.55;
+}
+
+.btn-secondary {
+  background: var(--surface-1);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--accent);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: transparent;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-1);
+  color: var(--text);
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+.btn-danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: var(--danger);
+}
+
+/* Hover lift for clickable card panels */
+.card-hover {
+  transition: transform var(--transition-base),
+              border-color var(--transition-base),
+              box-shadow var(--transition-base);
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
 }

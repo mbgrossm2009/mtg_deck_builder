@@ -1,4 +1,4 @@
-const BASE_URL = 'https://api.scryfall.com'
+const BASE_URL = '/api/scryfall'
 
 export async function searchCards(query) {
   const res = await fetch(`${BASE_URL}/cards/search?q=${encodeURIComponent(query)}`)

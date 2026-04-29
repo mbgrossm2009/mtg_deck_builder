@@ -1,9 +1,13 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, Link } from 'react-router-dom'
 import { getSelectedCommander, saveDeck, getDeck } from '../utils/localStorage'
 import { getCardImage } from '../utils/scryfallApi'
 import { generateDeck } from '../rules/deckGenerator'
-import { buildPass1ForCurrentSelection, buildPass2ForCurrentSelection } from '../services/llmDeckOrchestrator'
+import {
+  buildPass1ForCurrentSelection,
+  buildPass2ForCurrentSelection,
+  generateDeckWithLLMAssist,
+} from '../services/llmDeckOrchestrator'
 import { BRACKET_LABELS } from '../rules/bracketRules'
 
 const COLOR_PIPS = {
@@ -42,6 +46,9 @@ export default function DeckBuilder() {
   const [bracket, setBracket]         = useState(3)
   const [result, setResult]           = useState(() => initialDeck ? deckToResult(initialDeck, 3) : null)
   const [generating, setGenerating]   = useState(false)
+  // null while idle, 'pass1' while waiting on the strategy call, 'pass2' while
+  // waiting on the full-deck call. Drives the AI button's label.
+  const [aiStage, setAiStage]         = useState(null)
   const [showExcluded, setShowExcluded] = useState(false)
   const [showExplanation, setShowExplanation] = useState(false)
   const [hoveredCard, setHoveredCard] = useState(null)
@@ -78,6 +85,33 @@ export default function DeckBuilder() {
         setResult({ error: `Generation failed: ${err?.message ?? err}` })
       } finally {
         setGenerating(false)
+      }
+    }, 0)
+  }, [bracket, primaryArchetype])
+
+  // Automated two-pass AI generation. Pass 1 picks the strategy + core engine,
+  // Pass 2 fills the remaining slots around it. Both calls go through the
+  // /api/llm Vercel function so the OpenAI key never leaves the server.
+  // If /api/llm fails (no key configured, network error, etc.) the orchestrator
+  // falls back to the heuristic generator and surfaces a warning.
+  const handleGenerateAI = useCallback(() => {
+    setGenerating(true)
+    setAiStage('pass1')
+    setResult(null)
+    setLoadedDeck(null)
+    setSaveName('')
+    setTimeout(async () => {
+      try {
+        const deck = await generateDeckWithLLMAssist(bracket, primaryArchetype, {
+          twoPass: true,
+          onProgress: ({ stage }) => setAiStage(stage),
+        })
+        setResult(deck)
+      } catch (err) {
+        setResult({ error: `AI generation failed: ${err?.message ?? err}` })
+      } finally {
+        setGenerating(false)
+        setAiStage(null)
       }
     }, 0)
   }, [bracket, primaryArchetype])
@@ -217,9 +251,20 @@ export default function DeckBuilder() {
   if (!commander) {
     return (
       <div style={styles.page}>
-        <h2 style={styles.heading}>Deck Builder</h2>
+        <header style={styles.pageHeader}>
+          <h1 style={styles.heading}>Deck Builder</h1>
+          <p style={styles.subhead}>Generate a 99-card deck tuned to your commander.</p>
+        </header>
         <div style={styles.emptyState}>
-          No commander selected. Go to the Commander page and pick one first.
+          <div style={styles.emptyIcon} aria-hidden>👑</div>
+          <div style={styles.emptyTitle}>Pick a commander to get started</div>
+          <div style={styles.emptyDesc}>
+            Brewbench builds the deck around your commander's color identity and abilities.
+            Choose one and come back here.
+          </div>
+          <Link to="/commander" className="btn btn-primary" style={styles.emptyBtn}>
+            Choose Commander →
+          </Link>
         </div>
       </div>
     )
@@ -229,7 +274,10 @@ export default function DeckBuilder() {
 
   return (
     <div style={styles.page}>
-      <h2 style={styles.heading}>Deck Builder</h2>
+      <header style={styles.pageHeader}>
+        <h1 style={styles.heading}>Deck Builder</h1>
+        <p style={styles.subhead}>Generate a 99-card deck tuned to your commander.</p>
+      </header>
 
       {/* Commander strip */}
       <CommanderStrip commander={commander} />
@@ -244,28 +292,46 @@ export default function DeckBuilder() {
               onClick={() => setBracket(b)}
               style={{ ...styles.bracketBtn, ...(bracket === b ? styles.bracketBtnActive : {}) }}
             >
-              <span style={styles.bracketNum}>{b}</span>
+              <span style={{ ...styles.bracketNum, ...(bracket === b ? styles.bracketNumActive : {}) }}>{b}</span>
               <span style={styles.bracketLabel}>{BRACKET_LABELS[b]}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Generate button */}
+      {/* Primary action: AI two-pass generation. The marquee feature — gradient
+          treatment puts it visually above the heuristic option. Falls back to the
+          heuristic silently if /api/llm is unreachable. */}
       <button
-        style={{ ...styles.generateBtn, ...(generating ? styles.generateBtnDisabled : {}) }}
+        className="btn"
+        style={{ ...styles.aiGenerateBtn, ...(generating ? styles.generateBtnDisabled : {}) }}
+        onClick={handleGenerateAI}
+        disabled={generating}
+      >
+        {aiStage === 'pass1'
+          ? 'Choosing strategy…'
+          : aiStage === 'pass2'
+          ? 'Building deck…'
+          : <><span style={styles.sparkle} aria-hidden>✦</span>Generate with AI</>}
+      </button>
+
+      {/* Secondary action: heuristic generator. Instant, no API cost. */}
+      <button
+        className="btn btn-secondary"
+        style={{ ...styles.heuristicBtn, ...(generating ? styles.generateBtnDisabled : {}) }}
         onClick={handleGenerate}
         disabled={generating}
       >
-        {generating ? 'Generating…' : result ? 'Regenerate Deck' : 'Generate Deck'}
+        {generating && !aiStage ? 'Generating…' : result ? 'Quick Regenerate (no AI)' : 'Quick Generate (no AI)'}
       </button>
 
-      {/* Two-pass prompt flow — Pass 1 (strategy + core engine) → user pastes ChatGPT
-          response back → Pass 2 (build 99 around locked Pass 1). Better than single-pass
-          because the model can't waffle on strategy mid-build. */}
-      <button style={styles.showPromptBtn} onClick={handleStartPass1}>
-        Two-Pass Prompt for ChatGPT
-      </button>
+      {/* Tertiary: manual prompt copy/paste — for users who want to run their
+          own ChatGPT account or use a different model. */}
+      <div style={styles.manualLinkRow}>
+        <button className="btn btn-ghost" style={styles.manualLink} onClick={handleStartPass1}>
+          Advanced: copy prompts to ChatGPT manually
+        </button>
+      </div>
 
       {result?.error && (
         <div style={styles.errorBanner}>{result.error}</div>
@@ -1100,11 +1166,27 @@ function groupByPrimaryRole(cards) {
 // ─── styles ──────────────────────────────────────────────────────────────────
 
 const styles = {
-  page:            { maxWidth: '900px', margin: '0 auto', padding: '24px 16px', position: 'relative' },
-  heading:         { color: '#c084fc', marginBottom: '24px' },
-  emptyState:      { padding: '40px', border: '1px dashed #4a2c6e', borderRadius: '8px', color: '#6060a0', textAlign: 'center' },
-  section:         { marginBottom: '24px' },
-  sectionLabel:    { color: '#a0a0c0', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' },
+  page:            { position: 'relative' },
+  pageHeader:      { marginBottom: 'var(--space-8)' },
+  heading:         { fontSize: 'var(--text-3xl)', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 'var(--space-2)', color: 'var(--text)' },
+  subhead:         { fontSize: 'var(--text-base)', color: 'var(--text-muted)', lineHeight: 1.6 },
+  emptyState:      {
+                     padding: 'var(--space-12) var(--space-6)',
+                     background: 'var(--surface-1)',
+                     border: '1px solid var(--border)',
+                     borderRadius: 'var(--radius-lg)',
+                     textAlign: 'center',
+                     display: 'flex',
+                     flexDirection: 'column',
+                     alignItems: 'center',
+                     gap: 'var(--space-3)',
+                   },
+  emptyIcon:       { fontSize: '2.5rem', marginBottom: 'var(--space-2)' },
+  emptyTitle:      { fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--text)' },
+  emptyDesc:       { color: 'var(--text-muted)', maxWidth: '440px', lineHeight: 1.6 },
+  emptyBtn:        { padding: '10px 20px', textDecoration: 'none', marginTop: 'var(--space-3)' },
+  section:         { marginBottom: 'var(--space-6)' },
+  sectionLabel:    { color: 'var(--text-muted)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.10em', fontWeight: 600, marginBottom: 'var(--space-3)' },
 
   commanderStrip:  { display: 'flex', gap: '16px', alignItems: 'center', background: '#16213e', border: '2px solid #c084fc', borderRadius: '10px', padding: '16px', marginBottom: '24px' },
   commanderImg:    { width: '70px', borderRadius: '6px', flexShrink: 0 },
@@ -1121,22 +1203,48 @@ const styles = {
   modeDesc:        { fontSize: '0.75rem', color: '#7070a0' },
   betaPill:        { background: '#7c3aed', color: '#fff', fontSize: '0.6rem', fontWeight: '700', padding: '2px 6px', borderRadius: '8px', letterSpacing: '0.05em' },
 
-  bracketRow:      { display: 'flex', gap: '10px', flexWrap: 'wrap' },
-  bracketBtn:      { flex: '1', minWidth: '90px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '10px 8px', background: '#1a1a2e', border: '1px solid #3a2a5e', borderRadius: '8px', cursor: 'pointer', color: '#a0a0c0', transition: 'all 0.15s' },
-  bracketBtnActive:{ background: '#2d1b4e', border: '2px solid #c084fc', color: '#fff' },
-  bracketNum:      { fontSize: '1.1rem', fontWeight: '700', color: '#c084fc' },
-  bracketLabel:    { fontSize: '0.72rem', textAlign: 'center' },
+  bracketRow:      { display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' },
+  bracketBtn:      { flex: '1', minWidth: '90px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '12px 8px', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', cursor: 'pointer', color: 'var(--text-muted)', transition: 'background-color 120ms ease, border-color 120ms ease, color 120ms ease' },
+  bracketBtnActive:{ background: 'var(--accent-soft)', borderColor: 'var(--accent)', color: 'var(--text)' },
+  bracketNum:      { fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--text-muted)', fontFeatureSettings: '"tnum"' },
+  bracketNumActive:{ color: 'var(--accent-hover)' },
+  bracketLabel:    { fontSize: 'var(--text-xs)', textAlign: 'center', fontWeight: 500 },
 
-  generateBtn:     { display: 'block', width: '100%', padding: '14px', background: '#7c3aed', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '1rem', fontWeight: '700', cursor: 'pointer', marginBottom: '12px', letterSpacing: '0.03em' },
-  generateBtnDisabled: { background: '#4a2c6e', cursor: 'not-allowed', opacity: 0.7 },
-  showPromptBtn:   { display: 'block', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed #4a2c6e', borderRadius: '8px', color: '#a0a0c0', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer', marginBottom: '24px' },
+  aiGenerateBtn:   {
+                     display: 'flex',
+                     width: '100%',
+                     padding: '14px',
+                     background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+                     color: '#fff',
+                     border: '1px solid rgba(255,255,255,0.08)',
+                     borderRadius: 'var(--radius-md)',
+                     fontSize: 'var(--text-base)',
+                     fontWeight: 700,
+                     letterSpacing: '0.01em',
+                     marginBottom: 'var(--space-3)',
+                     boxShadow: '0 4px 14px rgba(99, 102, 241, 0.30)',
+                     transition: 'transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease',
+                   },
+  heuristicBtn:    {
+                     display: 'flex',
+                     width: '100%',
+                     padding: '12px',
+                     fontSize: 'var(--text-sm)',
+                     fontWeight: 600,
+                     marginBottom: 'var(--space-3)',
+                   },
+  generateBtnDisabled: { opacity: 0.55, cursor: 'not-allowed' },
+  sparkle:         { fontSize: 'var(--text-base)', color: '#fde68a' },
+  manualLinkRow:   { textAlign: 'center', marginBottom: 'var(--space-6)' },
+  manualLink:      { padding: '8px 12px', fontSize: 'var(--text-xs)', fontWeight: 500, background: 'transparent', border: 'none' },
+  showPromptBtn:   { display: 'block', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed var(--border-strong)', borderRadius: 'var(--radius-md)', color: 'var(--text-muted)', fontSize: 'var(--text-sm)', fontWeight: 600, cursor: 'pointer', marginBottom: 'var(--space-6)' },
   promptModal:     { width: '760px', maxWidth: '92vw', maxHeight: '88vh', display: 'flex', flexDirection: 'column' },
   promptMeta:      { color: '#a0a0c0', fontSize: '0.78rem', marginBottom: '10px' },
   promptStageHint: { color: '#c0c0e0', fontSize: '0.85rem', lineHeight: '1.5', marginBottom: '12px', padding: '10px 12px', background: '#1a1a2e', border: '1px solid #3a2a5e', borderRadius: '6px' },
   promptTextarea:  { flex: 1, minHeight: '320px', maxHeight: '55vh', width: '100%', boxSizing: 'border-box', padding: '12px', background: '#0a0e1a', border: '1px solid #2a1a4e', borderRadius: '6px', color: '#c0c0e0', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.78rem', lineHeight: '1.4', marginBottom: '14px', resize: 'vertical' },
   stageBadge:      { marginLeft: '12px', background: '#1e3a8a', color: '#93c5fd', fontSize: '0.65rem', fontWeight: '700', padding: '3px 9px', borderRadius: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' },
   modalSecondary:  { padding: '8px 16px', background: 'transparent', border: '1px solid #6b46c1', color: '#c084fc', borderRadius: '6px', cursor: 'pointer', fontSize: '0.88rem', fontWeight: '600' },
-  errorBanner:     { background: '#3b0000', border: '1px solid #ef4444', borderRadius: '8px', color: '#ef4444', padding: '14px', marginBottom: '20px' },
+  errorBanner:     { background: 'rgba(239, 68, 68, 0.10)', border: '1px solid rgba(239, 68, 68, 0.40)', borderRadius: 'var(--radius-md)', color: 'var(--danger)', padding: 'var(--space-4)', marginBottom: 'var(--space-5)', fontSize: 'var(--text-sm)' },
 
   statsBar:        { display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '20px' },
   statPill:        { flex: '1', minWidth: '100px', background: '#16213e', border: '1px solid #3a2a5e', borderRadius: '8px', padding: '10px 14px' },
@@ -1206,9 +1314,9 @@ const styles = {
   archetypeChipActive: { background: '#7c3aed', color: '#fff',    fontSize: '0.78rem', fontWeight: '700', borderRadius: '12px', padding: '4px 12px', border: '1px solid #c084fc', cursor: 'pointer' },
   archetypeHint:       { color: '#6070a0', fontSize: '0.75rem', fontStyle: 'italic', marginLeft: '6px' },
 
-  saveRow:         { display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px', flexWrap: 'wrap' },
-  saveBtn:         { padding: '10px 20px', background: '#2d1b4e', border: '1px solid #c084fc', color: '#c084fc', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem', fontWeight: '600' },
-  copyBtn:         { padding: '10px 20px', background: 'transparent', border: '1px solid #4a2c6e', color: '#a0a0c0', borderRadius: '8px', cursor: 'pointer', fontSize: '0.9rem', fontWeight: '600' },
+  saveRow:         { display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-5)', flexWrap: 'wrap' },
+  saveBtn:         { padding: '10px 18px', background: 'var(--accent-soft)', border: '1px solid var(--accent)', color: 'var(--accent-hover)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: 'var(--text-sm)', fontWeight: 600, transition: 'background-color 120ms ease, color 120ms ease' },
+  copyBtn:         { padding: '10px 18px', background: 'transparent', border: '1px solid var(--border-strong)', color: 'var(--text-muted)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: 'var(--text-sm)', fontWeight: 600, transition: 'background-color 120ms ease, color 120ms ease' },
   savedHint:       { color: '#7070a0', fontSize: '0.8rem', fontStyle: 'italic' },
 
   modalBackdrop:   { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 },

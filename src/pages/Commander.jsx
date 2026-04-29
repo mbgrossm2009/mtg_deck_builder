@@ -61,10 +61,12 @@ export default function Commander() {
 
   return (
     <div>
-      <h1 style={styles.title}>Choose Your Commander</h1>
-      <p style={styles.description}>
-        Search for a legendary creature or legal commander and save it as your selected commander.
-      </p>
+      <header style={styles.header}>
+        <h1 style={styles.title}>Choose Your Commander</h1>
+        <p style={styles.description}>
+          Search for a legendary creature. Brewbench will build the deck around its color identity and abilities.
+        </p>
+      </header>
 
       {selected && (
         <SelectedCommander commander={selected} onClear={handleClear} />
@@ -79,7 +81,7 @@ export default function Commander() {
           onChange={e => { setQuery(e.target.value); setEmpty(false) }}
           onKeyDown={handleKeyDown}
         />
-        <button style={styles.searchBtn} onClick={handleSearch} disabled={loading}>
+        <button className="btn btn-primary" style={styles.searchBtn} onClick={handleSearch} disabled={loading}>
           {loading ? 'Searching…' : 'Search'}
         </button>
       </div>
@@ -122,74 +124,76 @@ export default function Commander() {
 }
 
 const styles = {
+  header: {
+    marginBottom: 'var(--space-8)',
+  },
   title: {
-    fontSize: '1.8rem',
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: '8px',
+    fontSize: 'var(--text-3xl)',
+    fontWeight: 700,
+    letterSpacing: '-0.02em',
+    color: 'var(--text)',
+    marginBottom: 'var(--space-2)',
   },
   description: {
-    color: '#a0a0c0',
-    fontSize: '0.95rem',
-    marginBottom: '28px',
+    color: 'var(--text-muted)',
+    fontSize: 'var(--text-base)',
+    lineHeight: 1.6,
+    maxWidth: '560px',
   },
   searchRow: {
     display: 'flex',
-    gap: '10px',
-    marginBottom: '14px',
+    gap: 'var(--space-2)',
+    marginBottom: 'var(--space-4)',
   },
   input: {
     flex: 1,
-    padding: '10px 16px',
-    background: '#16213e',
-    border: '1px solid #4a2c6e',
-    borderRadius: '8px',
-    color: '#e0e0e0',
-    fontSize: '1rem',
+    padding: '11px 16px',
+    background: 'var(--surface-1)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-md)',
+    color: 'var(--text)',
+    fontSize: 'var(--text-sm)',
     outline: 'none',
+    transition: 'border-color 120ms ease, box-shadow 120ms ease',
   },
   searchBtn: {
-    padding: '10px 24px',
-    background: '#4a2c6e',
-    color: '#fff',
-    border: '1px solid #c084fc',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '1rem',
-    fontWeight: '600',
+    padding: '0 22px',
+    fontSize: 'var(--text-sm)',
   },
   warning: {
-    background: '#2d1f00',
-    border: '1px solid #f59e0b',
-    color: '#f59e0b',
+    background: 'rgba(245, 158, 11, 0.10)',
+    border: '1px solid rgba(245, 158, 11, 0.40)',
+    color: 'var(--warning)',
     padding: '10px 16px',
-    borderRadius: '8px',
-    marginBottom: '12px',
-    fontSize: '0.9rem',
+    borderRadius: 'var(--radius-md)',
+    marginBottom: 'var(--space-3)',
+    fontSize: 'var(--text-sm)',
   },
   errorBox: {
-    background: '#2d0f0f',
-    border: '1px solid #ef4444',
-    color: '#ef4444',
+    background: 'rgba(239, 68, 68, 0.10)',
+    border: '1px solid rgba(239, 68, 68, 0.40)',
+    color: 'var(--danger)',
     padding: '10px 16px',
-    borderRadius: '8px',
-    marginBottom: '12px',
-    fontSize: '0.9rem',
+    borderRadius: 'var(--radius-md)',
+    marginBottom: 'var(--space-3)',
+    fontSize: 'var(--text-sm)',
   },
   status: {
-    color: '#a0a0c0',
+    color: 'var(--text-muted)',
     textAlign: 'center',
-    padding: '40px 0',
-    fontSize: '0.95rem',
+    padding: 'var(--space-12) 0',
+    fontSize: 'var(--text-sm)',
   },
   resultsCount: {
-    color: '#a0a0c0',
-    fontSize: '0.82rem',
-    marginBottom: '14px',
+    color: 'var(--text-subtle)',
+    fontSize: 'var(--text-xs)',
+    fontWeight: 500,
+    marginBottom: 'var(--space-4)',
+    fontFeatureSettings: '"tnum"',
   },
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
-    gap: '16px',
+    gap: 'var(--space-4)',
   },
 }

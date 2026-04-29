@@ -62,7 +62,13 @@
       "Bash(curl -sS -o /dev/null -w \"5173: %{http_code}\\\\n\" --max-time 2 \"http://localhost:5173/\")",
       "Bash(pkill -f \"vite\")",
       "Bash(npm run *)",
-      "Bash(pkill -f vite)"
+      "Bash(pkill -f vite)",
+      "Bash(vercel dev *)",
+      "Bash(vercel *)",
+      "Bash(curl *)",
+      "Bash(kill %1)",
+      "Bash(lsof -ti:5174)",
+      "Bash(xargs kill *)"
     ]
   }
 }

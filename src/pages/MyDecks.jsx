@@ -41,12 +41,14 @@ export default function MyDecks() {
 
   return (
     <div>
-      <h2 style={styles.heading}>My Decks</h2>
-      <p style={styles.sub}>
-        {decks.length > 0
-          ? `${decks.length} saved deck${decks.length !== 1 ? 's' : ''}`
-          : 'No decks saved yet — generate one in the Deck Builder and save it.'}
-      </p>
+      <header style={styles.header}>
+        <h1 style={styles.heading}>My Decks</h1>
+        <p style={styles.sub}>
+          {decks.length > 0
+            ? `${decks.length} saved deck${decks.length !== 1 ? 's' : ''}`
+            : 'No decks saved yet — generate one in the Deck Builder and save it.'}
+        </p>
+      </header>
 
       {decks.length === 0 ? (
         <div style={styles.placeholder}>
@@ -77,7 +79,7 @@ function DeckCard({ deck, onLoad, onAskDelete, isConfirmingDelete, onConfirmDele
   const colorIdentity = deck.commander?.color_identity ?? []
 
   return (
-    <div style={styles.card}>
+    <div className="card-hover" style={styles.card}>
       <div style={styles.imageWrap}>
         {image
           ? <img src={image} alt={deck.commander?.name ?? ''} style={styles.image} loading="lazy" />
@@ -122,27 +124,31 @@ function DeckCard({ deck, onLoad, onAskDelete, isConfirmingDelete, onConfirmDele
 }
 
 const styles = {
-  heading: { color: '#c084fc', marginBottom: '8px' },
-  sub:     { color: '#a0a0c0', marginBottom: '20px', fontSize: '0.95rem' },
+  header:  { marginBottom: 'var(--space-8)' },
+  heading: { fontSize: 'var(--text-3xl)', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)', marginBottom: 'var(--space-2)' },
+  sub:     { color: 'var(--text-muted)', fontSize: 'var(--text-base)', lineHeight: 1.6 },
   placeholder: {
-    padding: '40px',
-    border: '1px dashed #4a2c6e',
-    borderRadius: '8px',
-    color: '#6060a0',
+    padding: 'var(--space-12)',
+    background: 'var(--surface-1)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-lg)',
+    color: 'var(--text-muted)',
     textAlign: 'center',
+    fontSize: 'var(--text-sm)',
   },
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-    gap: '16px',
+    gap: 'var(--space-4)',
   },
   card: {
-    background: '#16213e',
-    border: '1px solid #4a2c6e',
-    borderRadius: '10px',
+    background: 'var(--surface-1)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-lg)',
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
+    transition: 'border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease',
   },
   imageWrap: {
     width: '100%',

@@ -528,7 +528,10 @@ export default function Collection() {
 
   return (
     <div>
-      <h2 style={styles.heading}>My Collection</h2>
+      <header style={styles.header}>
+        <h1 style={styles.heading}>My Collection</h1>
+        <p style={styles.tagline}>The cards you own — Brewbench builds decks from this pool.</p>
+      </header>
       <div style={styles.subRow}>
         <p style={styles.sub}>
           {totalUnique > 0
@@ -777,8 +780,10 @@ const SearchBar = memo(function SearchBar({ value, onChange, collection }) {
 })
 
 const styles = {
-  heading: { color: '#c084fc', marginBottom: '8px' },
-  sub: { color: '#a0a0c0', marginBottom: '0', fontSize: '0.95rem' },
+  header:   { marginBottom: 'var(--space-6)' },
+  heading:  { fontSize: 'var(--text-3xl)', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)', marginBottom: 'var(--space-2)' },
+  tagline:  { color: 'var(--text-muted)', fontSize: 'var(--text-base)', lineHeight: 1.6 },
+  sub: { color: 'var(--text-muted)', marginBottom: '0', fontSize: 'var(--text-sm)' },
   subRow: {
     display: 'flex',
     alignItems: 'center',

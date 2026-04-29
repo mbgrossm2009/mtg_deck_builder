@@ -19,19 +19,25 @@
 // fall back to the heuristic generator.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { buildDeckGenerationPrompt, estimatePromptTokens } from './llmPromptBuilder'
+import {
+  buildDeckGenerationPrompt,
+  buildPass1Prompt,
+  buildPass2Prompt,
+  estimatePromptTokens,
+} from './llmPromptBuilder'
 
 // Toggle the mock on/off without editing call sites. The hybrid orchestrator
 // reads this and falls back to the heuristic generator if the LLM is "down".
 export const LLM_MODE = {
   DISABLED: 'disabled',     // throw — force heuristic fallback
   MOCK:     'mock',         // return a fake response for development
-  LIVE:     'live',         // hit the real backend (not implemented)
+  LIVE:     'live',         // hit /api/llm (Vercel serverless → OpenAI)
 }
 
-// Default to MOCK during development so the AI Assisted toggle in the UI
-// has *something* to render. Flip to DISABLED to test the fallback path.
-let currentMode = LLM_MODE.MOCK
+// LIVE is the production default. If OPENAI_API_KEY isn't configured on the
+// server, /api/llm returns a clear error and the orchestrator falls back to
+// the heuristic generator. Override with setLLMMode() during development.
+let currentMode = LLM_MODE.LIVE
 
 export function setLLMMode(mode) { currentMode = mode }
 export function getLLMMode() { return currentMode }
@@ -63,46 +69,83 @@ export async function generateDeckWithLLM({
   bracket,
   deckRules = {},
   strategyContext = {},
+  twoPass = false,
+  onProgress,
 }) {
   if (!commander) throw new Error('generateDeckWithLLM: commander is required')
   if (!Array.isArray(legalCardPool) || legalCardPool.length === 0) {
     throw new Error('generateDeckWithLLM: legalCardPool is empty — pre-filter produced no cards')
   }
 
-  const prompt = buildDeckGenerationPrompt({
-    commander,
-    legalCardPool,
-    bracket,
-    deckRules,
-    strategyContext,
-  })
-  const promptTokens = estimatePromptTokens(prompt)
-
   if (currentMode === LLM_MODE.DISABLED) {
     throw new Error('LLM integration not connected yet — set LLM_MODE to MOCK or LIVE.')
   }
 
   if (currentMode === LLM_MODE.LIVE) {
-    // Wired up later. The fetch must point at OUR backend, never directly at
-    // OpenAI/Anthropic. The backend reads the key from a server-side secret
-    // store, not from the browser.
-    //
-    //   const res = await fetch('/api/generate-deck', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify(prompt),
-    //   })
-    //   if (!res.ok) throw new Error(`LLM backend ${res.status}`)
-    //   const data = await res.json()
-    //   return { ...data, _meta: { mode: 'live', promptTokens } }
-    throw new Error('LLM integration not connected yet — backend endpoint not implemented.')
+    if (twoPass) {
+      // Pass 1 — strategy + core engine. Locking these first prevents the
+      // model from drifting mid-build when it picks the remaining 80 cards.
+      onProgress?.({ stage: 'pass1' })
+      const pass1Prompt = buildPass1Prompt({ commander, legalCardPool, bracket, strategyContext })
+      const pass1Tokens = estimatePromptTokens(pass1Prompt)
+      const pass1Output = await callBackend(pass1Prompt)
+
+      // Pass 2 — fill the rest of the 99 around the locked Pass 1 output.
+      // Returns the same shape as the single-pass response, so the validator
+      // and orchestrator handle it identically.
+      onProgress?.({ stage: 'pass2' })
+      const pass2Prompt = buildPass2Prompt({ commander, legalCardPool, bracket, deckRules, pass1Output })
+      const pass2Tokens = estimatePromptTokens(pass2Prompt)
+      const pass2Output = await callBackend(pass2Prompt)
+
+      return {
+        ...pass2Output,
+        _meta: {
+          mode: 'live',
+          twoPass: true,
+          promptTokens: pass1Tokens + pass2Tokens,
+          pass1Output,
+        },
+      }
+    }
+
+    const prompt = buildDeckGenerationPrompt({ commander, legalCardPool, bracket, deckRules, strategyContext })
+    const promptTokens = estimatePromptTokens(prompt)
+    const out = await callBackend(prompt)
+    return { ...out, _meta: { mode: 'live', promptTokens } }
   }
 
   // MOCK mode — return a deterministic, mostly-legal deck assembled from the
   // pre-filtered pool so the validator and orchestrator have realistic input
   // to work with during development. This is NOT a real strategy; it just
   // lets us exercise the full pipeline end-to-end without paying for tokens.
-  return mockLLMResponse({ commander, legalCardPool, bracket, deckRules, promptTokens })
+  const mockPrompt = buildDeckGenerationPrompt({ commander, legalCardPool, bracket, deckRules, strategyContext })
+  return mockLLMResponse({ commander, legalCardPool, bracket, deckRules, promptTokens: estimatePromptTokens(mockPrompt) })
+}
+
+// POSTs the prompt to /api/llm and returns the parsed JSON content. The
+// serverless function attaches OPENAI_API_KEY (server-side) and forwards
+// to OpenAI; the browser never sees the key.
+async function callBackend(prompt) {
+  let res
+  try {
+    res = await fetch('/api/llm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ system: prompt.system, user: prompt.user }),
+    })
+  } catch (err) {
+    throw new Error(`Could not reach /api/llm: ${err.message}`, { cause: err })
+  }
+
+  if (!res.ok) {
+    let body = null
+    try { body = await res.json() } catch { /* non-JSON error body */ }
+    throw new Error(body?.error ?? `LLM backend returned ${res.status}`)
+  }
+  const data = await res.json()
+  if (!data?.content) throw new Error('LLM backend returned no content.')
+  return data.content
 }
 
 function mockLLMResponse({ commander, legalCardPool, bracket, deckRules, promptTokens }) {

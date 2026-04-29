@@ -29,7 +29,8 @@ import { generateDeckWithLLM } from './llmDeckService'
 import { buildDeckGenerationPrompt, buildPass1Prompt, buildPass2Prompt, estimatePromptTokens } from './llmPromptBuilder'
 import { validateLLMDeckResponse } from '../rules/llmDeckValidator'
 
-export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId = null) {
+export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId = null, options = {}) {
+  const { twoPass = false, onProgress = null } = options
   const commander = getSelectedCommander()
   if (!commander) return { error: 'No commander selected.' }
 
@@ -87,8 +88,11 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       bracket,
       deckRules,
       strategyContext,
+      twoPass,
+      onProgress,
     })
-    explanation.push(`LLM responded with ${llmResponse.deck?.length ?? 0} card suggestions (mode: ${llmResponse._meta?.mode}).`)
+    const passLabel = llmResponse._meta?.twoPass ? ' (two-pass)' : ''
+    explanation.push(`LLM responded with ${llmResponse.deck?.length ?? 0} card suggestions${passLabel} (mode: ${llmResponse._meta?.mode}).`)
   } catch (err) {
     llmFailed = true
     warnings.push({

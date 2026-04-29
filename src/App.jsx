@@ -32,8 +32,8 @@ const styles = {
   },
   main: {
     flex: 1,
-    padding: '40px 32px',
-    maxWidth: '1100px',
+    padding: 'var(--space-12) var(--space-6) var(--space-16)',
+    maxWidth: 'var(--content-max-width)',
     width: '100%',
     margin: '0 auto',
   },
