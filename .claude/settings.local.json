@@ -73,7 +73,11 @@
       "Bash(git rm *)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(npx --yes --package=@resvg/resvg-js-cli -- resvg --version)",
+      "Bash(timeout 90 npx --yes svgexport public/og-image.svg public/og-image.png 1200:630)",
+      "Bash(timeout 90 npx --yes -p sharp-cli sharp -i public/og-image.svg -o public/ -f png --resize 1200)",
+      "Bash(timeout 90 npx --yes @resvg/resvg-js-cli public/og-image.svg public/og-image.png)"
     ]
   }
 }
