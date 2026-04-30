@@ -35,8 +35,10 @@ import { validateLLMDeckResponse } from '../rules/llmDeckValidator'
 // cards) push the prompt past Vercel's 60s function timeout and OpenAI's
 // 128k context window. We rank by heuristic score and take the top N — the
 // LLM gets the strongest candidates, the heuristic fallback still has access
-// to the full pool for slot-filling later.
-const LLM_POOL_CAP = 400
+// to the full pool for slot-filling later. 250 + truncated oracle_text keeps
+// the prompt around ~20k tokens so OpenAI responds in 10-20s, comfortably
+// inside the function timeout.
+const LLM_POOL_CAP = 250
 
 export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId = null, options = {}) {
   const { twoPass = false, onProgress = null } = options

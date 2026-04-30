@@ -27,16 +27,25 @@ function meaningfulRoles(roles) {
 }
 
 // Project the legal pool down to just the fields the LLM actually needs.
-// Keeping each card lean keeps the prompt under context limits when the
-// user has a 20k+ card collection.
+// Keeping each card lean keeps the prompt under context limits AND under
+// Vercel's 60s function timeout. Oracle text is the biggest contributor —
+// modal cards like Cryptic Command run 400+ chars; truncating to ~180
+// preserves the first effect (which is usually the relevant one) while
+// cutting prompt tokens roughly 60%. The roles/tags arrays already capture
+// the gameplay shape — the LLM uses oracle_text mostly for tiebreakers.
+const ORACLE_TEXT_BUDGET = 180
+
 function compactCard(card) {
+  const oracle = card.oracle_text ?? ''
   const out = {
     name: card.name,
     type_line: card.type_line ?? '',
     mana_cost: card.mana_cost ?? '',
     cmc: card.cmc ?? 0,
     color_identity: card.color_identity ?? [],
-    oracle_text: card.oracle_text ?? '',
+    oracle_text: oracle.length > ORACLE_TEXT_BUDGET
+      ? oracle.slice(0, ORACLE_TEXT_BUDGET) + '…'
+      : oracle,
   }
   const roles = meaningfulRoles(card.roles)
   if (roles.length > 0) out.roles = roles

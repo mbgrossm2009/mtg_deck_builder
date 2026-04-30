@@ -70,7 +70,10 @@
       "Bash(lsof -ti:5174)",
       "Bash(xargs kill *)",
       "Bash(git status *)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }
