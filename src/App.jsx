@@ -14,7 +14,7 @@ function App() {
   return (
     <div style={styles.app}>
       <NavBar />
-      <main style={styles.main}>
+      <main className="responsive-main" style={styles.main}>
         <Routes>
           {/* Conditional landing: Marketing for visitors, Home (onboarding) for users. */}
           <Route path="/" element={<RootRoute />} />

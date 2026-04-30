@@ -69,6 +69,9 @@
   --content-max-width: 1100px;
   --nav-height: 64px;
 
+  /* Breakpoints (used in CSS @media queries; JS uses useIsMobile) */
+  --bp-mobile: 640px;
+
   /* Motion */
   --transition-fast: 120ms ease;
   --transition-base: 180ms ease;
@@ -204,6 +207,27 @@ a {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   MOBILE OVERRIDES
+   Inline styles can't express media queries, so a few mobile-specific tweaks
+   live here. Components opt in by adding the class to their root style attr.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Hide elements on touch devices that have no useful behavior without hover.
+   Used by DeckBuilder's hover-position card preview. */
+@media (hover: none) and (pointer: coarse) {
+  .hover-only {
+    display: none !important;
+  }
+}
+
+/* Compact main content padding on phones — saves ~24px of horizontal space. */
+@media (max-width: 640px) {
+  .responsive-main {
+    padding: var(--space-6) var(--space-3) var(--space-12) !important;
+  }
 }
 
 /* Hover lift for clickable card panels */

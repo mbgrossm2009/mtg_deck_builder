@@ -2,13 +2,15 @@
 // onboarding cards) instead — App.jsx routes / based on auth state.
 
 import { Link } from 'react-router-dom'
+import { useIsMobile } from '../lib/useMediaQuery'
 
 export default function Marketing() {
+  const isMobile = useIsMobile()
   return (
     <div>
-      <section style={styles.hero}>
+      <section style={{ ...styles.hero, ...(isMobile ? styles.heroMobile : {}) }}>
         <div style={styles.eyebrow}>Commander Deck Builder</div>
-        <h1 style={styles.title}>
+        <h1 style={{ ...styles.title, ...(isMobile ? styles.titleMobile : {}) }}>
           Build optimized <span style={styles.titleAccent}>Commander</span> decks
           <br />from the cards you own.
         </h1>
@@ -109,6 +111,9 @@ const styles = {
     padding: 'var(--space-16) 0 var(--space-12)',
     textAlign: 'center',
   },
+  heroMobile: {
+    padding: 'var(--space-10) 0 var(--space-8)',
+  },
   eyebrow: {
     color: 'var(--accent-hover)',
     fontSize: 'var(--text-xs)',
@@ -123,6 +128,9 @@ const styles = {
     letterSpacing: '-0.02em',
     lineHeight: 1.1,
     marginBottom: 'var(--space-5)',
+  },
+  titleMobile: {
+    fontSize: 'var(--text-3xl)',
   },
   titleAccent: {
     background: 'linear-gradient(135deg, #a78bfa 0%, #6366f1 100%)',

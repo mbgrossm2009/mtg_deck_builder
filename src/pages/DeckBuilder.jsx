@@ -513,9 +513,9 @@ export default function DeckBuilder() {
         </>
       )}
 
-      {/* Card image tooltip */}
+      {/* Card image tooltip — hidden on touch devices via CSS (.hover-only) */}
       {hoveredCard && getCardImage(hoveredCard) && (
-        <div style={styles.tooltip}>
+        <div className="hover-only" style={styles.tooltip}>
           <img src={getCardImage(hoveredCard)} alt={hoveredCard.name} style={styles.tooltipImg} />
         </div>
       )}
@@ -997,12 +997,14 @@ const styles = {
   modeDesc:        { fontSize: '0.75rem', color: 'var(--text-subtle)' },
   betaPill:        { background: 'var(--accent)', color: '#fff', fontSize: '0.6rem', fontWeight: '700', padding: '2px 6px', borderRadius: '8px', letterSpacing: '0.05em' },
 
-  bracketRow:      { display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' },
-  bracketBtn:      { flex: '1', minWidth: '90px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '12px 8px', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', cursor: 'pointer', color: 'var(--text-muted)', transition: 'background-color 120ms ease, border-color 120ms ease, color 120ms ease' },
+  // Bracket selector — 5 buttons must fit on a 375px viewport. With 4px gaps
+  // between them and 24px container padding, each button gets ~64px max.
+  bracketRow:      { display: 'flex', gap: 'var(--space-2)', flexWrap: 'nowrap' },
+  bracketBtn:      { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '10px 4px', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', cursor: 'pointer', color: 'var(--text-muted)', transition: 'background-color 120ms ease, border-color 120ms ease, color 120ms ease', overflow: 'hidden' },
   bracketBtnActive:{ background: 'var(--accent-soft)', borderColor: 'var(--accent)', color: 'var(--text)' },
-  bracketNum:      { fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--text-muted)', fontFeatureSettings: '"tnum"' },
+  bracketNum:      { fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--text-muted)', fontFeatureSettings: '"tnum"', lineHeight: 1 },
   bracketNumActive:{ color: 'var(--accent-hover)' },
-  bracketLabel:    { fontSize: 'var(--text-xs)', textAlign: 'center', fontWeight: 500 },
+  bracketLabel:    { fontSize: 'var(--text-xs)', textAlign: 'center', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' },
 
   aiGenerateBtn:   {
                      display: 'flex',

@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom'
 import { useDataStore } from '../lib/dataStore'
+import { useIsMobile } from '../lib/useMediaQuery'
 
 export default function Home() {
+  const isMobile = useIsMobile()
   // Live read from dataStore so onboarding cards stay current when the user
   // adds cards / picks a commander / saves decks on other pages.
   const data = useDataStore()
@@ -25,9 +27,9 @@ export default function Home() {
 
   return (
     <div>
-      <section style={styles.hero}>
+      <section style={{ ...styles.hero, ...(isMobile ? styles.heroMobile : {}) }}>
         <div style={styles.eyebrow}>Commander Deck Builder</div>
-        <h1 style={styles.title}>
+        <h1 style={{ ...styles.title, ...(isMobile ? styles.titleMobile : {}) }}>
           Build optimized <span style={styles.titleAccent}>Commander</span> decks
           <br />from the cards you own.
         </h1>
@@ -143,6 +145,10 @@ const styles = {
     borderBottom: '1px solid var(--border)',
     marginBottom: 'var(--space-12)',
   },
+  heroMobile: {
+    padding: 'var(--space-6) 0 var(--space-8)',
+    marginBottom: 'var(--space-8)',
+  },
   eyebrow: {
     color: 'var(--accent-hover)',
     fontSize: 'var(--text-xs)',
@@ -158,6 +164,9 @@ const styles = {
     lineHeight: 1.1,
     marginBottom: 'var(--space-5)',
     maxWidth: '780px',
+  },
+  titleMobile: {
+    fontSize: 'var(--text-3xl)',
   },
   titleAccent: {
     background: 'linear-gradient(135deg, #a78bfa 0%, #6366f1 100%)',
