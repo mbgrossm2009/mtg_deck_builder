@@ -3,11 +3,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom'
 import { getSelectedCommander, saveDeck, getDeck } from '../utils/localStorage'
 import { getCardImage } from '../utils/scryfallApi'
 import { generateDeck } from '../rules/deckGenerator'
-import {
-  buildPass1ForCurrentSelection,
-  buildPass2ForCurrentSelection,
-  generateDeckWithLLMAssist,
-} from '../services/llmDeckOrchestrator'
+import { generateDeckWithLLMAssist } from '../services/llmDeckOrchestrator'
 import { BRACKET_LABELS } from '../rules/bracketRules'
 
 const COLOR_PIPS = {
@@ -57,13 +53,6 @@ export default function DeckBuilder() {
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [saveToast, setSaveToast]     = useState(null)
   const [primaryArchetype, setPrimaryArchetype] = useState(null)
-  // Two-pass prompt flow state. Shape:
-  //   null                                                    — modal closed
-  //   { stage: 'pass1', text, tokens, ... }                   — showing Pass 1 prompt to copy
-  //   { stage: 'paste', pass1Raw, parseError? }               — pasting Pass 1 output
-  //   { stage: 'pass2', text, tokens, ..., pass1Output }      — showing Pass 2 prompt to copy
-  //   { stage: 'error', error }                               — top-level error (no commander, empty collection)
-  const [promptPreview, setPromptPreview]   = useState(null)
 
   const commander = loadedDeck?.commander ?? getSelectedCommander()
 
@@ -143,79 +132,6 @@ export default function DeckBuilder() {
     setSaveToast(`Saved "${saved.name}"`)
     setTimeout(() => setSaveToast(curr => (curr === `Saved "${saved.name}"` ? null : curr)), 2500)
   }, [saveName, result, commander, loadedDeck])
-
-  // Open the modal at Pass 1 — builds the strategy/core-engine prompt.
-  const handleStartPass1 = useCallback(() => {
-    const result = buildPass1ForCurrentSelection({ bracket, primaryArchetypeId: primaryArchetype })
-    if (result.error) {
-      setPromptPreview({ stage: 'error', error: result.error })
-      return
-    }
-    setPromptPreview({
-      stage: 'pass1',
-      text: formatPromptForClipboard(result.prompt),
-      tokens: result.promptTokens,
-      poolSize: result.poolSize,
-      commanderName: result.commanderName,
-      bracket: result.bracket,
-    })
-  }, [bracket, primaryArchetype])
-
-  // Advance from Pass 1 prompt → paste-Pass-1-output stage.
-  const handleAdvanceToPaste = useCallback(() => {
-    setPromptPreview(curr => {
-      if (curr?.stage !== 'pass1' && curr?.stage !== 'pass2') return curr
-      return { stage: 'paste', pass1Raw: '', parseError: null }
-    })
-  }, [])
-
-  // Parse the pasted Pass 1 JSON, then build Pass 2 prompt.
-  const handleBuildPass2 = useCallback(() => {
-    setPromptPreview(curr => {
-      if (curr?.stage !== 'paste') return curr
-      const raw = (curr.pass1Raw ?? '').trim()
-      if (!raw) {
-        return { ...curr, parseError: 'Paste the Pass 1 JSON output from ChatGPT before continuing.' }
-      }
-      let parsed
-      try {
-        parsed = JSON.parse(raw)
-      } catch (err) {
-        return { ...curr, parseError: `Pass 1 output isn't valid JSON: ${err.message}` }
-      }
-      const result = buildPass2ForCurrentSelection({ bracket, pass1Output: parsed })
-      if (result.error) {
-        return { ...curr, parseError: result.error }
-      }
-      return {
-        stage: 'pass2',
-        text: formatPromptForClipboard(result.prompt),
-        tokens: result.promptTokens,
-        poolSize: result.poolSize,
-        commanderName: result.commanderName,
-        bracket: result.bracket,
-        pass1Output: parsed,
-      }
-    })
-  }, [bracket])
-
-  // Go back to Pass 1 (rebuild the prompt with current settings).
-  const handleBackToPass1 = useCallback(() => {
-    handleStartPass1()
-  }, [handleStartPass1])
-
-  const handleCopyPrompt = useCallback(async () => {
-    if (!promptPreview?.text) return
-    try {
-      await navigator.clipboard.writeText(promptPreview.text)
-      const which = promptPreview.stage === 'pass1' ? 'Pass 1' : 'Pass 2'
-      setSaveToast(`${which} prompt copied — paste into ChatGPT`)
-    } catch {
-      window.prompt('Copy prompt (Cmd/Ctrl+C):', promptPreview.text)
-      setSaveToast('Use the dialog to copy manually')
-    }
-    setTimeout(() => setSaveToast(curr => (curr?.endsWith('paste into ChatGPT') || curr?.startsWith('Use the dialog') ? null : curr)), 2500)
-  }, [promptPreview])
 
   const handleCopyDeck = useCallback(async () => {
     if (!result || !commander) return
@@ -324,14 +240,6 @@ export default function DeckBuilder() {
       >
         {generating && !aiStage ? 'Generating…' : result ? 'Quick Regenerate (no AI)' : 'Quick Generate (no AI)'}
       </button>
-
-      {/* Tertiary: manual prompt copy/paste — for users who want to run their
-          own ChatGPT account or use a different model. */}
-      <div style={styles.manualLinkRow}>
-        <button className="btn btn-ghost" style={styles.manualLink} onClick={handleStartPass1}>
-          Advanced: copy prompts to ChatGPT manually
-        </button>
-      </div>
 
       {result?.error && (
         <div style={styles.errorBanner}>{result.error}</div>
@@ -632,112 +540,6 @@ export default function DeckBuilder() {
                 {loadedDeck ? 'Update' : 'Save'}
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Two-pass prompt dialog — multi-stage flow */}
-      {promptPreview && (
-        <div style={styles.modalBackdrop} onClick={() => setPromptPreview(null)}>
-          <div style={{ ...styles.modal, ...styles.promptModal }} onClick={e => e.stopPropagation()}>
-
-            {/* Top-level error (no commander, empty collection) */}
-            {promptPreview.stage === 'error' && (
-              <>
-                <div style={styles.modalTitle}>Cannot Build Prompt</div>
-                <div style={styles.errorBanner}>{promptPreview.error}</div>
-                <div style={styles.modalActions}>
-                  <button style={styles.modalCancel} onClick={() => setPromptPreview(null)}>Close</button>
-                </div>
-              </>
-            )}
-
-            {/* Stage 1 — show Pass 1 prompt */}
-            {promptPreview.stage === 'pass1' && (
-              <>
-                <div style={styles.modalTitle}>
-                  Pass 1: Strategy &amp; Core Engine
-                  <span style={styles.stageBadge}>Step 1 of 2</span>
-                </div>
-                <div style={styles.promptStageHint}>
-                  Copy this prompt → paste into ChatGPT → ChatGPT returns JSON with strategy + 15-25 core cards. Then click <strong>Next</strong> to paste that JSON back.
-                </div>
-                <div style={styles.promptMeta}>
-                  Commander: <strong>{promptPreview.commanderName}</strong> · Bracket {promptPreview.bracket} ·
-                  Pool: {promptPreview.poolSize} cards · ~{promptPreview.tokens.toLocaleString()} tokens
-                </div>
-                <textarea
-                  readOnly
-                  value={promptPreview.text}
-                  style={styles.promptTextarea}
-                  onFocus={e => e.target.select()}
-                />
-                <div style={styles.modalActions}>
-                  <button style={styles.modalCancel} onClick={() => setPromptPreview(null)}>Close</button>
-                  <button style={styles.modalSecondary} onClick={handleCopyPrompt}>Copy Prompt</button>
-                  <button style={styles.modalConfirm} onClick={handleAdvanceToPaste}>Next: Paste ChatGPT's Response →</button>
-                </div>
-              </>
-            )}
-
-            {/* Stage 2 — paste Pass 1 output */}
-            {promptPreview.stage === 'paste' && (
-              <>
-                <div style={styles.modalTitle}>
-                  Paste Pass 1 Output
-                  <span style={styles.stageBadge}>Step 1.5 of 2</span>
-                </div>
-                <div style={styles.promptStageHint}>
-                  Paste the JSON ChatGPT returned for Pass 1. We'll fold it into Pass 2 as locked input.
-                </div>
-                <textarea
-                  value={promptPreview.pass1Raw}
-                  onChange={e => setPromptPreview(curr => curr?.stage === 'paste' ? { ...curr, pass1Raw: e.target.value, parseError: null } : curr)}
-                  placeholder='{ "chosenStrategy": "...", "coreEngine": [...], ... }'
-                  style={styles.promptTextarea}
-                  autoFocus
-                />
-                {promptPreview.parseError && (
-                  <div style={styles.errorBanner}>{promptPreview.parseError}</div>
-                )}
-                <div style={styles.modalActions}>
-                  <button style={styles.modalCancel} onClick={handleBackToPass1}>← Back to Pass 1</button>
-                  <button style={styles.modalConfirm} onClick={handleBuildPass2}>Build Pass 2 Prompt →</button>
-                </div>
-              </>
-            )}
-
-            {/* Stage 3 — show Pass 2 prompt */}
-            {promptPreview.stage === 'pass2' && (
-              <>
-                <div style={styles.modalTitle}>
-                  Pass 2: Build the 99
-                  <span style={styles.stageBadge}>Step 2 of 2</span>
-                </div>
-                <div style={styles.promptStageHint}>
-                  Copy this prompt → paste into ChatGPT (a fresh chat is fine) → ChatGPT returns the full deck. Pass 1 is locked in as constraints — the model must include your core engine and follow the chosen strategy.
-                </div>
-                <div style={styles.promptMeta}>
-                  Commander: <strong>{promptPreview.commanderName}</strong> · Bracket {promptPreview.bracket} ·
-                  Pool: {promptPreview.poolSize} cards · ~{promptPreview.tokens.toLocaleString()} tokens ·
-                  Core engine: {promptPreview.pass1Output?.coreEngine?.length ?? 0} cards locked
-                </div>
-                <textarea
-                  readOnly
-                  value={promptPreview.text}
-                  style={styles.promptTextarea}
-                  onFocus={e => e.target.select()}
-                />
-                <div style={styles.modalActions}>
-                  <button style={styles.modalCancel} onClick={() => setPromptPreview(null)}>Close</button>
-                  <button style={styles.modalSecondary} onClick={() => setPromptPreview(curr => curr?.stage === 'pass2' ? { stage: 'paste', pass1Raw: JSON.stringify(curr.pass1Output, null, 2), parseError: null } : curr)}>
-                    ← Edit Pass 1 Output
-                  </button>
-                  <button style={styles.modalConfirm} onClick={handleCopyPrompt}>Copy Prompt</button>
-                </div>
-              </>
-            )}
-
           </div>
         </div>
       )}
@@ -1083,14 +885,6 @@ function CardRow({ card, hovered, onHover }) {
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-// Builds a Moxfield/Archidekt-compatible decklist string. Aggregates by name so
-// the 12 separate basic-Swamp entries the generator emits collapse to "12 Swamp".
-// Non-basic cards are clamped to qty 1 — Commander is singleton — even if older
-// saved decks (from before the singleton fix) carried collection-level quantities.
-function formatPromptForClipboard({ system, user }) {
-  return `${system}\n\n---\n\n${JSON.stringify(user, null, 2)}`
-}
-
 function formatStatKey(key) {
   if (key === 'strategyDensityEstimate') return 'Synergy %'
   if (key === 'boardWipes') return 'Wipes'
@@ -1235,15 +1029,6 @@ const styles = {
                    },
   generateBtnDisabled: { opacity: 0.55, cursor: 'not-allowed' },
   sparkle:         { fontSize: 'var(--text-base)', color: '#fde68a' },
-  manualLinkRow:   { textAlign: 'center', marginBottom: 'var(--space-6)' },
-  manualLink:      { padding: '8px 12px', fontSize: 'var(--text-xs)', fontWeight: 500, background: 'transparent', border: 'none' },
-  showPromptBtn:   { display: 'block', width: '100%', padding: '10px', background: 'transparent', border: '1px dashed var(--border-strong)', borderRadius: 'var(--radius-md)', color: 'var(--text-muted)', fontSize: 'var(--text-sm)', fontWeight: 600, cursor: 'pointer', marginBottom: 'var(--space-6)' },
-  promptModal:     { width: '760px', maxWidth: '92vw', maxHeight: '88vh', display: 'flex', flexDirection: 'column' },
-  promptMeta:      { color: '#a0a0c0', fontSize: '0.78rem', marginBottom: '10px' },
-  promptStageHint: { color: '#c0c0e0', fontSize: '0.85rem', lineHeight: '1.5', marginBottom: '12px', padding: '10px 12px', background: '#1a1a2e', border: '1px solid #3a2a5e', borderRadius: '6px' },
-  promptTextarea:  { flex: 1, minHeight: '320px', maxHeight: '55vh', width: '100%', boxSizing: 'border-box', padding: '12px', background: '#0a0e1a', border: '1px solid #2a1a4e', borderRadius: '6px', color: '#c0c0e0', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.78rem', lineHeight: '1.4', marginBottom: '14px', resize: 'vertical' },
-  stageBadge:      { marginLeft: '12px', background: '#1e3a8a', color: '#93c5fd', fontSize: '0.65rem', fontWeight: '700', padding: '3px 9px', borderRadius: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' },
-  modalSecondary:  { padding: '8px 16px', background: 'transparent', border: '1px solid #6b46c1', color: '#c084fc', borderRadius: '6px', cursor: 'pointer', fontSize: '0.88rem', fontWeight: '600' },
   errorBanner:     { background: 'rgba(239, 68, 68, 0.10)', border: '1px solid rgba(239, 68, 68, 0.40)', borderRadius: 'var(--radius-md)', color: 'var(--danger)', padding: 'var(--space-4)', marginBottom: 'var(--space-5)', fontSize: 'var(--text-sm)' },
 
   statsBar:        { display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '20px' },
