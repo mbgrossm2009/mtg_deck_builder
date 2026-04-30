@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { NavLink, Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useIsMobile } from '../lib/useMediaQuery'
@@ -94,8 +95,11 @@ export default function NavBar() {
         </div>
       </div>
 
-      {/* Mobile drawer — full-height side panel. Renders above everything. */}
-      {isMobile && drawerOpen && user && (
+      {/* Mobile drawer is portaled to <body> — the parent <header> has
+          backdrop-filter, which creates a containing block for fixed-positioned
+          descendants. Without portaling, the drawer would be clipped to the
+          64px-tall header instead of filling the viewport. */}
+      {isMobile && drawerOpen && user && createPortal(
         <>
           <div
             style={styles.drawerBackdrop}
@@ -139,7 +143,8 @@ export default function NavBar() {
               </button>
             </div>
           </aside>
-        </>
+        </>,
+        document.body
       )}
     </header>
   )
