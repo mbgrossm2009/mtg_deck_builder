@@ -20,7 +20,7 @@ export default function CommanderCard({ card, onSelect, onAddToCollection, inCol
   }
 
   return (
-    <div style={styles.card}>
+    <div className="card-hover" style={styles.card}>
       <div style={styles.imageWrap}>
         {image
           ? <img src={image} alt={card.name} style={styles.image} />
@@ -42,15 +42,16 @@ export default function CommanderCard({ card, onSelect, onAddToCollection, inCol
           }
         </div>
         <div style={styles.btnRow}>
-          <button style={styles.selectBtn} onClick={() => onSelect(card)}>
-            Select Commander
+          <button className="btn btn-primary" style={styles.actionBtn} onClick={() => onSelect(card)}>
+            Select
           </button>
           <button
-            style={alreadyIn ? styles.addedBtn : styles.addBtn}
+            className={alreadyIn ? 'btn btn-secondary' : 'btn btn-secondary'}
+            style={{ ...styles.actionBtn, ...(alreadyIn ? styles.addedBtn : {}) }}
             onClick={handleAdd}
             disabled={alreadyIn}
           >
-            {alreadyIn ? 'In Collection' : '+ Collection'}
+            {alreadyIn ? '✓ Owned' : '+ Add'}
           </button>
         </div>
       </div>
@@ -60,9 +61,9 @@ export default function CommanderCard({ card, onSelect, onAddToCollection, inCol
 
 const styles = {
   card: {
-    background: '#16213e',
-    border: '1px solid #4a2c6e',
-    borderRadius: '10px',
+    background: 'var(--surface-1)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-lg)',
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
@@ -71,7 +72,7 @@ const styles = {
     width: '100%',
     aspectRatio: '5 / 7',
     overflow: 'hidden',
-    background: '#0f1526',
+    background: 'var(--bg-app)',
     flexShrink: 0,
   },
   image: {
@@ -86,29 +87,30 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: '#555',
-    fontSize: '0.8rem',
+    color: 'var(--text-subtle)',
+    fontSize: 'var(--text-xs)',
   },
   body: {
-    padding: '12px',
+    padding: 'var(--space-3)',
     display: 'flex',
     flexDirection: 'column',
     gap: '6px',
     flex: 1,
   },
   name: {
-    fontWeight: '700',
-    fontSize: '0.9rem',
-    color: '#e0e0e0',
-    lineHeight: '1.3',
+    fontWeight: 700,
+    fontSize: 'var(--text-sm)',
+    color: 'var(--text)',
+    lineHeight: 1.3,
   },
   manaCost: {
-    fontSize: '0.78rem',
-    color: '#c084fc',
+    fontSize: 'var(--text-xs)',
+    color: 'var(--accent-hover)',
+    fontFeatureSettings: '"tnum"',
   },
   typeLine: {
-    fontSize: '0.75rem',
-    color: '#a0a0c0',
+    fontSize: 'var(--text-xs)',
+    color: 'var(--text-muted)',
     fontStyle: 'italic',
   },
   pips: {
@@ -124,50 +126,27 @@ const styles = {
     width: '20px',
     height: '20px',
     borderRadius: '50%',
-    fontSize: '0.65rem',
-    fontWeight: '700',
+    fontSize: 'var(--text-xs)',
+    fontWeight: 700,
   },
   colorless: {
-    fontSize: '0.75rem',
-    color: '#777',
+    fontSize: 'var(--text-xs)',
+    color: 'var(--text-subtle)',
   },
   btnRow: {
     marginTop: 'auto',
     display: 'flex',
-    gap: '6px',
+    gap: 'var(--space-2)',
+    paddingTop: 'var(--space-2)',
   },
-  selectBtn: {
+  actionBtn: {
     flex: 1,
-    padding: '8px',
-    background: '#4a2c6e',
-    color: '#fff',
-    border: '1px solid #c084fc',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '0.82rem',
-    fontWeight: '600',
-  },
-  addBtn: {
-    flex: 1,
-    padding: '8px',
-    background: 'transparent',
-    color: '#4ade80',
-    border: '1px solid #4ade80',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '0.82rem',
-    fontWeight: '600',
+    padding: '8px 10px',
+    fontSize: 'var(--text-xs)',
   },
   addedBtn: {
-    flex: 1,
-    padding: '8px',
-    background: '#14532d',
-    color: '#86efac',
-    border: '1px solid #16a34a',
-    borderRadius: '6px',
-    cursor: 'default',
-    fontSize: '0.82rem',
-    fontWeight: '600',
-    opacity: 0.8,
+    color: 'var(--success)',
+    borderColor: 'rgba(16, 185, 129, 0.40)',
+    background: 'rgba(16, 185, 129, 0.10)',
   },
 }

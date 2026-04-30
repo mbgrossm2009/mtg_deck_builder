@@ -108,13 +108,13 @@ function DeckCard({ deck, onLoad, onAskDelete, isConfirmingDelete, onConfirmDele
         </div>
 
         <div style={styles.actions}>
-          <button style={styles.loadBtn} onClick={onLoad}>Load</button>
+          <button className="btn btn-primary" style={styles.actionBtn} onClick={onLoad}>Load</button>
           {!isConfirmingDelete ? (
-            <button style={styles.deleteBtn} onClick={onAskDelete}>Delete</button>
+            <button className="btn btn-danger" style={styles.actionBtn} onClick={onAskDelete}>Delete</button>
           ) : (
             <div style={styles.confirmRow}>
-              <button style={styles.deleteConfirm} onClick={onConfirmDelete}>Confirm</button>
-              <button style={styles.deleteCancel} onClick={onCancelDelete}>Cancel</button>
+              <button className="btn btn-danger" style={{ ...styles.actionBtn, ...styles.deleteConfirm }} onClick={onConfirmDelete}>Confirm</button>
+              <button className="btn btn-secondary" style={styles.actionBtn} onClick={onCancelDelete}>Cancel</button>
             </div>
           )}
         </div>
@@ -154,68 +154,36 @@ const styles = {
     width: '100%',
     aspectRatio: '5 / 7',
     overflow: 'hidden',
-    background: '#0f1526',
+    background: 'var(--bg-app)',
     flexShrink: 0,
   },
   image: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' },
   noImage: {
     width: '100%', height: '100%',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    color: '#555', fontSize: '0.8rem',
+    color: 'var(--text-subtle)', fontSize: 'var(--text-xs)',
   },
-  body: { padding: '12px', display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 },
-  deckName:      { fontWeight: '700', fontSize: '0.95rem', color: '#e0e0e0', lineHeight: '1.3' },
-  commanderName: { color: '#c084fc', fontSize: '0.82rem' },
+  body: { padding: 'var(--space-3)', display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 },
+  deckName:      { fontWeight: 700, fontSize: 'var(--text-sm)', color: 'var(--text)', lineHeight: 1.3 },
+  commanderName: { color: 'var(--accent-hover)', fontSize: 'var(--text-xs)' },
   pips: { display: 'flex', gap: '4px', flexWrap: 'wrap' },
   pip: {
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     width: '20px', height: '20px', borderRadius: '50%',
-    fontSize: '0.65rem', fontWeight: '700',
+    fontSize: 'var(--text-xs)', fontWeight: 700,
   },
-  colorless: { fontSize: '0.75rem', color: '#777' },
-  meta: { fontSize: '0.78rem', color: '#a0a0c0', marginTop: '4px' },
-  metaDate: { color: '#6070a0', fontSize: '0.72rem' },
-  actions: { marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' },
-  loadBtn: {
-    padding: '8px',
-    background: '#2d1b4e',
-    color: '#c084fc',
-    border: '1px solid #c084fc',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '0.82rem',
-    fontWeight: '600',
+  colorless: { fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' },
+  meta: { fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: '4px' },
+  metaDate: { color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' },
+  actions: { marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', paddingTop: 'var(--space-2)' },
+  actionBtn: {
+    width: '100%',
+    padding: '8px 10px',
+    fontSize: 'var(--text-xs)',
   },
-  deleteBtn: {
-    padding: '8px',
-    background: 'transparent',
-    color: '#ef4444',
-    border: '1px solid #ef4444',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '0.82rem',
-    fontWeight: '600',
-  },
-  confirmRow: { display: 'flex', gap: '6px' },
+  confirmRow: { display: 'flex', gap: 'var(--space-2)' },
   deleteConfirm: {
     flex: 1,
-    padding: '8px',
-    background: '#3b0000',
-    color: '#fff',
-    border: '1px solid #ef4444',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '0.78rem',
-    fontWeight: '700',
-  },
-  deleteCancel: {
-    flex: 1,
-    padding: '8px',
-    background: 'transparent',
-    color: '#a0a0c0',
-    border: '1px solid #4a2c6e',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '0.78rem',
+    fontWeight: 700,
   },
 }

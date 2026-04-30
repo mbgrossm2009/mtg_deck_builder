@@ -35,7 +35,7 @@ const CollectionCard = memo(function CollectionCard({ card, onRemove, onSetComma
   const colorIdentity = card.color_identity ?? []
   const eligible = isCommanderEligible(card)
   return (
-    <div style={styles.card}>
+    <div className="card-hover" style={styles.card}>
       <div style={styles.imageWrap}>
         {image
           ? <img src={image} alt={card.name} style={styles.image} loading="lazy" decoding="async" />
@@ -46,7 +46,7 @@ const CollectionCard = memo(function CollectionCard({ card, onRemove, onSetComma
         <div style={styles.nameRow}>
           <div style={styles.name}>{card.name}</div>
           {(card.quantity ?? 1) > 1 && (
-            <span style={styles.qtyBadge}>x{card.quantity}</span>
+            <span style={styles.qtyBadge}>×{card.quantity}</span>
           )}
         </div>
         {card.mana_cost && <div style={styles.manaCost}>{card.mana_cost}</div>}
@@ -70,14 +70,15 @@ const CollectionCard = memo(function CollectionCard({ card, onRemove, onSetComma
         <div style={styles.actions}>
           {eligible && (
             <button
-              style={isCurrentCommander ? styles.commanderBtnActive : styles.commanderBtn}
+              className={isCurrentCommander ? 'btn btn-secondary' : 'btn btn-primary'}
+              style={{ ...styles.actionBtn, ...(isCurrentCommander ? styles.commanderActive : {}) }}
               onClick={() => onSetCommander(card)}
               disabled={isCurrentCommander}
             >
-              {isCurrentCommander ? '★ Current Commander' : 'Set as Commander'}
+              {isCurrentCommander ? '★ Commander' : 'Set as Commander'}
             </button>
           )}
-          <button style={styles.removeBtn} onClick={() => onRemove(card.id)}>
+          <button className="btn btn-danger" style={styles.actionBtn} onClick={() => onRemove(card.id)}>
             Remove
           </button>
         </div>
@@ -904,14 +905,12 @@ const styles = {
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
-    gap: '16px',
+    gap: 'var(--space-4)',
   },
   card: {
-    background: '#16213e',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#4a2c6e',
-    borderRadius: '10px',
+    background: 'var(--surface-1)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-lg)',
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
@@ -920,7 +919,7 @@ const styles = {
     width: '100%',
     aspectRatio: '5 / 7',
     overflow: 'hidden',
-    background: '#0f1526',
+    background: 'var(--bg-app)',
     flexShrink: 0,
   },
   image: {
@@ -935,11 +934,11 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: '#555',
-    fontSize: '0.8rem',
+    color: 'var(--text-subtle)',
+    fontSize: 'var(--text-xs)',
   },
   body: {
-    padding: '12px',
+    padding: 'var(--space-3)',
     display: 'flex',
     flexDirection: 'column',
     gap: '6px',
@@ -948,54 +947,52 @@ const styles = {
   nameRow: {
     display: 'flex',
     alignItems: 'flex-start',
-    gap: '6px',
+    gap: 'var(--space-2)',
   },
   name: {
-    fontWeight: '700',
-    fontSize: '0.9rem',
-    color: '#e0e0e0',
-    lineHeight: '1.3',
+    fontWeight: 700,
+    fontSize: 'var(--text-sm)',
+    color: 'var(--text)',
+    lineHeight: 1.3,
     flex: 1,
   },
   qtyBadge: {
-    fontSize: '0.72rem',
-    fontWeight: '700',
-    color: '#c084fc',
-    background: '#2a1a4e',
-    borderRadius: '4px',
-    padding: '1px 5px',
+    fontSize: 'var(--text-xs)',
+    fontWeight: 700,
+    color: 'var(--accent-hover)',
+    background: 'var(--accent-soft)',
+    borderRadius: 'var(--radius-sm)',
+    padding: '1px 6px',
     whiteSpace: 'nowrap',
     flexShrink: 0,
+    fontFeatureSettings: '"tnum"',
   },
   validationBadge: {
-    fontSize: '0.68rem',
-    color: '#a0a0c0',
-    background: '#1a1a2e',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#4a2c6e',
-    borderRadius: '4px',
-    padding: '1px 6px',
+    fontSize: 'var(--text-xs)',
+    color: 'var(--text-muted)',
+    background: 'var(--bg-app)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-sm)',
+    padding: '2px 8px',
     alignSelf: 'flex-start',
   },
   failedBadge: {
-    fontSize: '0.68rem',
-    color: '#f59e0b',
-    background: '#2d1f00',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#92400e',
-    borderRadius: '4px',
-    padding: '1px 6px',
+    fontSize: 'var(--text-xs)',
+    color: 'var(--warning)',
+    background: 'rgba(245, 158, 11, 0.10)',
+    border: '1px solid rgba(245, 158, 11, 0.30)',
+    borderRadius: 'var(--radius-sm)',
+    padding: '2px 8px',
     alignSelf: 'flex-start',
   },
   manaCost: {
-    fontSize: '0.78rem',
-    color: '#c084fc',
+    fontSize: 'var(--text-xs)',
+    color: 'var(--accent-hover)',
+    fontFeatureSettings: '"tnum"',
   },
   typeLine: {
-    fontSize: '0.75rem',
-    color: '#a0a0c0',
+    fontSize: 'var(--text-xs)',
+    color: 'var(--text-muted)',
     fontStyle: 'italic',
   },
   pips: {
@@ -1011,54 +1008,30 @@ const styles = {
     width: '20px',
     height: '20px',
     borderRadius: '50%',
-    fontSize: '0.65rem',
-    fontWeight: '700',
+    fontSize: 'var(--text-xs)',
+    fontWeight: 700,
   },
   colorless: {
-    fontSize: '0.75rem',
-    color: '#777',
-  },
-  removeBtn: {
-    padding: '8px',
-    background: 'transparent',
-    color: '#ef4444',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#ef4444',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '0.82rem',
-    fontWeight: '600',
+    fontSize: 'var(--text-xs)',
+    color: 'var(--text-subtle)',
   },
   actions: {
     marginTop: 'auto',
     display: 'flex',
     flexDirection: 'column',
-    gap: '6px',
+    gap: 'var(--space-2)',
+    paddingTop: 'var(--space-2)',
   },
-  commanderBtn: {
-    padding: '8px',
-    background: '#2d1b4e',
-    color: '#c084fc',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#c084fc',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '0.82rem',
-    fontWeight: '600',
+  actionBtn: {
+    width: '100%',
+    padding: '8px 10px',
+    fontSize: 'var(--text-xs)',
   },
-  commanderBtnActive: {
-    padding: '8px',
-    background: '#c084fc',
-    color: '#1a0e2e',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#c084fc',
-    borderRadius: '6px',
+  commanderActive: {
     cursor: 'default',
-    fontSize: '0.82rem',
-    fontWeight: '700',
+    color: 'var(--accent-hover)',
+    background: 'var(--accent-soft)',
+    borderColor: 'var(--accent)',
   },
   commanderToast: {
     position: 'fixed',

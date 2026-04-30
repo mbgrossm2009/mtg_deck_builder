@@ -15,7 +15,7 @@ export default function SelectedCommander({ commander, onClear }) {
     <div style={styles.wrap}>
       <div style={styles.header}>
         <span style={styles.label}>Selected Commander</span>
-        <button style={styles.clearBtn} onClick={onClear}>Clear Commander</button>
+        <button className="btn btn-danger" style={styles.clearBtn} onClick={onClear}>Clear</button>
       </div>
       <div style={styles.body}>
         {image && (
@@ -48,62 +48,64 @@ export default function SelectedCommander({ commander, onClear }) {
 
 const styles = {
   wrap: {
-    background: '#16213e',
-    border: '2px solid #c084fc',
-    borderRadius: '12px',
-    padding: '20px',
-    marginBottom: '32px',
+    background: 'var(--surface-1)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-xl)',
+    padding: 'var(--space-6)',
+    marginBottom: 'var(--space-8)',
+    boxShadow: 'var(--shadow-md)',
   },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '16px',
+    marginBottom: 'var(--space-4)',
   },
   label: {
-    color: '#c084fc',
-    fontWeight: '700',
-    fontSize: '0.8rem',
+    color: 'var(--text-muted)',
+    fontWeight: 600,
+    fontSize: 'var(--text-xs)',
     textTransform: 'uppercase',
-    letterSpacing: '0.08em',
+    letterSpacing: '0.10em',
   },
   clearBtn: {
     padding: '6px 14px',
-    background: 'transparent',
-    border: '1px solid #ef4444',
-    color: '#ef4444',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '0.82rem',
+    fontSize: 'var(--text-xs)',
   },
   body: {
     display: 'flex',
-    gap: '20px',
+    gap: 'var(--space-5)',
     alignItems: 'flex-start',
   },
   image: {
     width: '140px',
-    borderRadius: '8px',
+    borderRadius: 'var(--radius-md)',
     flexShrink: 0,
+    boxShadow: 'var(--shadow-sm)',
   },
   details: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '8px',
+    gap: 'var(--space-2)',
+    flex: 1,
+    minWidth: 0,
   },
   name: {
-    fontSize: '1.4rem',
-    fontWeight: '700',
-    color: '#fff',
+    fontSize: 'var(--text-2xl)',
+    fontWeight: 700,
+    color: 'var(--text)',
+    letterSpacing: '-0.01em',
+    lineHeight: 1.15,
   },
   typeLine: {
-    color: '#a0a0c0',
+    color: 'var(--text-muted)',
     fontStyle: 'italic',
-    fontSize: '0.88rem',
+    fontSize: 'var(--text-sm)',
   },
   manaCost: {
-    color: '#c084fc',
-    fontSize: '0.88rem',
+    color: 'var(--accent-hover)',
+    fontSize: 'var(--text-sm)',
+    fontFeatureSettings: '"tnum"',
   },
   pips: {
     display: 'flex',
@@ -117,20 +119,25 @@ const styles = {
     width: '24px',
     height: '24px',
     borderRadius: '50%',
-    fontSize: '0.72rem',
-    fontWeight: '700',
+    fontSize: 'var(--text-xs)',
+    fontWeight: 700,
   },
   colorless: {
-    fontSize: '0.85rem',
-    color: '#777',
+    fontSize: 'var(--text-sm)',
+    color: 'var(--text-subtle)',
   },
   oracleText: {
-    fontSize: '0.85rem',
-    color: '#b0b0c8',
-    lineHeight: '1.55',
+    fontSize: 'var(--text-sm)',
+    color: 'var(--text-muted)',
+    lineHeight: 1.6,
     margin: 0,
     whiteSpace: 'pre-wrap',
-    maxHeight: '110px',
+    maxHeight: '160px',
     overflowY: 'auto',
+    padding: 'var(--space-3)',
+    background: 'var(--bg-app)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-md)',
+    marginTop: 'var(--space-2)',
   },
 }
