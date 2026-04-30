@@ -41,8 +41,8 @@ export default function Login() {
   return (
     <div style={styles.wrap}>
       <div style={styles.card}>
-        <div style={styles.brandMark} aria-hidden>B</div>
-        <h1 style={styles.title}>Welcome to Brewbench</h1>
+        <div style={styles.brandMark} aria-hidden>D</div>
+        <h1 style={styles.title}>Welcome to Deckify</h1>
         <p style={styles.subtitle}>
           Sign in to import your collection and build optimized Commander decks.
         </p>

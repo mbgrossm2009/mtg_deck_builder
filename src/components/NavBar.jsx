@@ -41,8 +41,8 @@ export default function NavBar() {
     <header style={styles.header}>
       <div style={styles.inner}>
         <NavLink to="/" style={styles.brand} end>
-          <span style={styles.brandMark} aria-hidden>B</span>
-          <span style={styles.brandWord}>Brewbench</span>
+          <span style={styles.brandMark} aria-hidden>D</span>
+          <span style={styles.brandWord}>Deckify</span>
         </NavLink>
 
         {/* Desktop / tablet nav. Hidden on mobile via conditional render. */}

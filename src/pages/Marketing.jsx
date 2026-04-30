@@ -15,8 +15,9 @@ export default function Marketing() {
           <br />from the cards you own.
         </h1>
         <p style={styles.subtitle}>
-          Import your collection. Pick a commander. Brewbench builds a power-tuned 99-card
-          deck — with strategy detection, bracket-aware filtering, and AI-assisted card selection.
+          Import your collection. Pick a commander. Deckify it — into a power-tuned
+          99-card build with strategy detection, bracket-aware filtering, and AI-assisted
+          card selection.
         </p>
         <div style={styles.ctaRow}>
           <Link to="/login" className="btn btn-primary" style={styles.primaryCta}>
@@ -43,7 +44,7 @@ export default function Marketing() {
           <FeatureCard
             number="2"
             title="Pick a commander"
-            description="Search any legendary creature. Brewbench detects the strategy from your commander's text and your collection."
+            description="Search any legendary creature. Deckify detects the strategy from your commander's text and your collection."
           />
           <FeatureCard
             number="3"
@@ -75,7 +76,7 @@ export default function Marketing() {
       </section>
 
       <section style={styles.cta}>
-        <h2 style={styles.ctaTitle}>Ready to brew?</h2>
+        <h2 style={styles.ctaTitle}>Ready to deckify?</h2>
         <p style={styles.ctaSub}>
           Free to use. Sign in with Google or Facebook.
         </p>

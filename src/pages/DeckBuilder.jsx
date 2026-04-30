@@ -173,9 +173,9 @@ export default function DeckBuilder() {
         </header>
         <div style={styles.emptyState}>
           <div style={styles.emptyIcon} aria-hidden>👑</div>
-          <div style={styles.emptyTitle}>Pick a commander to get started</div>
+          <div style={styles.emptyTitle}>Pick a commander to start deckifying</div>
           <div style={styles.emptyDesc}>
-            Brewbench builds the deck around your commander's color identity and abilities.
+            Deckify builds the deck around your commander's color identity and abilities.
             Choose one and come back here.
           </div>
           <Link to="/commander" className="btn btn-primary" style={styles.emptyBtn}>

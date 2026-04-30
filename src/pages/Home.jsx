@@ -34,7 +34,7 @@ export default function Home() {
           <br />from the cards you own.
         </h1>
         <p style={styles.subtitle}>
-          Import your collection, pick a commander, and let Brewbench generate a
+          Import your collection, pick a commander, and let Deckify generate a
           power-tuned 99-card deck — with strategy detection, bracket-aware filtering,
           and AI-assisted card selection.
         </p>
@@ -63,7 +63,7 @@ export default function Home() {
         <StepCard
           number={3}
           title="Generate your deck"
-          description="Pick a power bracket. Brewbench analyzes your collection and assembles 99 cards tuned to your commander."
+          description="Pick a power bracket. Deckify analyzes your collection and assembles 99 cards tuned to your commander."
           status={hasDecks ? 'done' : nextStep === 3 ? 'next' : 'todo'}
           progressLabel={hasDecks ? `${progress.decks} saved deck${progress.decks !== 1 ? 's' : ''}` : null}
           ctaLabel={hasDecks ? 'Open builder' : 'Generate deck'}
