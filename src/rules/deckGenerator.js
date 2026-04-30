@@ -7,7 +7,7 @@ import { assignRoles } from './cardRoles'
 import { isBracketAllowed, computeActualBracket, targetLandCount, targetRoleCounts, BRACKET_LABELS } from './bracketRules'
 import { scoreCard } from './deckScorer'
 import { detectCombos, registerCombos, getAllCombos } from './comboRules'
-import { detectArchetypes, anchorNamesFor, themesToArchetypes, mergeArchetypes } from './archetypeRules'
+import { detectArchetypes, anchorNamesFor, themesToArchetypes, mergeArchetypes, cardMatchesArchetype } from './archetypeRules'
 import { validateDeck, countRoles } from './deckValidator'
 
 export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
@@ -134,7 +134,7 @@ export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
     scored = rescore(candidates)
     buckets = buildBuckets(scored)
 
-    const added = fillRole(deck, usedNames, buckets, role, target, explanation)
+    const added = fillRole(deck, usedNames, buckets, role, target, explanation, scoringContext)
     if (added < target) {
       explanation.push(`Could only find ${added} ${role} cards in your collection (wanted ${target}).`)
     }
@@ -145,12 +145,12 @@ export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
   if (remaining > 0) {
     scored = rescore(candidates)
     buckets = buildBuckets(scored)
-    const fillerAdded = fillRole(deck, usedNames, buckets, 'filler', remaining, explanation)
+    const fillerAdded = fillRole(deck, usedNames, buckets, 'filler', remaining, explanation, scoringContext)
     if (fillerAdded < remaining) {
       // Pull from any role bucket as overflow so we still hit 99
       for (const role of roleOrder) {
         if (deck.length >= 99) break
-        fillRole(deck, usedNames, buckets, role, 99 - deck.length, explanation)
+        fillRole(deck, usedNames, buckets, role, 99 - deck.length, explanation, scoringContext)
       }
     }
     if (deck.length < 99) {
@@ -429,17 +429,67 @@ function fillLands(deck, usedNames, buckets, commander, target, explanation) {
   return added
 }
 
-function fillRole(deck, usedNames, buckets, role, target, explanation) {
+// scoringContext (optional) carries archetypes + primaryArchetypeId. When
+// the user has locked a primary archetype AND we're filling a synergy/filler
+// slot, we run a two-pass fill: first 70% of slots are reserved for cards
+// that match the primary archetype, then the remaining 30% (or any unfilled
+// portion of the reservation) draws from the full pool. Without this, the
+// scoring penalty alone isn't always enough to keep "premium off-archetype
+// staples" out of synergy slots.
+function fillRole(deck, usedNames, buckets, role, target, explanation, scoringContext = null) {
   const pool = buckets[role] ?? []
+  if (pool.length === 0 || target === 0) return 0
+
+  const locked      = !!scoringContext?.primaryArchetypeId
+  const isSoftRole  = role === 'synergy' || role === 'filler'
+  const useTwoPass  = locked && isSoftRole
+
   let added = 0
-  for (const card of pool) {
-    if (deck.length >= 99) break
-    if (added >= target) break
-    if (usedNames.has(card.name.toLowerCase())) continue
-    // Singleton format — qty 1 regardless of collection ownership count.
+  const tryPick = (card) => {
+    if (deck.length >= 99) return false
+    if (added >= target) return false
+    if (usedNames.has(card.name.toLowerCase())) return false
     deck.push({ ...card, quantity: 1 })
     usedNames.add(card.name.toLowerCase())
     added++
+    return true
+  }
+
+  if (useTwoPass) {
+    const primary = scoringContext.archetypes?.find(a => a.id === scoringContext.primaryArchetypeId)
+    const onArchetype = pool.filter(c => cardMatchesArchetype(c, primary))
+    // Reserve 70% — but not more than we can actually fill from on-archetype cards.
+    const reservation = Math.min(Math.ceil(target * 0.7), onArchetype.length)
+
+    // Pass 1: fill up to the reservation with on-archetype picks.
+    for (const card of onArchetype) {
+      if (added >= reservation) break
+      tryPick(card)
+    }
+
+    // Pass 2: fill the rest from the full pool (highest-scored first, on-archetype
+    // cards already considered will be skipped by the usedNames check).
+    for (const card of pool) {
+      if (added >= target) break
+      tryPick(card)
+    }
+
+    if (added > 0) {
+      const onCount = added - Math.max(0, added - reservation)
+      explanation.push(
+        `Added ${added} ${role} card${added !== 1 ? 's' : ''} ` +
+        `(${onCount} on-archetype, ${added - onCount} other).`
+      )
+    }
+    return added
+  }
+
+  // Standard single-pass fill — original behavior preserved for everything
+  // except synergy/filler under a locked archetype.
+  for (const card of pool) {
+    if (!tryPick(card)) {
+      if (deck.length >= 99 || added >= target) break
+    }
   }
   if (added > 0) explanation.push(`Added ${added} ${role} card${added !== 1 ? 's' : ''}.`)
   return added

@@ -85,6 +85,26 @@ export function scoreCard(card, role, commander, bracket, context = {}) {
       score -= 30
       log('Competing-archetype anchor', -30)
     }
+
+    // Off-archetype synergy/filler penalty. When a primary is locked, cards
+    // that fall into the synergy/filler bucket but don't fit the locked
+    // archetype get pushed down so on-archetype picks win the slot. Universal
+    // staples (lands/ramp/draw/removal/wipe/protection) are exempt — they're
+    // commander-agnostic and matter regardless of strategy.
+    if (context.primaryArchetypeId) {
+      const UNIVERSAL_ROLES = new Set(['land', 'ramp', 'draw', 'removal', 'wipe', 'protection', 'win_condition'])
+      const cardRoles = card.roles ?? []
+      const primaryRole = cardRoles[0] ?? 'filler'
+      const isSynergyOrFiller = primaryRole === 'synergy' || primaryRole === 'filler'
+      const isUniversal = cardRoles.some(r => UNIVERSAL_ROLES.has(r))
+      if (isSynergyOrFiller && !isUniversal) {
+        const primary = context.archetypes?.find(a => a.id === context.primaryArchetypeId)
+        if (primary && !cardMatchesArchetype(card, primary)) {
+          score -= 30
+          log('Off-archetype synergy/filler (locked)', -30)
+        }
+      }
+    }
   } else {
     const sharedWords = countSharedMeaningfulWords(getOracleText(commander), getOracleText(card))
     const delta = Math.min(sharedWords * 2, 10)

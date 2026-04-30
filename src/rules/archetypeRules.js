@@ -513,12 +513,20 @@ export function scoreArchetypeFit(card, archetypes, primaryId = null) {
     const def = ARCHETYPES.find(a => a.id === arch.id)
     if (!def) continue
 
-    if (def.anchors?.some(name => name === cardName)) total += 50
+    // When primary is locked, weights are amplified so on-archetype cards
+    // can outscore off-archetype EDHREC darlings in the synergy bucket.
+    // Anchor: +50 → +75. Signal cap: 3 → 5 hits, 3 → 5 strength.
+    const locked = !!primaryId
+    const anchorBonus    = locked ? 75 : 50
+    const hitsCap        = locked ? 5  : 3
+    const strengthCap    = locked ? 5  : 3
+
+    if (def.anchors?.some(name => name === cardName)) total += anchorBonus
 
     let hits = 0
     for (const re of def.cardSignals) if (re.test(text)) hits++
     for (const sub of def.typeBoosts) if (typeLine.includes(sub.toLowerCase())) hits++
-    if (hits > 0) total += Math.min(hits, 3) * 4 * Math.min(arch.strength, 3)
+    if (hits > 0) total += Math.min(hits, hitsCap) * 4 * Math.min(arch.strength, strengthCap)
   }
   return total
 }
