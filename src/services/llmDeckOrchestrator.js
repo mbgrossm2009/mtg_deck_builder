@@ -25,9 +25,18 @@ import { detectCombos } from '../rules/comboRules'
 import { detectArchetypes } from '../rules/archetypeRules'
 import { isLand, isBasicLand, getBasicLandsForCommander, avgCmc } from '../utils/cardHelpers'
 import { generateDeck } from '../rules/deckGenerator'
+import { scoreCard } from '../rules/deckScorer'
+import { cardMatchesArchetype } from '../rules/archetypeRules'
 import { generateDeckWithLLM } from './llmDeckService'
 import { buildDeckGenerationPrompt, buildPass1Prompt, buildPass2Prompt, estimatePromptTokens } from './llmPromptBuilder'
 import { validateLLMDeckResponse } from '../rules/llmDeckValidator'
+
+// Cap the pool sent to the LLM. Without this, large collections (~500+ legal
+// cards) push the prompt past Vercel's 60s function timeout and OpenAI's
+// 128k context window. We rank by heuristic score and take the top N — the
+// LLM gets the strongest candidates, the heuristic fallback still has access
+// to the full pool for slot-filling later.
+const LLM_POOL_CAP = 400
 
 export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId = null, options = {}) {
   const { twoPass = false, onProgress = null } = options
@@ -78,13 +87,22 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     primaryArchetypeId: archetypes.some(a => a.id === primaryArchetypeId) ? primaryArchetypeId : null,
   }
 
+  // 5b. Cap the pool sent to the LLM. Heuristic fallback receives the full pool.
+  const llmPool = capPoolForLLM(legalCardPool, commander, bracket, strategyContext)
+  if (llmPool.length < legalCardPool.length) {
+    explanation.push(
+      `Capped LLM pool to top ${llmPool.length} of ${legalCardPool.length} candidates ` +
+      `(prevents prompt timeout / context-limit failures).`
+    )
+  }
+
   // 6. Call the LLM (mocked for now). If it throws, drop straight to heuristic fallback.
   let llmResponse = null
   let llmFailed = false
   try {
     llmResponse = await generateDeckWithLLM({
       commander,
-      legalCardPool,
+      legalCardPool: llmPool,
       bracket,
       deckRules,
       strategyContext,
@@ -402,6 +420,51 @@ export function buildPass2ForCurrentSelection({ bracket = 3, pass1Output } = {})
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────
+
+// Score every legal card and return the top LLM_POOL_CAP. Always preserves
+// every universal-role card (lands/ramp/draw/removal/wipe/protection/tutor/
+// win_condition) so the LLM never runs out of staples to fill required slots,
+// even if a primary archetype lock would otherwise crowd them out.
+function capPoolForLLM(legalCardPool, commander, bracket, strategyContext) {
+  if (legalCardPool.length <= LLM_POOL_CAP) return legalCardPool
+
+  const UNIVERSAL_ROLES = new Set([
+    'land', 'ramp', 'draw', 'removal', 'wipe', 'protection', 'tutor', 'win_condition',
+  ])
+  const scoringContext = {
+    archetypes: strategyContext.archetypes,
+    primaryArchetypeId: strategyContext.primaryArchetypeId,
+  }
+
+  const universal = []
+  const candidates = []
+
+  for (const card of legalCardPool) {
+    const roles = card.roles ?? []
+    if (roles.some(r => UNIVERSAL_ROLES.has(r))) {
+      universal.push(card)
+    } else {
+      const score = scoreCard(card, roles[0] ?? 'filler', commander, bracket, scoringContext)
+      candidates.push({ card, score })
+    }
+  }
+
+  // If a primary is locked, give on-archetype non-universal cards a hard
+  // tiebreak so the cap doesn't accidentally drop them in favor of a slightly
+  // higher-scored off-archetype card.
+  const primary = strategyContext.primaryArchetypeId
+    ? strategyContext.archetypes?.find(a => a.id === strategyContext.primaryArchetypeId)
+    : null
+  if (primary) {
+    for (const c of candidates) {
+      if (cardMatchesArchetype(c.card, primary)) c.score += 25
+    }
+  }
+
+  candidates.sort((a, b) => b.score - a.score)
+  const remaining = Math.max(0, LLM_POOL_CAP - universal.length)
+  return [...universal, ...candidates.slice(0, remaining).map(c => c.card)]
+}
 
 function extractCreatureSubtypes(commander) {
   const tl = commander?.type_line ?? ''
