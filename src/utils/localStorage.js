@@ -12,6 +12,14 @@
 
 import { supabase } from '../lib/supabase'
 import * as dataStore from '../lib/dataStore'
+import { notify } from '../lib/toast'
+
+// Surface a storage failure to the user via toast AND log to console for
+// debugging. Single helper so every error path looks the same.
+function reportSupabaseError(action, error) {
+  console.error(`${action} failed:`, error)
+  notify(`Couldn't ${action} — try again or refresh.`, 'error')
+}
 
 // Kept for back-compat with any callers that still catch it. localStorage's
 // quota constraint is gone, but if Supabase ever returns a quota-style error
@@ -148,7 +156,7 @@ export function saveSelectedCommander(card) {
     })
     .eq('id', userId)
     .then(({ error }) => {
-      if (error) console.error('saveSelectedCommander failed:', error)
+      if (error) reportSupabaseError('save your commander', error)
     })
 }
 
@@ -162,7 +170,7 @@ export function clearSelectedCommander() {
     .update({ selected_commander_id: null, selected_commander_data: null })
     .eq('id', userId)
     .then(({ error }) => {
-      if (error) console.error('clearSelectedCommander failed:', error)
+      if (error) reportSupabaseError('clear your commander', error)
     })
 }
 
@@ -202,7 +210,7 @@ export function addToCollection(card) {
       .from('collections')
       .insert(collectionRowFor(trimmed, userId))
       .then(({ error }) => {
-        if (error) console.error('addToCollection failed:', error)
+        if (error) reportSupabaseError('add card to collection', error)
       })
   }
 
@@ -223,7 +231,7 @@ export function removeFromCollection(cardId) {
     .eq('user_id', userId)
     .eq('card_id', cardId)
     .then(({ error }) => {
-      if (error) console.error('removeFromCollection failed:', error)
+      if (error) reportSupabaseError('remove card from collection', error)
     })
 }
 
@@ -246,7 +254,7 @@ export function removeFailedCards() {
       .eq('user_id', state.userId)
       .in('card_id', failedIds)
       .then(({ error }) => {
-        if (error) console.error('removeFailedCards failed:', error)
+        if (error) reportSupabaseError('remove failed cards', error)
       })
   }
 
@@ -277,7 +285,7 @@ export function updateCollectionCard(cardId, updates) {
       .eq('user_id', state.userId)
       .eq('card_id', cardId)
       .then(({ error }) => {
-        if (error) console.error('updateCollectionCard failed:', error)
+        if (error) reportSupabaseError('update card data', error)
       })
   }
 }
@@ -316,7 +324,7 @@ export function saveCollection(cards) {
       .eq('user_id', state.userId)
       .in('card_id', toDelete)
       .then(({ error }) => {
-        if (error) console.error('saveCollection (delete) failed:', error)
+        if (error) reportSupabaseError('save collection (delete pass)', error)
       })
   }
 
@@ -328,7 +336,7 @@ export function saveCollection(cards) {
       .from('collections')
       .upsert(chunk, { onConflict: 'user_id,card_id' })
       .then(({ error }) => {
-        if (error) console.error('saveCollection (upsert) failed:', error)
+        if (error) reportSupabaseError('save collection (upsert pass)', error)
       })
   }
 }
@@ -343,7 +351,7 @@ export function clearCollection() {
     .delete()
     .eq('user_id', userId)
     .then(({ error }) => {
-      if (error) console.error('clearCollection failed:', error)
+      if (error) reportSupabaseError('clear collection', error)
     })
 }
 
@@ -407,7 +415,7 @@ export async function addImportedCardsToCollection(importedCards) {
         .from('collections')
         .upsert(chunk, { onConflict: 'user_id,card_id' })
       if (error) {
-        console.error('addImportedCardsToCollection batch failed:', error)
+        reportSupabaseError('import cards (batch)', error)
         throw new Error(error.message)
       }
     }
@@ -476,7 +484,7 @@ export function saveDeck({ id, name, commander, mainDeck }) {
         .eq('id', deckId)
         .eq('user_id', state.userId)
         .then(({ error }) => {
-          if (error) console.error('saveDeck (update) failed:', error)
+          if (error) reportSupabaseError('save deck', error)
         })
     } else {
       supabase
@@ -489,7 +497,7 @@ export function saveDeck({ id, name, commander, mainDeck }) {
           main_deck:      trimmedCards,
         })
         .then(({ error }) => {
-          if (error) console.error('saveDeck (insert) failed:', error)
+          if (error) reportSupabaseError('save deck', error)
         })
     }
   }
@@ -511,7 +519,7 @@ export function deleteDeck(id) {
     .eq('id', id)
     .eq('user_id', userId)
     .then(({ error }) => {
-      if (error) console.error('deleteDeck failed:', error)
+      if (error) reportSupabaseError('delete deck', error)
     })
 }
 

@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import NavBar from './components/NavBar'
 import RequireAuth from './components/RequireAuth'
+import Toaster from './components/Toaster'
 import { useAuth } from './contexts/AuthContext'
 import Home from './pages/Home'
 import Marketing from './pages/Marketing'
@@ -28,6 +29,7 @@ function App() {
           <Route path="/my-decks"     element={<RequireAuth><MyDecks /></RequireAuth>} />
         </Routes>
       </main>
+      <Toaster />
     </div>
   )
 }

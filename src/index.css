@@ -224,6 +224,11 @@ a {
   to { transform: rotate(360deg); }
 }
 
+@keyframes toast-in {
+  from { transform: translateY(8px); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    MOBILE OVERRIDES
    Inline styles can't express media queries, so a few mobile-specific tweaks

@@ -23,7 +23,12 @@ export function isBracketAllowed(card, bracket) {
   }
 
   if (bracket <= 3) {
-    // Combos are excluded — handled in generator after combo detection
+    // B3 (Upgraded) allows tutors and most fast mana, but holds back the
+    // elite cEDH-tier acceleration so it doesn't feel like a power spike.
+    // Mana Crypt / Mox Diamond / Chrome Mox / Jeweled Lotus / Lotus Petal /
+    // Mox Opal / Mox Amber / Mana Vault / Grim Monolith → blocked at B3,
+    // unlocked at B4. B3 still gets Sol Ring, Signets, Talismans, etc.
+    if (tags.includes('fast_mana') && isEliteFastMana(card.name)) return false
   }
 
   return true
@@ -38,6 +43,16 @@ function isSafeRock(name) {
 function isSoftTutor(name) {
   return ['Cultivate', 'Kodama\'s Reach', 'Farseek', 'Nature\'s Lore', 'Rampant Growth',
           'Three Visits', 'Skyshroud Claim', 'Tempt with Discovery'].includes(name)
+}
+
+// Elite cEDH-tier fast mana — held back until B4. Everything else with the
+// fast_mana tag (Talismans, Signets, Sol Ring, etc.) is allowed at B3.
+function isEliteFastMana(name) {
+  return [
+    'Mana Crypt', 'Mana Vault', 'Grim Monolith',
+    'Mox Diamond', 'Chrome Mox', 'Mox Opal', 'Mox Amber',
+    'Lotus Petal', 'Jeweled Lotus', 'Dockside Extortionist',
+  ].includes(name)
 }
 
 function isInfiniteWinCon(name) {
@@ -130,9 +145,14 @@ export function targetRoleCounts(bracket, commander = null, archetypes = []) {
     return {
       ramp,
       draw:          8,    // cantrips + draw engines; most cEDH lists run 5-12
-      removal:       5,    // spot removal floor — counterspells stack on top via this bucket
+      // Interaction is bundled — counterspells get classified as 'removal' by
+      // cardRoles.js, so the removal bucket holds spot removal + every counter
+      // the deck owns. Targeting 10 here pulls the full interaction package
+      // (~5 spot + ~5 counters) and combines with protection (4) for a total
+      // interaction count of 14 — squarely in the real cEDH range of 10-14.
+      removal:       10,
       wipe:          1,    // wipes are too slow at cEDH speed
-      protection:    5,    // must protect the win turn (combo lists run 5-7)
+      protection:    4,    // targeted protection; counters above are the bulk
       win_condition: 3,    // counterintuitive: cEDH has FEW named wincons; tutors find them
       tutor:         12,   // single biggest defining feature of cEDH (range 10-15)
       synergy:       12,   // engine pieces; remaining slots fall to filler

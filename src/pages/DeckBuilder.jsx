@@ -428,6 +428,11 @@ export default function DeckBuilder() {
             />
           </div>
 
+          {/* Mana curve histogram — surfaces the CMC distribution so users can
+              spot top-heavy decks at a glance. Pairs with the per-bracket CMC
+              target enforced by the scorer. */}
+          <ManaCurveHistogram mainDeck={result.mainDeck} />
+
           {/* Warnings */}
           {result.warnings.length > 0 && (
             <div style={styles.warningsPanel}>
@@ -589,6 +594,49 @@ function StatPill({ label, value, highlight }) {
     <div style={{ ...styles.statPill, ...(highlight ? styles.statPillHighlight : {}) }}>
       <div style={styles.statLabel}>{label}</div>
       <div style={styles.statValue}>{value}</div>
+    </div>
+  )
+}
+
+// CSS-based bar histogram showing CMC distribution of non-land cards.
+// Buckets: 0, 1, 2, 3, 4, 5, 6+. Bar heights normalized to the tallest
+// bucket so even small decks render with visible bars. Surfacing this
+// helps users spot top-heavy decks at a glance — pairs with the bracket
+// CMC target (cEDH wants ~2.0, casual wants ~4.0).
+function ManaCurveHistogram({ mainDeck }) {
+  const buckets = [0, 0, 0, 0, 0, 0, 0]   // indexes 0..6, where 6 means "6+"
+  for (const card of mainDeck) {
+    const types = (card.type_line ?? '').toLowerCase()
+    if (types.includes('land')) continue
+    const cmc = Math.min(6, Math.max(0, Math.round(card.cmc ?? 0)))
+    buckets[cmc]++
+  }
+  const maxCount = Math.max(1, ...buckets)
+  const labels = ['0', '1', '2', '3', '4', '5', '6+']
+
+  return (
+    <div style={styles.curvePanel}>
+      <div style={styles.curveTitle}>Mana Curve <span style={styles.curveSubtitle}>(non-land)</span></div>
+      <div style={styles.curveBars}>
+        {buckets.map((count, i) => {
+          const heightPct = (count / maxCount) * 100
+          return (
+            <div key={i} style={styles.curveCol}>
+              <div style={styles.curveCount}>{count}</div>
+              <div style={styles.curveBarTrack}>
+                <div
+                  style={{
+                    ...styles.curveBarFill,
+                    height: `${heightPct}%`,
+                    opacity: count === 0 ? 0.15 : 1,
+                  }}
+                />
+              </div>
+              <div style={styles.curveLabel}>{labels[i]}</div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -1045,6 +1093,17 @@ const styles = {
   statPillHighlight: { borderColor: 'var(--warning)' },
   statLabel:       { color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: '4px' },
   statValue:       { color: 'var(--text)', fontWeight: 700, fontSize: 'var(--text-base)', fontFeatureSettings: '"tnum"' },
+
+  // Mana curve histogram
+  curvePanel:      { background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4) var(--space-5)', marginBottom: 'var(--space-5)' },
+  curveTitle:      { color: 'var(--text)', fontWeight: 700, fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.10em', marginBottom: 'var(--space-3)' },
+  curveSubtitle:   { color: 'var(--text-subtle)', fontWeight: 500, textTransform: 'none', letterSpacing: 0, marginLeft: 'var(--space-2)' },
+  curveBars:       { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 'var(--space-2)', alignItems: 'end' },
+  curveCol:        { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' },
+  curveCount:      { color: 'var(--text-muted)', fontSize: 'var(--text-xs)', fontWeight: 600, fontFeatureSettings: '"tnum"', minHeight: '14px' },
+  curveBarTrack:   { width: '100%', height: '80px', background: 'var(--bg-app)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'flex-end', overflow: 'hidden' },
+  curveBarFill:    { width: '100%', background: 'linear-gradient(180deg, var(--accent-hover) 0%, var(--accent) 100%)', borderRadius: 'var(--radius-sm) var(--radius-sm) 0 0', transition: 'height var(--transition-base)', minHeight: '2px' },
+  curveLabel:      { color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', fontWeight: 500, fontFeatureSettings: '"tnum"' },
 
   // The LLM panel intentionally uses a blue accent to differentiate from the
   // commander/deck purple, but built on top of standard surface tokens so it

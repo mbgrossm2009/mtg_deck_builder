@@ -30,13 +30,13 @@ import { cardMatchesArchetype } from '../rules/archetypeRules'
 import { generateDeckWithLLM } from './llmDeckService'
 import { validateLLMDeckResponse } from '../rules/llmDeckValidator'
 
-// Cap the pool sent to the LLM. Without this, large collections (~500+ legal
-// cards) push the prompt past Vercel's 60s function timeout and OpenAI's
-// 128k context window. We rank by heuristic score and take the top N — the
-// LLM gets the strongest candidates, the heuristic fallback still has access
-// to the full pool for slot-filling later. 250 + truncated oracle_text keeps
-// the prompt around ~20k tokens so OpenAI responds in 10-20s, comfortably
-// inside the function timeout.
+// Adaptive cap on the pool sent to the LLM:
+//   - If the legal pool is small (≤ 500 cards), send EVERYTHING. Small
+//     collections shouldn't lose any candidates to a cap.
+//   - Above that, cap at 250 by score so the prompt stays under Vercel's
+//     60s function timeout and OpenAI's 128k context window.
+// In both cases the heuristic fallback still has access to the full pool.
+const LLM_POOL_CAP_THRESHOLD = 500
 const LLM_POOL_CAP = 250
 
 export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId = null, options = {}) {
@@ -284,7 +284,11 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
 // every universal-role card (lands/ramp/draw/removal/wipe/protection/tutor/
 // win_condition) so the LLM never runs out of staples to fill required slots,
 // even if a primary archetype lock would otherwise crowd them out.
+//
+// Adaptive: small collections (≤ THRESHOLD legal cards) skip the cap entirely
+// — there's no token-budget reason to drop cards when the prompt fits anyway.
 function capPoolForLLM(legalCardPool, commander, bracket, strategyContext) {
+  if (legalCardPool.length <= LLM_POOL_CAP_THRESHOLD) return legalCardPool
   if (legalCardPool.length <= LLM_POOL_CAP) return legalCardPool
 
   const UNIVERSAL_ROLES = new Set([
