@@ -1,17 +1,44 @@
-# React + Vite
+# Deckify
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Commander deck builder for Magic: The Gathering. Import your collection, pick
+a commander, generate a power-tuned 99-card deck. AI-assisted (OpenAI) or
+pure heuristic.
 
-Currently, two official plugins are available:
+## Local development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+npm run dev          # vite dev server (Scryfall calls work via vite proxy)
+vercel dev           # full local dev with serverless functions (/api/llm needs OPENAI_API_KEY in .env.local)
+```
 
-## React Compiler
+## Tests
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm test             # run the full suite once
+npm run test:watch   # rerun on file change
+```
 
-## Expanding the ESLint configuration
+The suite uses Vitest. It covers the deterministic, side-effect-free parts of
+the rules engine and import pipeline:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
-# mtg_deck_builder
+- `src/utils/cardHelpers.test.js` — type checks, color identity, basics, dedup, avg CMC
+- `src/utils/cardImportParser.test.js` — CSV/TXT parsing edge cases (Moxfield, Archidekt, MTGO formats)
+- `src/rules/cardRoles.test.js` — `assignRoles` regex classification (lands, ramp, draw, removal, wipes, protection, win-cons, mechanic tags, tribal)
+- `src/rules/archetypeRules.test.js` — archetype detection, matching, scoring (with and without primary lock), EDHREC theme mapping, anchor lookups
+- `src/rules/commanderRules.test.js` — `filterLegalCards` (color identity, banned list, ALWAYS_LEGAL exceptions, dedup, commander-self exclusion)
+- `src/rules/comboRules.test.js` — combo detection, incomplete combos, registration
+- `src/rules/deckValidator.test.js` — 99-card check, singleton (basics excepted), color identity, banned, role-balance warnings
+
+Not covered (intentionally — too coupled, network-dependent, or AI-driven):
+the deck generator, deck scorer, bracket rules, LLM service/orchestrator/validator,
+storage layer (Supabase), and external API wrappers.
+
+## Build / deploy
+
+```bash
+npm run build        # vite build → dist/
+git push             # Vercel auto-deploys main
+```
+
+Required Vercel env vars: `OPENAI_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.

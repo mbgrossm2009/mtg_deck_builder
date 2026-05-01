@@ -82,12 +82,40 @@ export function parseImportedText(inputText) {
   return deduplicateCards(parsed)
 }
 
+// Split a CSV row, respecting double-quoted fields. Handles fields with
+// embedded commas like `"Atraxa, Praetors' Voice"` which Moxfield/EDHREC
+// exports produce. Also handles `""` as an escaped quote inside a field.
+function splitCsvRow(line) {
+  const cells = []
+  let current = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (ch === '"') {
+      // `""` inside a quoted field → literal `"`
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"'
+        i++
+      } else {
+        inQuotes = !inQuotes
+      }
+    } else if (ch === ',' && !inQuotes) {
+      cells.push(current)
+      current = ''
+    } else {
+      current += ch
+    }
+  }
+  cells.push(current)
+  return cells.map(c => c.trim())
+}
+
 // Parse CSV text with flexible header detection
 export function parseCsvText(csvText) {
   const lines = csvText.split(/\r?\n/).filter(l => l.trim())
   if (lines.length === 0) return []
 
-  const firstRow = lines[0].split(',').map(c => c.trim().toLowerCase().replace(/"/g, ''))
+  const firstRow = splitCsvRow(lines[0]).map(c => c.toLowerCase().replace(/"/g, ''))
   const nameAliases = ['name', 'card name', 'card_name', 'cardname']
   const qtyAliases  = ['quantity', 'qty', 'count', 'amount', 'copies']
 
@@ -99,7 +127,7 @@ export function parseCsvText(csvText) {
 
   const parsed = []
   for (const line of dataLines) {
-    const row = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''))
+    const row = splitCsvRow(line)
     if (row.every(c => !c)) continue
 
     let name = ''
