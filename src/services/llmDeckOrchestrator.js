@@ -30,14 +30,32 @@ import { cardMatchesArchetype } from '../rules/archetypeRules'
 import { generateDeckWithLLM } from './llmDeckService'
 import { validateLLMDeckResponse } from '../rules/llmDeckValidator'
 
-// Adaptive cap on the pool sent to the LLM:
-//   - If the legal pool is small (≤ 500 cards), send EVERYTHING. Small
-//     collections shouldn't lose any candidates to a cap.
-//   - Above that, cap at 250 by score so the prompt stays under Vercel's
-//     60s function timeout and OpenAI's 128k context window.
-// In both cases the heuristic fallback still has access to the full pool.
+// Adaptive cap on the pool sent to the LLM. Two layers:
+//   1. Below the threshold (≤ 500 cards): send EVERYTHING — small collections
+//      shouldn't lose any candidates.
+//   2. Above the threshold: cap PER ROLE, not globally. The old single-bucket
+//      cap of 250 let universal-role cards (ramp/removal/draw/etc.) eat the
+//      whole budget when the collection was heavy in any one role, leaving
+//      the synergy bucket to fight for a tiny remainder. That's how high-
+//      impact creatures (Klauth, Terror of the Peaks, etc.) ended up trimmed
+//      before the LLM ever saw them.
+// Per-role caps comfortably exceed the deck's actual need for that role
+// (e.g. cap ramp at 30 when the deck only takes ~10) so the LLM has 3× headroom
+// per slot. Heuristic fallback still receives the full uncapped pool.
 const LLM_POOL_CAP_THRESHOLD = 500
-const LLM_POOL_CAP = 250
+const ROLE_CAPS = {
+  land:           50,
+  ramp:           30,
+  draw:           25,
+  removal:        30,
+  wipe:           12,
+  protection:     15,
+  tutor:          10,
+  win_condition:  15,
+  synergy:        70,
+  filler:         25,
+}
+const DEFAULT_ROLE_CAP = 15
 
 export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId = null, options = {}) {
   const { twoPass = false, onProgress = null } = options
@@ -280,53 +298,43 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
-// Score every legal card and return the top LLM_POOL_CAP. Always preserves
-// every universal-role card (lands/ramp/draw/removal/wipe/protection/tutor/
-// win_condition) so the LLM never runs out of staples to fill required slots,
-// even if a primary archetype lock would otherwise crowd them out.
+// Cap the pool sent to the LLM with PER-ROLE caps. Each card is bucketed by
+// its primary role and only competes for slots in that bucket — so a
+// collection with 80 ramp cards no longer crowds out the synergy/wincon
+// picks the deck actually needs.
 //
 // Adaptive: small collections (≤ THRESHOLD legal cards) skip the cap entirely
 // — there's no token-budget reason to drop cards when the prompt fits anyway.
 function capPoolForLLM(legalCardPool, commander, bracket, strategyContext) {
   if (legalCardPool.length <= LLM_POOL_CAP_THRESHOLD) return legalCardPool
-  if (legalCardPool.length <= LLM_POOL_CAP) return legalCardPool
 
-  const UNIVERSAL_ROLES = new Set([
-    'land', 'ramp', 'draw', 'removal', 'wipe', 'protection', 'tutor', 'win_condition',
-  ])
   const scoringContext = {
     archetypes: strategyContext.archetypes,
     primaryArchetypeId: strategyContext.primaryArchetypeId,
   }
-
-  const universal = []
-  const candidates = []
-
-  for (const card of legalCardPool) {
-    const roles = card.roles ?? []
-    if (roles.some(r => UNIVERSAL_ROLES.has(r))) {
-      universal.push(card)
-    } else {
-      const score = scoreCard(card, roles[0] ?? 'filler', commander, bracket, scoringContext)
-      candidates.push({ card, score })
-    }
-  }
-
-  // If a primary is locked, give on-archetype non-universal cards a hard
-  // tiebreak so the cap doesn't accidentally drop them in favor of a slightly
-  // higher-scored off-archetype card.
   const primary = strategyContext.primaryArchetypeId
     ? strategyContext.archetypes?.find(a => a.id === strategyContext.primaryArchetypeId)
     : null
-  if (primary) {
-    for (const c of candidates) {
-      if (cardMatchesArchetype(c.card, primary)) c.score += 25
-    }
+
+  // Bucket each card by its primary role. Multi-role cards still surface
+  // their secondary roles to the LLM via the roles array — the bucket is
+  // only used for cap accounting here.
+  const buckets = new Map()
+  for (const card of legalCardPool) {
+    const role = card.roles?.[0] ?? 'filler'
+    let score = scoreCard(card, role, commander, bracket, scoringContext)
+    if (primary && cardMatchesArchetype(card, primary)) score += 25
+    if (!buckets.has(role)) buckets.set(role, [])
+    buckets.get(role).push({ card, score })
   }
 
-  candidates.sort((a, b) => b.score - a.score)
-  const remaining = Math.max(0, LLM_POOL_CAP - universal.length)
-  return [...universal, ...candidates.slice(0, remaining).map(c => c.card)]
+  const out = []
+  for (const [role, items] of buckets) {
+    items.sort((a, b) => b.score - a.score)
+    const cap = ROLE_CAPS[role] ?? DEFAULT_ROLE_CAP
+    for (const item of items.slice(0, cap)) out.push(item.card)
+  }
+  return out
 }
 
 function extractCreatureSubtypes(commander) {

@@ -304,10 +304,27 @@ function scoreLandQuality(card) {
   const name = card.name
   if (PREMIUM_LANDS.has(name)) return 25
   if (WEAK_LANDS.has(name))    return -25
-  const text = getOracleText(card)
-  // Heuristic: lands that explicitly say "enters tapped" with no compensating draw/scry/return effect → small penalty
-  if (/enters .* tapped/.test(text) && !/(draw|scry|search|create)/.test(text)) return -8
-  // Tutoring up duals (e.g. Farseek-style lands), ETB-untapped multicolor lands → small bonus
+
+  const nameLower = name.toLowerCase()
+  const text = getOracleText(card).toLowerCase()
+
+  // Category-wide weak tiers — the named WEAK_LANDS list only enumerates a
+  // handful of obvious junk lands; these patterns catch entire categories of
+  // always-tapped fixing that the LLM and heuristic would otherwise treat as
+  // mid-tier. Without this, a collection heavy in gates/gain lands fills the
+  // mana base ahead of an actual shock land and the deck feels a full bracket
+  // weaker than its target.
+  if (/\bguildgate\b/.test(nameLower)) return -22                                // Ravnica gates
+  if (/\bpanorama\b/.test(nameLower)) return -22                                 // Alara panoramas
+  if (/enters .* tapped/.test(text) && /you gain 1 life/.test(text)) return -22  // gain lands ("X Refuge")
+  if (/return .* land you control to .* hand/.test(text)) return -18             // bounce / Karoo lands
+  // Tri-lands (always tapped, three colors): "T: Add R, G, or W" or with commas
+  if (/enters .* tapped/.test(text) && /add \{[wubrg]\}, \{[wubrg]\}, or \{[wubrg]\}/.test(text)) return -16
+
+  // Generic ETB-tapped without a payoff (catches everything else)
+  if (/enters .* tapped/.test(text) && !/(draw|scry|search|create|discover)/.test(text)) return -10
+
+  // Untapped multi-color or any-color lands → small bonus
   if (/add \{[wubrg]\}.*\{[wubrg]\}|any color/.test(text)) return 12
   return 0
 }

@@ -11,7 +11,7 @@ import { BRACKET_LABELS } from '../rules/bracketRules'
 const BRACKET_DESCRIPTIONS = {
   1: 'Exhibition — ultra-casual, no fast mana, no tutors, no game-changers, no infinite combos.',
   2: 'Core — casual precon power. Limited tutors (land tutors only) and a few safe mana rocks (Sol Ring, Signet, Mind Stone).',
-  3: 'Upgraded — focused & efficient but not cutthroat. Tutors and game-changers allowed in moderation. Combos discouraged.',
+  3: 'Upgraded — FOCUSED, EFFICIENT, AND BUILT TO WIN. This is "upgraded precon", not "casual precon". A few tutors and game-changers are allowed. Prefer high-impact removal (Anguished Unmaking, Assassin\'s Trophy, Swords to Plowshares) over filler removal (Murder, Cancel, Naturalize). Prefer untapped color-fixing (shocks, fast lands, original duals, triomes) over always-tapped lands (gates, gain lands, tri-lands, bounce lands). Combos discouraged unless they double as the deck\'s win condition.',
   4: 'Optimized — high-power. Strong tutors, fast mana, and 2-card combos allowed.',
   5: 'Competitive (cEDH) — fastest viable lines, every tutor and combo on the table.',
 }
@@ -729,8 +729,11 @@ DO NOT include random off-theme cards just to hit 99. Every slot must serve the 
 STEP 4 — BRACKET RULES
 
 Bracket 1–2: avoid tutors, fast mana, combos.
-Bracket 3:   moderate optimization, limited tutors, combos discouraged.
-Bracket 4–5: tutors, fast mana, and combos allowed.
+Bracket 3:   FOCUSED AND EFFICIENT — "upgraded precon", not "casual precon". Up to 3 tutors. A few game-changers allowed. Prefer high-impact removal (Anguished Unmaking, Assassin's Trophy, Swords to Plowshares, Beast Within) over filler (Murder, Cancel, Naturalize, Scorching Dragonfire). Combos discouraged unless they double as the wincon.
+Bracket 4–5: tutors, fast mana, and combos allowed. Optimize aggressively.
+
+LAND QUALITY (applies at every bracket above 1):
+Prefer UNTAPPED color-fixing — fetches, shocks, original duals, fast lands, triomes, painlands — over always-tapped fixing — guildgates, gain lands ("X Refuge"), tri-lands, bounce lands ("Karoos"). Tapped lands are fine when they bring real value (scry, draw, recursion, search). Tapped lands that only produce mana are a downgrade vs. a basic — pick the basic.
 
 ---
 
