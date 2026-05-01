@@ -29,10 +29,10 @@ const B1_LINES = [
   { t: '00:00.6', text: '✗ Blocked Mana Crypt (fast mana)',       tone: 'block' },
   { t: '00:00.6', text: '✗ Blocked Cyclonic Rift (game changer)', tone: 'block' },
   { t: '00:00.8', text: '→ Calling AI strategy pass...',          tone: 'wait'  },
-  { t: '00:13.2', text: '✓ Strategy: counters value, no combos',  tone: 'ok'    },
-  { t: '00:13.4', text: '→ Calling AI build pass...',             tone: 'wait'  },
-  { t: '00:23.1', text: '✓ 99 cards · avg CMC 4.0 · 38L · 0 tutors', tone: 'ok' },
-  { t: '00:23.1', text: '✓ Done in 23.1s',                        tone: 'done'  },
+  { t: '00:32.2', text: '✓ Strategy: counters value, no combos',  tone: 'ok'    },
+  { t: '00:32.4', text: '→ Calling AI build pass...',             tone: 'wait'  },
+  { t: '01:09.1', text: '✓ 99 cards · avg CMC 4.0 · 38L · 0 tutors', tone: 'ok' },
+  { t: '01:09.1', text: '✓ Done in 69.1s',                        tone: 'done'  },
 ]
 const B5_LINES = [
   { t: '00:00.4', text: '✓ Filtered for B5 → 891 candidates',     tone: 'ok'    },
@@ -41,10 +41,10 @@ const B5_LINES = [
   { t: '00:00.6', text: '✓ Mana Crypt eligible',                  tone: 'good'  },
   { t: '00:00.6', text: '✓ Cyclonic Rift eligible',               tone: 'good'  },
   { t: '00:00.8', text: '→ Calling AI strategy pass...',          tone: 'wait'  },
-  { t: '00:13.6', text: '✓ Strategy: proliferate combo lines',    tone: 'ok'    },
-  { t: '00:13.8', text: '→ Calling AI build pass...',             tone: 'wait'  },
-  { t: '00:23.4', text: '✓ 99 cards · avg CMC 2.0 · 28L · 12 tutors', tone: 'ok' },
-  { t: '00:23.4', text: '✓ Done in 23.4s',                        tone: 'done'  },
+  { t: '00:33.6', text: '✓ Strategy: proliferate combo lines',    tone: 'ok'    },
+  { t: '00:33.8', text: '→ Calling AI build pass...',             tone: 'wait'  },
+  { t: '01:11.4', text: '✓ 99 cards · avg CMC 2.0 · 28L · 12 tutors', tone: 'ok' },
+  { t: '01:11.4', text: '✓ Done in 71.4s',                        tone: 'done'  },
 ]
 
 const TYPING_DELAY_MS = 1100   // pause between lines (a bit faster than the cycling demo since there are two terminals)

@@ -225,15 +225,15 @@ export default function DeckBuilder() {
         disabled={generating}
       >
         {aiStage === 'pass1'
-          ? 'Pass 1: choosing strategy (~10s)…'
+          ? 'Pass 1: choosing strategy (~30s)…'
           : aiStage === 'pass2'
-          ? 'Pass 2: building deck (~10s)…'
+          ? 'Pass 2: building deck (~40s)…'
           : <><span style={styles.sparkle} aria-hidden>✦</span>Generate with AI</>}
       </button>
       {!generating && (
         <div style={styles.aiHint}>
           <span style={styles.aiHintIcon} aria-hidden>⏱</span>
-          Takes about <strong>15 to 30 seconds</strong>. Runs strategy and build passes through OpenAI.
+          Takes about <strong>60 to 90 seconds</strong>. Two OpenAI passes (strategy then build), each generating ~5,000 tokens.
         </div>
       )}
 

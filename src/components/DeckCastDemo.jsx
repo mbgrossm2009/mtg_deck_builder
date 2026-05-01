@@ -4,8 +4,8 @@
 // generating a deck. Loops through real cEDH/casual commander examples so
 // the user sees what the app does instead of just reading about it.
 //
-// Doubles as the AI-time disclosure: the [00:23.4] timestamps make the
-// 15-30 second wait part of the storytelling rather than a surprise.
+// Doubles as the AI-time disclosure: the timestamps make the
+// 60-90 second wait part of the storytelling rather than a surprise.
 //
 // Pure CSS animation. No images, no MTG IP — just the names of public
 // commander cards and generic gameplay terminology.
@@ -14,7 +14,8 @@ import { useEffect, useState } from 'react'
 import { useIsMobile } from '../lib/useMediaQuery'
 
 // Each demo is a sequence of (timestamp, text, color) lines.
-// Timestamps are realistic — Pass 1 and Pass 2 each take ~10s in production.
+// Timestamps are realistic — Pass 1 and Pass 2 each take ~30-40s in production
+// (bottlenecked by OpenAI's output token speed on ~5,000-token JSON responses).
 const DEMOS = [
   {
     command: 'deckify --commander "Atraxa, Praetors\' Voice" --bracket 4',
@@ -23,10 +24,10 @@ const DEMOS = [
       { t: '00:00.4', text: '✓ Detected archetype: +1/+1 Counters · str 4', tone: 'ok'   },
       { t: '00:00.7', text: '✓ Filtered for bracket 4 → 723 candidates',  tone: 'ok'   },
       { t: '00:00.9', text: '→ Calling AI strategy pass...',              tone: 'wait' },
-      { t: '00:14.1', text: '✓ Strategy: proliferate value engine',       tone: 'ok'   },
-      { t: '00:14.3', text: '→ Calling AI build pass...',                 tone: 'wait' },
-      { t: '00:23.4', text: '✓ 99 cards · avg CMC 2.8 · 7 tutors',         tone: 'ok'   },
-      { t: '00:23.4', text: '✓ Done in 23.4 seconds',                     tone: 'good' },
+      { t: '00:32.4', text: '✓ Strategy: proliferate value engine',       tone: 'ok'   },
+      { t: '00:32.6', text: '→ Calling AI build pass...',                 tone: 'wait' },
+      { t: '01:08.7', text: '✓ 99 cards · avg CMC 2.8 · 7 tutors',         tone: 'ok'   },
+      { t: '01:08.7', text: '✓ Done in 68.7 seconds',                     tone: 'good' },
     ],
   },
   {
@@ -36,10 +37,10 @@ const DEMOS = [
       { t: '00:00.5', text: '✓ Detected archetype: combo · str 5',         tone: 'ok'   },
       { t: '00:00.8', text: '✓ Filtered for bracket 5 → 412 candidates',  tone: 'ok'   },
       { t: '00:01.0', text: '→ Calling AI strategy pass...',              tone: 'wait' },
-      { t: '00:11.7', text: '✓ Strategy: infinite combats · WUBRG 5c',    tone: 'ok'   },
-      { t: '00:11.9', text: '→ Calling AI build pass...',                 tone: 'wait' },
-      { t: '00:21.2', text: '✓ 99 cards · avg CMC 1.9 · 12 tutors · 28L', tone: 'ok'   },
-      { t: '00:21.2', text: '✓ Done in 21.2 seconds',                     tone: 'good' },
+      { t: '00:29.8', text: '✓ Strategy: infinite combats · WUBRG 5c',    tone: 'ok'   },
+      { t: '00:30.0', text: '→ Calling AI build pass...',                 tone: 'wait' },
+      { t: '01:02.4', text: '✓ 99 cards · avg CMC 1.9 · 12 tutors · 28L', tone: 'ok'   },
+      { t: '01:02.4', text: '✓ Done in 62.4 seconds',                     tone: 'good' },
     ],
   },
   {
@@ -49,10 +50,10 @@ const DEMOS = [
       { t: '00:00.3', text: '✓ Detected archetype: tribal · goblins · str 3', tone: 'ok' },
       { t: '00:00.4', text: '✓ Filtered for bracket 3 → 287 candidates',  tone: 'ok'   },
       { t: '00:00.6', text: '→ Calling AI strategy pass...',              tone: 'wait' },
-      { t: '00:13.8', text: '✓ Strategy: aggro tokens + sac payoff',      tone: 'ok'   },
-      { t: '00:14.0', text: '→ Calling AI build pass...',                 tone: 'wait' },
-      { t: '00:24.6', text: '✓ 99 cards · avg CMC 2.4 · synergy 28',      tone: 'ok'   },
-      { t: '00:24.6', text: '✓ Done in 24.6 seconds',                     tone: 'good' },
+      { t: '00:34.5', text: '✓ Strategy: aggro tokens + sac payoff',      tone: 'ok'   },
+      { t: '00:34.7', text: '→ Calling AI build pass...',                 tone: 'wait' },
+      { t: '01:11.1', text: '✓ 99 cards · avg CMC 2.4 · synergy 28',      tone: 'ok'   },
+      { t: '01:11.1', text: '✓ Done in 71.1 seconds',                     tone: 'good' },
     ],
   },
   {
@@ -62,10 +63,10 @@ const DEMOS = [
       { t: '00:00.4', text: '✓ Detected archetype: tribal · vampires · str 4', tone: 'ok' },
       { t: '00:00.6', text: '✓ Filtered for bracket 2 → 318 candidates',  tone: 'ok'   },
       { t: '00:00.8', text: '→ Calling AI strategy pass...',              tone: 'wait' },
-      { t: '00:12.5', text: '✓ Strategy: anthems + lifelink swarm',       tone: 'ok'   },
-      { t: '00:12.7', text: '→ Calling AI build pass...',                 tone: 'wait' },
-      { t: '00:22.1', text: '✓ 99 cards · avg CMC 3.6 · 38L · 0 tutors',  tone: 'ok'   },
-      { t: '00:22.1', text: '✓ Done in 22.1 seconds',                     tone: 'good' },
+      { t: '00:31.7', text: '✓ Strategy: anthems + lifelink swarm',       tone: 'ok'   },
+      { t: '00:31.9', text: '→ Calling AI build pass...',                 tone: 'wait' },
+      { t: '01:05.6', text: '✓ 99 cards · avg CMC 3.6 · 38L · 0 tutors',  tone: 'ok'   },
+      { t: '01:05.6', text: '✓ Done in 65.6 seconds',                     tone: 'good' },
     ],
   },
   {
@@ -76,10 +77,10 @@ const DEMOS = [
       { t: '00:00.6', text: '✓ Commander CMC 9 → ramp target +4',         tone: 'ok'   },
       { t: '00:00.9', text: '✓ Filtered for bracket 4 → 891 candidates',  tone: 'ok'   },
       { t: '00:01.1', text: '→ Calling AI strategy pass...',              tone: 'wait' },
-      { t: '00:13.6', text: '✓ Strategy: cascade slivers + commander tutoring', tone: 'ok' },
-      { t: '00:13.8', text: '→ Calling AI build pass...',                 tone: 'wait' },
-      { t: '00:25.7', text: '✓ 99 cards · 5c · avg CMC 3.1 · synergy 28', tone: 'ok'   },
-      { t: '00:25.7', text: '✓ Done in 25.7 seconds',                     tone: 'good' },
+      { t: '00:35.2', text: '✓ Strategy: cascade slivers + commander tutoring', tone: 'ok' },
+      { t: '00:35.4', text: '→ Calling AI build pass...',                 tone: 'wait' },
+      { t: '01:14.9', text: '✓ 99 cards · 5c · avg CMC 3.1 · synergy 28', tone: 'ok'   },
+      { t: '01:14.9', text: '✓ Done in 74.9 seconds',                     tone: 'good' },
     ],
   },
 ]

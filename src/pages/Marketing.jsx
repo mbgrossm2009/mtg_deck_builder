@@ -44,7 +44,7 @@ export default function Marketing() {
 
         {/* Live demo terminal — shows the deck-gen pipeline running in real time
             with realistic timestamps. Doubles as the AI-time disclosure: the
-            ~22-second total in the demo prepares users for the real wait. */}
+            ~60-75 second total in the demo prepares users for the real wait. */}
         <div style={styles.demoWrap}>
           <div style={styles.demoLabel}>
             <span style={styles.demoLabelDot} aria-hidden />
@@ -53,7 +53,8 @@ export default function Marketing() {
           <DeckCastDemo />
           <p style={styles.demoCaption}>
             AI deck generation runs two passes (strategy and build) and typically
-            completes in <strong>15 to 30 seconds</strong> per deck.
+            completes in <strong>60 to 90 seconds</strong> per deck. Each pass
+            generates ~5,000 tokens and is bottlenecked by OpenAI's output speed.
           </p>
         </div>
       </section>
