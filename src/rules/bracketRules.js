@@ -6,28 +6,37 @@ export const BRACKET_LABELS = {
   5: 'Competitive',
 }
 
-// What each bracket prohibits during card selection
+// What each bracket prohibits during card selection. Restructured to make
+// each bracket's policy explicit:
+//   B1: no game changers, no fast mana, no tutors, no infinite wincons
+//   B2: same as B1 EXCEPT safe rocks (Sol Ring etc.) and soft tutors (land
+//       ramp) are exempt — even though Sol Ring is officially a "game changer"
+//       in WotC's bracket spec, every precon ships with it, so blocking it at
+//       B2 (precon power level) would be absurd
+//   B3: elite fast mana still blocked (smooths the B3→B4 power curve)
+//   B4 + B5: anything goes
 export function isBracketAllowed(card, bracket) {
   const { tags = [], roles = [] } = card
 
-  if (bracket <= 1) {
+  if (bracket === 1) {
+    if (tags.includes('game_changer')) return false
     if (tags.includes('fast_mana'))    return false
     if (tags.includes('tutor'))        return false
-    if (tags.includes('game_changer')) return false
     if (roles.includes('win_condition') && isInfiniteWinCon(card.name)) return false
   }
 
-  if (bracket <= 2) {
-    if (tags.includes('fast_mana') && !isSafeRock(card.name)) return false
-    if (tags.includes('tutor') && !isSoftTutor(card.name))    return false
+  if (bracket === 2) {
+    // Safe rocks (Sol Ring, etc.) and soft tutors (land ramp) bypass the
+    // game-changer / fast_mana / tutor blocks. They are bracket-2 staples.
+    if (tags.includes('game_changer') && !isSafeRock(card.name) && !isSoftTutor(card.name)) return false
+    if (tags.includes('fast_mana')    && !isSafeRock(card.name))     return false
+    if (tags.includes('tutor')        && !isSoftTutor(card.name))    return false
+    if (roles.includes('win_condition') && isInfiniteWinCon(card.name)) return false
   }
 
-  if (bracket <= 3) {
+  if (bracket === 3) {
     // B3 (Upgraded) allows tutors and most fast mana, but holds back the
     // elite cEDH-tier acceleration so it doesn't feel like a power spike.
-    // Mana Crypt / Mox Diamond / Chrome Mox / Jeweled Lotus / Lotus Petal /
-    // Mox Opal / Mox Amber / Mana Vault / Grim Monolith → blocked at B3,
-    // unlocked at B4. B3 still gets Sol Ring, Signets, Talismans, etc.
     if (tags.includes('fast_mana') && isEliteFastMana(card.name)) return false
   }
 
