@@ -418,8 +418,9 @@ export default function DeckBuilder() {
           {/* Stats bar — "Interaction" is a derived stat (removal + protection)
               that mirrors how cEDH players talk about their decks: "how many
               cards stop the win?" The buckets stay separate inside the
-              generator, but the user-facing summary aggregates them. */}
-          <div style={styles.statsBar}>
+              generator, but the user-facing summary aggregates them.
+              On mobile the .stats-bar-responsive class flips to a 2-col grid. */}
+          <div className="stats-bar-responsive" style={styles.statsBar}>
             <StatPill label="Total Cards" value={result.stats.totalCards} />
             <StatPill label="Lands" value={result.stats.landCount} />
             <StatPill label="Avg CMC" value={result.stats.avgCmc} />
@@ -623,13 +624,13 @@ function ManaCurveHistogram({ mainDeck }) {
   return (
     <div style={styles.curvePanel}>
       <div style={styles.curveTitle}>Mana Curve <span style={styles.curveSubtitle}>(non-land)</span></div>
-      <div style={styles.curveBars}>
+      <div className="curve-bars-responsive" style={styles.curveBars}>
         {buckets.map((count, i) => {
           const heightPct = (count / maxCount) * 100
           return (
             <div key={i} style={styles.curveCol}>
               <div style={styles.curveCount}>{count}</div>
-              <div style={styles.curveBarTrack}>
+              <div className="curve-bar-track-responsive" style={styles.curveBarTrack}>
                 <div
                   style={{
                     ...styles.curveBarFill,

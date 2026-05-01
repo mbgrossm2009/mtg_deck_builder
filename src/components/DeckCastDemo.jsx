@@ -11,6 +11,7 @@
 // commander cards and generic gameplay terminology.
 
 import { useEffect, useState } from 'react'
+import { useIsMobile } from '../lib/useMediaQuery'
 
 // Each demo is a sequence of (timestamp, text, color) lines.
 // Timestamps are realistic — Pass 1 and Pass 2 each take ~10s in production.
@@ -91,6 +92,7 @@ export default function DeckCastDemo() {
   const [demoIdx, setDemoIdx]       = useState(0)
   const [visibleLines, setVisible]  = useState(0)
   const [typedCommand, setTyped]    = useState('')
+  const isMobile = useIsMobile()
 
   const demo = DEMOS[demoIdx]
 
@@ -125,7 +127,7 @@ export default function DeckCastDemo() {
 
   return (
     <div style={styles.frame} aria-label="Live demo of Deckify generating a deck">
-      <div style={styles.titleBar}>
+      <div style={{ ...styles.titleBar, ...(isMobile ? styles.titleBarMobile : {}) }}>
         <span style={{ ...styles.dot, background: '#ff5f57' }} aria-hidden />
         <span style={{ ...styles.dot, background: '#febc2e' }} aria-hidden />
         <span style={{ ...styles.dot, background: '#28c840' }} aria-hidden />
@@ -136,7 +138,7 @@ export default function DeckCastDemo() {
         </span>
       </div>
 
-      <pre style={styles.terminal}>
+      <pre style={{ ...styles.terminal, ...(isMobile ? styles.terminalMobile : {}) }}>
         <code>
           <span style={styles.commandLine}>
             {typedCommand}
@@ -182,6 +184,9 @@ const styles = {
     padding: 'var(--space-2) var(--space-3)',
     background: 'var(--surface-2)',
     borderBottom: '1px solid var(--border)',
+  },
+  titleBarMobile: {
+    padding: '6px var(--space-2)',
   },
   dot: {
     width: 12,
@@ -233,6 +238,14 @@ const styles = {
     minHeight: '320px',
     overflowX: 'auto',
     textAlign: 'left',
+    whiteSpace: 'pre-wrap',  // wrap long lines on narrow viewports instead of forcing horizontal scroll
+    wordBreak: 'break-word',
+  },
+  terminalMobile: {
+    padding: 'var(--space-3) var(--space-3) var(--space-4)',
+    fontSize: '0.72rem',     // ~11.5px — fits the long timestamp+text lines on 375px
+    lineHeight: 1.6,
+    minHeight: '280px',
   },
   commandLine: {
     display: 'block',

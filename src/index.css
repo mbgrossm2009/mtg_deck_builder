@@ -262,6 +262,23 @@ a {
   .responsive-main {
     padding: var(--space-6) var(--space-3) var(--space-12) !important;
   }
+
+  /* DeckBuilder stats bar — 5 pills become an awkward 3+2 wrap on narrow
+     screens. Force a clean 2-column grid that lets each pill claim its own
+     row when needed. */
+  .stats-bar-responsive {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .stats-bar-responsive > * {
+    min-width: 0 !important;  /* override the inline minWidth: 100px */
+  }
+
+  /* Mana curve histogram — bar tracks shorten on mobile so the panel
+     doesn't dominate the deck-builder viewport. */
+  .curve-bars-responsive .curve-bar-track-responsive {
+    height: 56px !important;
+  }
 }
 
 /* Hover lift for clickable card panels */
