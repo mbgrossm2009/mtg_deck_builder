@@ -84,7 +84,7 @@ const DEMOS = [
   },
 ]
 
-const TYPING_DELAY_MS  = 600   // pause between lines so it feels like real progress
+const TYPING_DELAY_MS  = 1100  // pause between lines so each step has time to register
 const HOLD_AT_END_MS   = 5500  // dwell on completed demo before cycling
 const CHAR_SPEED_MS    = 22    // per-character typing delay — slow enough to watch the command get typed
 
