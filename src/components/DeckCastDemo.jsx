@@ -67,6 +67,20 @@ const DEMOS = [
       { t: '00:22.1', text: '✓ Done in 22.1 seconds',                     tone: 'good' },
     ],
   },
+  {
+    command: 'deckify --commander "Sliver Overlord" --bracket 4',
+    lines: [
+      { t: '00:00.3', text: '✓ Loaded collection (3,128 cards)',          tone: 'ok'   },
+      { t: '00:00.5', text: '✓ Detected archetype: tribal · slivers · str 5', tone: 'ok' },
+      { t: '00:00.6', text: '✓ Commander CMC 9 → ramp target +4',         tone: 'ok'   },
+      { t: '00:00.9', text: '✓ Filtered for bracket 4 → 891 candidates',  tone: 'ok'   },
+      { t: '00:01.1', text: '→ Calling AI strategy pass...',              tone: 'wait' },
+      { t: '00:13.6', text: '✓ Strategy: cascade slivers + commander tutoring', tone: 'ok' },
+      { t: '00:13.8', text: '→ Calling AI build pass...',                 tone: 'wait' },
+      { t: '00:25.7', text: '✓ 99 cards · 5c · avg CMC 3.1 · synergy 28', tone: 'ok'   },
+      { t: '00:25.7', text: '✓ Done in 25.7 seconds',                     tone: 'good' },
+    ],
+  },
 ]
 
 const TYPING_DELAY_MS  = 250   // pause between lines so it feels like real progress
