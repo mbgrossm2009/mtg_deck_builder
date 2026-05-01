@@ -225,11 +225,17 @@ export default function DeckBuilder() {
         disabled={generating}
       >
         {aiStage === 'pass1'
-          ? 'Choosing strategy…'
+          ? 'Pass 1 — choosing strategy (~10s)…'
           : aiStage === 'pass2'
-          ? 'Building deck…'
+          ? 'Pass 2 — building deck (~10s)…'
           : <><span style={styles.sparkle} aria-hidden>✦</span>Generate with AI</>}
       </button>
+      {!generating && (
+        <div style={styles.aiHint}>
+          <span style={styles.aiHintIcon} aria-hidden>⏱</span>
+          Takes about <strong>15–30 seconds</strong> — runs strategy + build passes through OpenAI.
+        </div>
+      )}
 
       {/* Secondary action: heuristic generator. Instant, no API cost. */}
       <button
@@ -1086,6 +1092,18 @@ const styles = {
                    },
   generateBtnDisabled: { opacity: 0.55, cursor: 'not-allowed' },
   sparkle:         { fontSize: 'var(--text-base)', color: '#fde68a' },
+  aiHint:          {
+                     display: 'flex',
+                     alignItems: 'center',
+                     gap: '6px',
+                     justifyContent: 'center',
+                     marginTop: 'calc(var(--space-3) * -1 + 2px)',
+                     marginBottom: 'var(--space-3)',
+                     color: 'var(--text-subtle)',
+                     fontSize: 'var(--text-xs)',
+                     fontWeight: 500,
+                   },
+  aiHintIcon:      { color: 'var(--accent-hover)', fontSize: 'var(--text-sm)' },
   errorBanner:     { background: 'rgba(239, 68, 68, 0.10)', border: '1px solid rgba(239, 68, 68, 0.40)', borderRadius: 'var(--radius-md)', color: 'var(--danger)', padding: 'var(--space-4)', marginBottom: 'var(--space-5)', fontSize: 'var(--text-sm)' },
 
   statsBar:        { display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', marginBottom: 'var(--space-5)' },

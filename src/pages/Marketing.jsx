@@ -3,6 +3,7 @@
 
 import { Link } from 'react-router-dom'
 import { useIsMobile } from '../lib/useMediaQuery'
+import DeckCastDemo from '../components/DeckCastDemo'
 
 export default function Marketing() {
   const isMobile = useIsMobile()
@@ -38,6 +39,21 @@ export default function Marketing() {
           >
             How it works
           </a>
+        </div>
+
+        {/* Live demo terminal — shows the deck-gen pipeline running in real time
+            with realistic timestamps. Doubles as the AI-time disclosure: the
+            ~22-second total in the demo prepares users for the real wait. */}
+        <div style={styles.demoWrap}>
+          <div style={styles.demoLabel}>
+            <span style={styles.demoLabelDot} aria-hidden />
+            Watch a real generation run
+          </div>
+          <DeckCastDemo />
+          <p style={styles.demoCaption}>
+            AI deck generation runs two passes — strategy + build — and typically
+            completes in <strong>15-30 seconds</strong> per deck.
+          </p>
         </div>
       </section>
 
@@ -194,6 +210,37 @@ const styles = {
     fontSize: 'var(--text-base)',
     fontWeight: 700,
     textDecoration: 'none',
+  },
+  demoWrap: {
+    marginTop: 'var(--space-12)',
+    position: 'relative',
+    zIndex: 1,
+  },
+  demoLabel: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 'var(--space-2)',
+    color: 'var(--text-subtle)',
+    fontSize: 'var(--text-xs)',
+    fontWeight: 600,
+    letterSpacing: '0.10em',
+    textTransform: 'uppercase',
+    marginBottom: 'var(--space-3)',
+  },
+  demoLabelDot: {
+    width: 6,
+    height: 6,
+    borderRadius: '50%',
+    background: 'var(--success)',
+    boxShadow: '0 0 0 3px rgba(16, 185, 129, 0.20)',
+  },
+  demoCaption: {
+    marginTop: 'var(--space-4)',
+    color: 'var(--text-subtle)',
+    fontSize: 'var(--text-sm)',
+    lineHeight: 1.6,
+    maxWidth: '520px',
+    margin: 'var(--space-4) auto 0',
   },
   secondaryCta: {
     padding: '14px 16px',
