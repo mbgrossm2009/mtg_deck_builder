@@ -76,7 +76,12 @@ describe('validateDeck — singleton enforcement', () => {
       { name: 'Sol Ring', type_line: 'Artifact', isBasicLand: false },
     ])
     const { errors } = validateDeck(deck, COMMANDER)
-    expect(errors.some(e => e.toLowerCase().includes('sol ring') && e.includes('singleton'))).toBe(true)
+    // toLowerCase() on both halves so the assertion isn't sensitive to
+    // sentence-case capitalization in the error string.
+    expect(errors.some(e => {
+      const l = e.toLowerCase()
+      return l.includes('sol ring') && l.includes('singleton')
+    })).toBe(true)
   })
 
   it('treats names case-insensitively for singleton check', () => {
@@ -85,7 +90,7 @@ describe('validateDeck — singleton enforcement', () => {
       { name: 'sol ring', type_line: 'Artifact', isBasicLand: false },
     ])
     const { errors } = validateDeck(deck, COMMANDER)
-    expect(errors.find(e => e.includes('singleton'))).toBeDefined()
+    expect(errors.find(e => e.toLowerCase().includes('singleton'))).toBeDefined()
   })
 
   it('exempts basic lands from singleton check', () => {
