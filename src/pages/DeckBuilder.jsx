@@ -409,11 +409,18 @@ export default function DeckBuilder() {
             primaryArchetypeId={primaryArchetype}
           />
 
-          {/* Stats bar */}
+          {/* Stats bar — "Interaction" is a derived stat (removal + protection)
+              that mirrors how cEDH players talk about their decks: "how many
+              cards stop the win?" The buckets stay separate inside the
+              generator, but the user-facing summary aggregates them. */}
           <div style={styles.statsBar}>
             <StatPill label="Total Cards" value={result.stats.totalCards} />
             <StatPill label="Lands" value={result.stats.landCount} />
             <StatPill label="Avg CMC" value={result.stats.avgCmc} />
+            <StatPill
+              label="Interaction"
+              value={(result.stats.roleCounts?.removal ?? 0) + (result.stats.roleCounts?.protection ?? 0)}
+            />
             <StatPill
               label="Actual Bracket"
               value={`${result.bracketAnalysis.actualBracket} — ${BRACKET_LABELS[result.bracketAnalysis.actualBracket]}`}

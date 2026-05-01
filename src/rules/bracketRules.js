@@ -152,9 +152,12 @@ export function targetRoleCounts(bracket, commander = null, archetypes = []) {
   // Bracket 4 (optimized) bumped 5 → 7 tutors; real bracket 4 lists run 6-8.
   let tutor   = bracket <= 1 ? 0 : bracket === 2 ? 1 : bracket === 3 ? 3 : 7
   if (isTribal) {
-    // Tribal lords/anthems/payoffs all live in synergy. Steal from removal/draw/tutor
-    // because tribal decks lean on combat damage and tribal-specific draw/tutor effects.
-    synergy = 35
+    // Tribal lords/anthems/payoffs all live in synergy. Steal from draw/removal/tutor
+    // because tribal decks lean on combat damage and tribal-specific effects.
+    // Cap at 28 (was 35) — 35 left no room for interaction. 28 still gives a
+    // meaningful tribal commitment (8 above the 20 baseline) without crowding
+    // wipes / protection / win-cons out of the deck.
+    synergy = 28
     draw    = Math.max(draw - 2, 7)
     removal = Math.max(removal - 1, 6)
     tutor   = Math.max(tutor - 1, 0)
