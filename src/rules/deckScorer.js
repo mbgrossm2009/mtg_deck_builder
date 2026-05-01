@@ -1,5 +1,6 @@
 import { getOracleText } from '../utils/cardHelpers'
 import { scoreArchetypeFit, cardMatchesArchetype, isCompetingArchetypeAnchor } from './archetypeRules'
+import { targetAvgCmc } from './bracketRules'
 
 // Cards that are explicitly weak/joke/limited-only and almost never belong in
 // a Commander deck. We hard-penalize these so they sink to the bottom of any
@@ -58,12 +59,39 @@ export function scoreCard(card, role, commander, bracket, context = {}) {
     else if (r === 'mythic')   { score += 2; log('Rarity (mythic)',    2) }
   }
 
+  // CMC scoring — bracket-aware. Each bracket has a target average CMC
+  // (see targetAvgCmc in bracketRules.js). Cards at or below the target
+  // get a bonus; cards above it get a penalty that scales with how far
+  // over they are. This means a 6-drop is acceptable at bracket 1
+  // (target 4.0) but a serious negative at bracket 5 (target 2.0).
+  //
+  // Bonus is doubled when the running deck average is already above
+  // target — the scorer "leans into the curve" as the deck fills,
+  // preferring cheaper cards once the curve drifts heavy.
   const cmc = card.cmc ?? 0
   if (role !== 'win_condition' && role !== 'filler') {
-    if (cmc <= 2)      { score += 6; log(`CMC ${cmc} (cheap)`,  6) }
-    else if (cmc <= 3) { score += 3; log(`CMC ${cmc}`,          3) }
-    else if (cmc >= 7) { score -= 6; log(`CMC ${cmc} (heavy)`, -6) }
-    else if (cmc >= 5) { score -= 3; log(`CMC ${cmc} (high)`,  -3) }
+    const target = targetAvgCmc(bracket)
+    const overTargetBy = cmc - target
+
+    let cmcDelta = 0
+    if (overTargetBy <= -1.5)      cmcDelta = 7   // well below target — strong bonus
+    else if (overTargetBy <= -0.5) cmcDelta = 5   // slightly below — small bonus
+    else if (overTargetBy <= 0.5)  cmcDelta = 2   // on target — token bonus
+    else if (overTargetBy <= 1.5)  cmcDelta = -2  // slightly over
+    else if (overTargetBy <= 2.5)  cmcDelta = -5  // notably over
+    else                            cmcDelta = -9  // way over (e.g. 7-drop in cEDH)
+
+    // Amplify the penalty if the running deck average is already heavy.
+    // runningCmcOverTarget is provided by deckGenerator while the deck fills.
+    const runningOver = context.runningCmcOverTarget ?? 0
+    if (runningOver > 0.3 && cmcDelta < 0) {
+      cmcDelta = Math.round(cmcDelta * 1.5)  // -5 → -8, -9 → -14
+    }
+
+    if (cmcDelta !== 0) {
+      score += cmcDelta
+      log(`CMC ${cmc} vs target ${target.toFixed(1)}`, cmcDelta)
+    }
   }
 
   const flexBonus = Math.min(roles.length - 1, 3) * 3

@@ -4,7 +4,7 @@ import { fetchSpellbookCombos } from '../utils/commanderSpellbook'
 import { fetchEdhrecCommander } from '../utils/edhrecApi'
 import { filterLegalCards } from './commanderRules'
 import { assignRoles } from './cardRoles'
-import { isBracketAllowed, computeActualBracket, targetLandCount, targetRoleCounts, BRACKET_LABELS } from './bracketRules'
+import { isBracketAllowed, computeActualBracket, targetLandCount, targetRoleCounts, targetAvgCmc, BRACKET_LABELS } from './bracketRules'
 import { scoreCard } from './deckScorer'
 import { detectCombos, registerCombos, getAllCombos } from './comboRules'
 import { detectArchetypes, anchorNamesFor, themesToArchetypes, mergeArchetypes, cardMatchesArchetype } from './archetypeRules'
@@ -108,19 +108,27 @@ export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
     breakdowns,
   }
 
-  const rescore = (cards) => cards.map(card => ({
-    ...card,
-    score: scoreCard(card, card.roles[0] ?? 'filler', commander, bracket, scoringContext),
-  }))
+  // Re-scoring helper — recomputes scores for every candidate against the
+  // current scoringContext. Re-called between fill passes so that:
+  //   1. Combo-completion bonuses snap on the moment a partner lands in usedNames
+  //   2. CMC scoring sees the running deck average and amplifies penalties when
+  //      the deck has drifted heavy
+  const rescore = (cards) => {
+    scoringContext.runningCmcOverTarget = computeRunningCmcOverTarget(deck, bracket)
+    return cards.map(card => ({
+      ...card,
+      score: scoreCard(card, card.roles[0] ?? 'filler', commander, bracket, scoringContext),
+    }))
+  }
 
   // 6. Initial scoring + bucket build
+  const deck = []
   let scored = rescore(candidates)
   let buckets = buildBuckets(scored)
 
   // 7. Fill: lands, then utility roles in priority order, then filler.
-  //    Re-score before each pass so combo-completion bonuses snap on the moment
-  //    a partner card lands in usedNames.
-  const deck = []
+  //    Re-score before each pass so combo-completion AND running-CMC bonuses
+  //    snap to the deck's current state.
   const targetCounts = targetRoleCounts(bracket, commander, archetypes)
   const landTarget = targetLandCount(bracket)
 
@@ -140,7 +148,7 @@ export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
     }
   }
 
-  // Filler last — re-score so leftovers favor archetype + combo fit
+  // Filler last — re-score so leftovers favor archetype + combo fit + curve
   const remaining = 99 - deck.length
   if (remaining > 0) {
     scored = rescore(candidates)
@@ -354,6 +362,19 @@ export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
 }
 
 // ─── helpers ────────────────────────────────────────────────────────────────
+
+// How far over the bracket's target avg CMC the deck currently sits, looking
+// only at non-land cards. Returns 0 if the deck is at or below target. The
+// scorer reads this and amplifies CMC penalties when the deck has drifted
+// heavy, so later picks lean cheaper to drag the curve back to target.
+function computeRunningCmcOverTarget(deck, bracket) {
+  const nonLands = deck.filter(c => !(c.roles ?? []).includes('land'))
+  if (nonLands.length === 0) return 0
+  const totalCmc = nonLands.reduce((s, c) => s + (c.cmc ?? 0), 0)
+  const avg = totalCmc / nonLands.length
+  const target = targetAvgCmc(bracket)
+  return Math.max(0, avg - target)
+}
 
 // "Legendary Creature — Serpent God" → ['serpent', 'god']
 // Used so commander creature subtypes count as synergy keywords (Koma's Serpent

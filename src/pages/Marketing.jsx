@@ -9,7 +9,15 @@ export default function Marketing() {
   return (
     <div>
       <section style={{ ...styles.hero, ...(isMobile ? styles.heroMobile : {}) }}>
-        <div style={styles.eyebrow}>Commander Deck Builder</div>
+        {/* Glow behind the hero — subtle radial pulse adds depth without using
+            an actual image (keeps bundle size tiny and avoids IP risk). */}
+        <div style={styles.heroGlow} aria-hidden />
+
+        <div style={styles.eyebrow}>
+          <span style={styles.eyebrowOrnament} aria-hidden>◆</span>
+          Commander Deck Builder
+          <span style={styles.eyebrowOrnament} aria-hidden>◆</span>
+        </div>
         <h1 style={{ ...styles.title, ...(isMobile ? styles.titleMobile : {}) }}>
           Build optimized <span style={styles.titleAccent}>Commander</span> decks
           <br />from the cards you own.
@@ -111,19 +119,48 @@ const styles = {
   hero: {
     padding: 'var(--space-16) 0 var(--space-12)',
     textAlign: 'center',
+    position: 'relative',
+    overflow: 'hidden',
   },
   heroMobile: {
     padding: 'var(--space-10) 0 var(--space-8)',
   },
+  // Soft purple aura behind the hero — sits behind the title and fades out.
+  // Pure CSS, no image, no IP risk.
+  heroGlow: {
+    position: 'absolute',
+    top: '20%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: '120%',
+    height: '320px',
+    background:
+      'radial-gradient(ellipse at center, rgba(139, 92, 246, 0.18) 0%, rgba(139, 92, 246, 0.06) 35%, transparent 70%)',
+    filter: 'blur(20px)',
+    pointerEvents: 'none',
+    zIndex: 0,
+  },
   eyebrow: {
+    position: 'relative',
+    zIndex: 1,
     color: 'var(--accent-hover)',
     fontSize: 'var(--text-xs)',
     fontWeight: 600,
     letterSpacing: '0.12em',
     textTransform: 'uppercase',
     marginBottom: 'var(--space-4)',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 'var(--space-3)',
+  },
+  eyebrowOrnament: {
+    color: 'var(--accent-2)',
+    fontSize: '0.6rem',
+    opacity: 0.7,
   },
   title: {
+    position: 'relative',
+    zIndex: 1,
     fontSize: 'var(--text-4xl)',
     fontWeight: 800,
     letterSpacing: '-0.02em',
@@ -134,7 +171,7 @@ const styles = {
     fontSize: 'var(--text-3xl)',
   },
   titleAccent: {
-    background: 'linear-gradient(135deg, #a78bfa 0%, #6366f1 100%)',
+    background: 'linear-gradient(135deg, #a78bfa 0%, #6366f1 50%, #f59e0b 100%)',
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
     backgroundClip: 'text',

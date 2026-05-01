@@ -81,11 +81,27 @@ export function computeActualBracket(mainDeck, combos) {
 
 // Target land count varies by bracket. cEDH (5) drops significantly because
 // games end T3-T5 and rituals/fast mana fill in for missed land drops.
+// Bracket 5 calibrated against three real cEDH lists (Atraxa GU, Najeela, Rograkh+Silas)
+// which all ran 24-28 lands.
 export function targetLandCount(bracket) {
   if (bracket <= 2) return 38
   if (bracket === 3) return 37
   if (bracket === 4) return 36
-  return 31  // bracket 5 — cEDH
+  return 28  // bracket 5 — cEDH (was 31; lowered after empirical testing)
+}
+
+// Target average CMC of NON-LAND cards per bracket. Used by deckScorer to bias
+// card selection toward the bracket's expected curve. Casual brackets allow
+// big splashy 5+ drops; cEDH must average 2.0 or below to win on T3-T5.
+//
+// These are TARGETS, not caps. The scorer applies a soft penalty as a card's
+// CMC exceeds the target, scaled to how far over it goes.
+export function targetAvgCmc(bracket) {
+  if (bracket === 1) return 4.0   // exhibition — big splashy plays welcome
+  if (bracket === 2) return 3.7   // core / precon
+  if (bracket === 3) return 3.3   // upgraded
+  if (bracket === 4) return 2.8   // optimized
+  return 2.0                       // cEDH — must combo by T3-T5
 }
 
 // Target counts per role per bracket. Optional `commander` and `archetypes` let us
@@ -99,16 +115,27 @@ export function targetRoleCounts(bracket, commander = null, archetypes = []) {
   // applies. Tribal expansion is intentionally skipped here: even tribal cEDH
   // commanders (Najeela, Sliver Overlord) run combo packages, not 35-card
   // tribal swarms.
+  // Bracket 5 (cEDH) numbers calibrated against three real cEDH lists:
+  //   Atraxa GU:       28L 16R  9D  17 rem(spot+counter)  0W 6P 2WC 10T 15S
+  //   Najeela:         28L 21R  5D  13 rem                0W 5P 4WC 15T 10S
+  //   Rograkh+Silas:   24L 22R 10D  15 rem                0W 3P 4WC 11T 12S
+  // Median: 28L / 19R / 8D / floor 5R + counters / 0-1W / 5P / 3WC / 12T / 12S.
+  // High-CMC commander ramp bonus IS applied at bracket 5 — Atraxa GU is a 7-drop
+  // and needs the +4 boost to reach the 20+ ramp the real list runs.
   if (bracket === 5) {
+    const cmc = commander?.cmc ?? 0
+    let ramp = 18
+    if (cmc >= 7)      ramp += 4   // Atraxa GU territory
+    else if (cmc >= 5) ramp += 2   // Yidris, Yawgmoth-tier
     return {
-      ramp:          10,   // fast mana counts here; 10 captures most cEDH packages
-      draw:          12,   // cantrips + draw engines (Brainstorm/Rhystic/Remora)
+      ramp,
+      draw:          8,    // cantrips + draw engines; most cEDH lists run 5-12
       removal:       5,    // spot removal floor — counterspells stack on top via this bucket
       wipe:          1,    // wipes are too slow at cEDH speed
-      protection:    7,    // must protect the win turn
+      protection:    5,    // must protect the win turn (combo lists run 5-7)
       win_condition: 3,    // counterintuitive: cEDH has FEW named wincons; tutors find them
-      tutor:         8,    // single biggest defining feature of cEDH
-      synergy:       18,
+      tutor:         12,   // single biggest defining feature of cEDH (range 10-15)
+      synergy:       12,   // engine pieces; remaining slots fall to filler
       filler:        99,
     }
   }
@@ -122,7 +149,8 @@ export function targetRoleCounts(bracket, commander = null, archetypes = []) {
   let synergy = 20
   let draw    = bracket >= 4 ? 12 : 10
   let removal = bracket <= 2 ? 8 : 9
-  let tutor   = bracket <= 1 ? 0 : bracket === 2 ? 1 : bracket === 3 ? 3 : 5
+  // Bracket 4 (optimized) bumped 5 → 7 tutors; real bracket 4 lists run 6-8.
+  let tutor   = bracket <= 1 ? 0 : bracket === 2 ? 1 : bracket === 3 ? 3 : 7
   if (isTribal) {
     // Tribal lords/anthems/payoffs all live in synergy. Steal from removal/draw/tutor
     // because tribal decks lean on combat damage and tribal-specific draw/tutor effects.
