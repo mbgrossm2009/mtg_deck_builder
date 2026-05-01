@@ -24,13 +24,13 @@ export default function Marketing() {
           <br />from the cards you own.
         </h1>
         <p style={styles.subtitle}>
-          Import your collection. Pick a commander. Deckify it — into a power-tuned
+          Import your collection. Pick a commander. Deckify it into a power-tuned
           99-card build with strategy detection, bracket-aware filtering, and AI-assisted
           card selection.
         </p>
         <div style={styles.ctaRow}>
           <Link to="/login" className="btn btn-primary" style={styles.primaryCta}>
-            Get started — free →
+            Get started for free →
           </Link>
           <a
             href="#how-it-works"
@@ -51,8 +51,8 @@ export default function Marketing() {
           </div>
           <DeckCastDemo />
           <p style={styles.demoCaption}>
-            AI deck generation runs two passes — strategy + build — and typically
-            completes in <strong>15-30 seconds</strong> per deck.
+            AI deck generation runs two passes (strategy and build) and typically
+            completes in <strong>15 to 30 seconds</strong> per deck.
           </p>
         </div>
       </section>
@@ -90,7 +90,7 @@ export default function Marketing() {
           />
           <Capability
             title="Combo detection"
-            description="Flags 100+ known infinite combos — including ones you didn't know your collection could assemble."
+            description="Flags 100+ known infinite combos, including ones you didn't know your collection could assemble."
           />
           <Capability
             title="Strategy-aware scoring"

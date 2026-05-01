@@ -532,13 +532,13 @@ export default function Collection() {
     <div>
       <header style={styles.header}>
         <h1 style={styles.heading}>My Collection</h1>
-        <p style={styles.tagline}>The cards you own — Deckify builds decks from this pool.</p>
+        <p style={styles.tagline}>The cards you own. Deckify builds decks from this pool.</p>
       </header>
       <div style={styles.subRow}>
         <p style={styles.sub}>
           {totalUnique > 0
             ? `${totalUnique} unique card${totalUnique !== 1 ? 's' : ''} · ${totalCopies} total cop${totalCopies !== 1 ? 'ies' : 'y'}`
-            : 'Your collection is empty — add cards from the Commander page or import below.'}
+            : 'Your collection is empty. Add cards from the Commander page or import below.'}
         </p>
         {totalUnique > 0 && (
           confirmingClear ? (
@@ -585,7 +585,7 @@ export default function Collection() {
             </button>
           </div>
           <div style={styles.failedBannerBody}>
-            These names didn{"'"}t match any real Magic card — likely typos or made-up names:
+            These names didn{"'"}t match any real Magic card. Likely typos or made-up names:
             <span style={styles.failedBannerNames}>
               {failedCards.slice(0, 12).map(c => c.name).join(', ')}
               {failedCards.length > 12 && `, and ${failedCards.length - 12} more`}

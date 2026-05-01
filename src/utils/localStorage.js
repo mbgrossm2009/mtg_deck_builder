@@ -18,7 +18,7 @@ import { notify } from '../lib/toast'
 // debugging. Single helper so every error path looks the same.
 function reportSupabaseError(action, error) {
   console.error(`${action} failed:`, error)
-  notify(`Couldn't ${action} — try again or refresh.`, 'error')
+  notify(`Couldn't ${action}. Try again or refresh.`, 'error')
 }
 
 // Kept for back-compat with any callers that still catch it. localStorage's

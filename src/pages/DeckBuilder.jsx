@@ -225,15 +225,15 @@ export default function DeckBuilder() {
         disabled={generating}
       >
         {aiStage === 'pass1'
-          ? 'Pass 1 — choosing strategy (~10s)…'
+          ? 'Pass 1: choosing strategy (~10s)…'
           : aiStage === 'pass2'
-          ? 'Pass 2 — building deck (~10s)…'
+          ? 'Pass 2: building deck (~10s)…'
           : <><span style={styles.sparkle} aria-hidden>✦</span>Generate with AI</>}
       </button>
       {!generating && (
         <div style={styles.aiHint}>
           <span style={styles.aiHintIcon} aria-hidden>⏱</span>
-          Takes about <strong>15–30 seconds</strong> — runs strategy + build passes through OpenAI.
+          Takes about <strong>15 to 30 seconds</strong>. Runs strategy and build passes through OpenAI.
         </div>
       )}
 
@@ -430,7 +430,7 @@ export default function DeckBuilder() {
             />
             <StatPill
               label="Actual Bracket"
-              value={`${result.bracketAnalysis.actualBracket} — ${BRACKET_LABELS[result.bracketAnalysis.actualBracket]}`}
+              value={`${result.bracketAnalysis.actualBracket}: ${BRACKET_LABELS[result.bracketAnalysis.actualBracket]}`}
               highlight={result.bracketAnalysis.actualBracket > result.bracketAnalysis.targetBracket}
             />
           </div>
@@ -471,7 +471,7 @@ export default function DeckBuilder() {
           {/* Deck list grouped by role */}
           <div style={styles.deckSection}>
             <div style={styles.panelTitle}>
-              Deck — {result.mainDeck.length} cards + commander
+              Deck: {result.mainDeck.length} cards + commander
             </div>
             {ROLE_ORDER.map(role => {
               const cards = groupedDeck[role]
@@ -678,7 +678,7 @@ function DeckSummary({ mainDeck, combos, archetypes, primaryArchetypeId }) {
         {winCons.length === 0 ? (
           <span style={combos.length > 0 ? summaryStyles.muted : summaryStyles.warning}>
             {combos.length > 0
-              ? 'No standalone finisher — wins through the combo lines below.'
+              ? 'No standalone finisher. Wins through the combo lines below.'
               : '⚠ No win conditions or combo lines detected. Deck has no clear path to victory.'}
           </span>
         ) : (
@@ -697,7 +697,7 @@ function DeckSummary({ mainDeck, combos, archetypes, primaryArchetypeId }) {
             {combos.map((combo, i) => (
               <div key={i} style={summaryStyles.comboLine}>
                 <span style={summaryStyles.comboCards}>{combo.cards.join(' + ')}</span>
-                <span style={summaryStyles.comboDesc}> — {combo.description}</span>
+                <span style={summaryStyles.comboDesc}>: {combo.description}</span>
               </div>
             ))}
           </div>
@@ -737,7 +737,7 @@ function DiagnosticsPanel({ diagnostics }) {
   return (
     <div style={diagStyles.collapsible}>
       <button style={diagStyles.collapsibleBtn} onClick={() => setExpanded(p => !p)}>
-        {expanded ? '▾' : '▸'} Diagnostics — see why each card was picked or skipped
+        {expanded ? '▾' : '▸'} Diagnostics: see why each card was picked or skipped
       </button>
       {expanded && (
         <div style={diagStyles.body}>
@@ -751,7 +751,7 @@ function DiagnosticsPanel({ diagnostics }) {
               <span style={diagStyles.statusDetail}>
                 {ds.edhrec?.loaded
                   ? `${ds.edhrec.topCardCount} top cards · ${ds.edhrec.themeCount} themes`
-                  : 'No data loaded — likely CORS or fetch failure (check browser console).'}
+                  : 'No data loaded. Likely CORS or fetch failure (check browser console).'}
               </span>
             </div>
             {ds.edhrec?.loaded && (
@@ -924,7 +924,7 @@ function CardDetail({ card }) {
 
       {!card.picked && card.beatBy.length === 0 && (
         <div style={diagStyles.empty}>
-          Not picked despite no higher-scoring competition in this role — likely the bucket's target was already filled by then, or the card was an overflow case. Try regenerating; ordering between role passes can shift this.
+          Not picked despite no higher-scoring competition in this role. Likely the bucket's target was already filled by then, or the card was an overflow case. Try regenerating; ordering between role passes can shift this.
         </div>
       )}
     </div>

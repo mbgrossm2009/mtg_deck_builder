@@ -40,7 +40,7 @@ export default function Home() {
         </h1>
         <p style={styles.subtitle}>
           Import your collection, pick a commander, and let Deckify generate a
-          power-tuned 99-card deck — with strategy detection, bracket-aware filtering,
+          power-tuned 99-card deck with strategy detection, bracket-aware filtering,
           and AI-assisted card selection.
         </p>
       </section>

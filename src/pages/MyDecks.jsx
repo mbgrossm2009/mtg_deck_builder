@@ -46,7 +46,7 @@ export default function MyDecks() {
         <p style={styles.sub}>
           {decks.length > 0
             ? `${decks.length} saved deck${decks.length !== 1 ? 's' : ''}`
-            : 'No decks saved yet — generate one in the Deck Builder and save it.'}
+            : 'No decks saved yet. Generate one in the Deck Builder and save it.'}
         </p>
       </header>
 

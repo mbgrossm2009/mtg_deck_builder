@@ -5,7 +5,7 @@ export function validateDeck(mainDeck, commander) {
   const warnings = []
 
   if (mainDeck.length !== 99) {
-    errors.push(`Deck has ${mainDeck.length} cards — needs exactly 99 (plus commander).`)
+    errors.push(`Deck has ${mainDeck.length} cards. Needs exactly 99 (plus commander).`)
   }
 
   // Singleton check (basic lands exempt)
@@ -16,7 +16,7 @@ export function validateDeck(mainDeck, commander) {
     nameCounts[key] = (nameCounts[key] ?? 0) + 1
   }
   for (const [name, count] of Object.entries(nameCounts)) {
-    if (count > 1) errors.push(`"${name}" appears ${count} times — singleton violation.`)
+    if (count > 1) errors.push(`"${name}" appears ${count} times. Singleton violation.`)
   }
 
   // Color identity
@@ -35,11 +35,11 @@ export function validateDeck(mainDeck, commander) {
 
   // Role balance warnings
   const roleCounts = countRoles(mainDeck)
-  if (roleCounts.land < 33)         warnings.push(`Only ${roleCounts.land} lands — deck may have mana problems.`)
-  if (roleCounts.ramp < 6)          warnings.push(`Only ${roleCounts.ramp} ramp pieces — deck may be slow.`)
-  if (roleCounts.draw < 6)          warnings.push(`Only ${roleCounts.draw} draw sources — you may run out of cards.`)
-  if (roleCounts.removal < 5)       warnings.push(`Only ${roleCounts.removal} removal spells — may struggle to answer threats.`)
-  if (roleCounts.win_condition < 1) warnings.push('No clear win conditions found — how does this deck plan to win?')
+  if (roleCounts.land < 33)         warnings.push(`Only ${roleCounts.land} lands. Deck may have mana problems.`)
+  if (roleCounts.ramp < 6)          warnings.push(`Only ${roleCounts.ramp} ramp pieces. Deck may be slow.`)
+  if (roleCounts.draw < 6)          warnings.push(`Only ${roleCounts.draw} draw sources. You may run out of cards.`)
+  if (roleCounts.removal < 5)       warnings.push(`Only ${roleCounts.removal} removal spells. May struggle to answer threats.`)
+  if (roleCounts.win_condition < 1) warnings.push('No clear win conditions found. How does this deck plan to win?')
 
   return { errors, warnings }
 }
