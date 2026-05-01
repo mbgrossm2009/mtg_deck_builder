@@ -4,6 +4,7 @@
 import { Link } from 'react-router-dom'
 import { useIsMobile } from '../lib/useMediaQuery'
 import DeckCastDemo from '../components/DeckCastDemo'
+import BracketComparisonDemo from '../components/BracketComparisonDemo'
 
 export default function Marketing() {
   const isMobile = useIsMobile()
@@ -55,6 +56,13 @@ export default function Marketing() {
             completes in <strong>15 to 30 seconds</strong> per deck.
           </p>
         </div>
+      </section>
+
+      {/* Side-by-side bracket comparison — same commander, two brackets,
+          shown in lockstep so the divergence is unmissable. The most
+          differentiated thing the engine does. */}
+      <section style={styles.comparisonSection}>
+        <BracketComparisonDemo />
       </section>
 
       <section id="how-it-works" style={styles.howSection}>
@@ -248,6 +256,10 @@ const styles = {
     textDecoration: 'none',
   },
 
+  comparisonSection: {
+    padding: 'var(--space-12) 0',
+    borderTop: '1px solid var(--border)',
+  },
   howSection: {
     padding: 'var(--space-12) 0',
     borderTop: '1px solid var(--border)',
