@@ -79,11 +79,13 @@ export function computeActualBracket(mainDeck, combos) {
   return { actualBracket: bracket, flaggedCards: [...new Set(flagged)] }
 }
 
-// Target land count varies slightly by bracket
+// Target land count varies by bracket. cEDH (5) drops significantly because
+// games end T3-T5 and rituals/fast mana fill in for missed land drops.
 export function targetLandCount(bracket) {
   if (bracket <= 2) return 38
   if (bracket === 3) return 37
-  return 36
+  if (bracket === 4) return 36
+  return 31  // bracket 5 — cEDH
 }
 
 // Target counts per role per bracket. Optional `commander` and `archetypes` let us
@@ -91,6 +93,26 @@ export function targetLandCount(bracket) {
 //   - high-CMC commanders need more ramp (a 7-drop wants 13-15 pieces, not 10)
 //   - tribal commanders want way more synergy slots (Slivers/Elves/etc. run 30-40 tribe)
 export function targetRoleCounts(bracket, commander = null, archetypes = []) {
+  // cEDH (bracket 5) has a fundamentally different deck shape from optimized
+  // (bracket 4): heavy tutors, minimal removal/wipes, very few wincons, lots
+  // of protection. Branch out early — none of the brackets-1-through-4 logic
+  // applies. Tribal expansion is intentionally skipped here: even tribal cEDH
+  // commanders (Najeela, Sliver Overlord) run combo packages, not 35-card
+  // tribal swarms.
+  if (bracket === 5) {
+    return {
+      ramp:          10,   // fast mana counts here; 10 captures most cEDH packages
+      draw:          12,   // cantrips + draw engines (Brainstorm/Rhystic/Remora)
+      removal:       5,    // spot removal floor — counterspells stack on top via this bucket
+      wipe:          1,    // wipes are too slow at cEDH speed
+      protection:    7,    // must protect the win turn
+      win_condition: 3,    // counterintuitive: cEDH has FEW named wincons; tutors find them
+      tutor:         8,    // single biggest defining feature of cEDH
+      synergy:       18,
+      filler:        99,
+    }
+  }
+
   let ramp = bracket >= 4 ? 12 : 10
   const cmc = commander?.cmc ?? 0
   if (cmc >= 7)      ramp += 4
