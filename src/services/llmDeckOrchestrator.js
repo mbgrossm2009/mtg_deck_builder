@@ -21,7 +21,7 @@ import { filterLegalCards } from '../rules/commanderRules'
 import { assignRoles } from '../rules/cardRoles'
 import { isBracketAllowed, targetLandCount, targetRoleCounts, computeActualBracket, BRACKET_LABELS } from '../rules/bracketRules'
 import { validateDeck, countRoles } from '../rules/deckValidator'
-import { detectCombos } from '../rules/comboRules'
+import { detectCombos, getAllCombos } from '../rules/comboRules'
 import { detectArchetypes } from '../rules/archetypeRules'
 import { isLand, isBasicLand, getBasicLandsForCommander, avgCmc } from '../utils/cardHelpers'
 import { generateDeck } from '../rules/deckGenerator'
@@ -376,6 +376,36 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
 
   while (deck.length > 99) deck.pop()
 
+  // 11a. Heuristic critique — deterministic score-based swaps. Walks every
+  // unlocked deck card and the available pool, scores both with the same
+  // scoreCard the heuristic generator uses, and swaps deck cards for pool
+  // cards that score significantly higher (≥12 points). No LLM judgment
+  // involved — pure "stronger card replaces weaker card" within the user's
+  // own collection. Catches the weak-removal/filler problem that the LLM
+  // critique can't fix because it tries to suggest cards (Damnation, Swords,
+  // etc.) the user doesn't own.
+  {
+    const heuristicSwaps = runHeuristicCritique({
+      deck,
+      legalNonLands,
+      commander,
+      bracket,
+      strategyContext,
+      edhrecData,
+    })
+    if (heuristicSwaps.length > 0) {
+      explanation.push(`Heuristic critique: applied ${heuristicSwaps.length} score-based swap${heuristicSwaps.length === 1 ? '' : 's'}.`)
+      for (const s of heuristicSwaps) {
+        explanation.push(`  Swap: -${s.out} (score ${s.outScore}) → +${s.in} (score ${s.inScore}, +${s.delta})`)
+      }
+      // Update usedNames so the LLM critique that runs next doesn't try to
+      // re-suggest swapped-in cards.
+      usedNames.clear()
+      usedNames.add(commander.name.toLowerCase())
+      for (const c of deck) if (!c.isBasicLand) usedNames.add(c.name.toLowerCase())
+    }
+  }
+
   // 11b. Critique pass (Pass 3) — ask the LLM to evaluate the assembled deck
   // and propose up to 5 swaps. Single-shot, never iterates. Locked cards
   // (mana base + skeleton) are off-limits to swaps. Best-effort: if the
@@ -504,6 +534,93 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────
+
+// Heuristic (non-LLM) critique. Walks the unlocked deck cards and the
+// available pool, scores both with the same scoreCard the heuristic
+// generator uses, and swaps deck cards for pool cards that score ≥12 points
+// higher. Mutates `deck` in place. Returns the applied swaps so the
+// orchestrator can log them.
+//
+// Why this exists: the LLM critique frequently identifies weak picks
+// correctly but proposes upgrades the user doesn't own (Damnation, Swords,
+// etc. — textbook answers from the model's training data). Heuristic
+// critique only proposes swaps within the user's actual collection, so
+// every swap is guaranteed to be a real improvement they can use.
+//
+// Constraints:
+//   - Locked cards (mana base + skeleton) are never swapped out
+//   - Cap at 8 swaps per generation to prevent over-aggressive rewrites
+//   - Min score delta of 12 — swap only when the upgrade is meaningful
+function runHeuristicCritique({ deck, legalNonLands, commander, bracket, strategyContext, edhrecData }) {
+  const MIN_DELTA = 12
+  const MAX_SWAPS = 8
+
+  // Build a lightweight scoring context. EDHREC rank is the most important
+  // signal; combos and primary archetype matter too.
+  const edhrecRank = new Map()
+  ;(edhrecData?.topCards ?? []).forEach((c, i) => edhrecRank.set(c.name, i + 1))
+
+  const allCombos = getAllCombos()
+  const candidateNames = new Set(legalNonLands.map(c => c.name.toLowerCase()))
+  candidateNames.add(commander.name.toLowerCase())
+  const relevantCombos = allCombos.filter(combo =>
+    combo.cards.some(name => candidateNames.has(name.toLowerCase()))
+  )
+
+  const scoringContext = {
+    archetypes: strategyContext.archetypes ?? [],
+    primaryArchetypeId: strategyContext.primaryArchetypeId ?? null,
+    combos: relevantCombos,
+    pickedNames: new Set(deck.map(c => c.name.toLowerCase())),
+    edhrecRank,
+    edhrecRankTotal: Math.max(edhrecData?.topCards?.length ?? 1, 1),
+  }
+  const scoreFor = (card) =>
+    scoreCard(card, (card.roles ?? ['filler'])[0], commander, bracket, scoringContext)
+
+  // Available pool: legal non-lands not currently in the deck.
+  const inDeckNames = new Set(deck.map(c => c.name.toLowerCase()))
+  const pool = legalNonLands.filter(c => !inDeckNames.has(c.name.toLowerCase()))
+
+  // Score the deck (unlocked only) and pool. Sort: deck weakest first, pool
+  // strongest first.
+  const swappableDeck = deck
+    .map((c, idx) => ({ idx, card: c, score: scoreFor(c) }))
+    .filter(({ card }) => !card.fromManaSolver && !card.fromSkeleton)
+    .sort((a, b) => a.score - b.score)
+
+  const scoredPool = pool
+    .map(c => ({ card: c, score: scoreFor(c) }))
+    .sort((a, b) => b.score - a.score)
+
+  const swaps = []
+  const usedPoolNames = new Set()
+
+  for (const { idx, card: deckCard, score: deckScore } of swappableDeck) {
+    if (swaps.length >= MAX_SWAPS) break
+
+    for (const { card: poolCard, score: poolScore } of scoredPool) {
+      if (usedPoolNames.has(poolCard.name.toLowerCase())) continue
+      const delta = poolScore - deckScore
+      if (delta < MIN_DELTA) break   // pool sorted desc — no remaining card can help
+
+      // Swap in place. Tag the new card so downstream code knows it came from
+      // the heuristic critique (useful for diagnostics + debug UI later).
+      deck[idx] = { ...poolCard, quantity: 1, fromHeuristicCritique: true, critiqueDelta: delta }
+      swaps.push({
+        out: deckCard.name,
+        in: poolCard.name,
+        outScore: deckScore,
+        inScore: poolScore,
+        delta,
+      })
+      usedPoolNames.add(poolCard.name.toLowerCase())
+      break
+    }
+  }
+
+  return swaps
+}
 
 // Apply the swaps returned by the critique pass. Each swap is validated:
 //   - `out` must be a card currently in the deck AND not locked (mana base
