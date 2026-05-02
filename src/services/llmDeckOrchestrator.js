@@ -31,7 +31,7 @@ import { generateDeckWithLLM, critiqueDeck } from './llmDeckService'
 import { validateLLMDeckResponse } from '../rules/llmDeckValidator'
 import { solveManaBase } from '../rules/manaBaseSolver'
 import { buildSkeleton, buildSkeletonFromMoxfield, mergeSkeletons, skeletonRoleCounts } from '../rules/deckSkeleton'
-import { buildBracketStaples } from '../rules/bracketStaples'
+import { buildBracketStaples, getStapleCoverage } from '../rules/bracketStaples'
 import { fetchEdhrecCommander } from '../utils/edhrecApi'
 import { fetchMoxfieldConsensus } from '../utils/moxfieldApi'
 
@@ -161,6 +161,29 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   })
   if (bracketStaples.length > 0) {
     explanation.push(`Bracket-${bracket} staples force-locked: ${bracketStaples.length} additional cards (${bracketStaples.slice(0, 5).map(c => c.name).join(', ')}${bracketStaples.length > 5 ? `, +${bracketStaples.length - 5} more` : ''}).`)
+  }
+
+  // Surface bracket-staple coverage so the user knows when their collection
+  // is the bottleneck. A B5 deck can only feel like B5 if the user owns
+  // enough cEDH staples; if not, no algorithm change can fix it.
+  const stapleCoverage = getStapleCoverage({
+    bracket,
+    collectionNames: rawCollection.map(c => c.name),
+  })
+  if (stapleCoverage.total > 0) {
+    const pct = Math.round((stapleCoverage.owned / stapleCoverage.total) * 100)
+    explanation.push(`Bracket-${bracket} staple coverage: you own ${stapleCoverage.owned}/${stapleCoverage.total} curated staples for this bracket (${pct}%).`)
+    if (bracket >= 4 && stapleCoverage.missing.length > 0) {
+      const topMissing = stapleCoverage.missing.slice(0, 12).join(', ')
+      explanation.push(`  Missing high-value B${bracket}+ cards: ${topMissing}${stapleCoverage.missing.length > 12 ? `, +${stapleCoverage.missing.length - 12} more` : ''}.`)
+      // Only warn when the gap is big enough to genuinely affect bracket fit.
+      if (pct < 50) {
+        warnings.push({
+          severity: 'warning',
+          message: `Your collection has only ${stapleCoverage.owned}/${stapleCoverage.total} bracket-${bracket} staples (${pct}%). The deck will lean closer to bracket ${Math.max(1, bracket - 1)} in practice. Acquiring cards like ${stapleCoverage.missing.slice(0, 5).join(', ')} would meaningfully strengthen it.`,
+        })
+      }
+    }
   }
   const allLockedNames = new Set([
     ...skeletonNames,
@@ -433,47 +456,108 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     }
   }
 
-  // 11b. Critique pass (Pass 3) — ask the LLM to evaluate the assembled deck
-  // and propose up to 5 swaps. Single-shot, never iterates. Locked cards
-  // (mana base + skeleton) are off-limits to swaps. Best-effort: if the
-  // critique call fails, the deck ships as-is.
+  // 11b. Critique pass (Pass 3) — iterate until approved or limit hit.
+  //
+  // The model evaluates the assembled deck and proposes swaps. We apply
+  // valid swaps (locked cards untouchable), then re-critique the improved
+  // deck. The deck only ships once the model returns approved=true OR we
+  // hit MAX_ITERATIONS.
+  //
+  // Anti-oscillation: cards swapped OUT in any prior iteration are blocked
+  // from being swapped IN later — prevents the model from undoing a previous
+  // improvement (A→B then B→A). Cards swapped IN are also tracked so the
+  // model can't propose redundant swaps to cards already added.
+  //
+  // Caps:
+  //   MAX_ITERATIONS — hard cap on total LLM calls (each is ~30s of latency)
+  //   STAGNATION_LIMIT — break early if N consecutive iterations land 0 swaps
+  //                      (model can't improve further from this collection)
   let critiqueResult = null
-  if (!llmFailed) {
-    const deckForCritique = deck.map(c => ({
-      name: c.name,
-      role: (c.roles ?? ['filler'])[0],
-      locked: !!c.fromManaSolver || !!c.fromSkeleton || !!c.fromBracketStaples,
-      source: c.fromManaSolver ? 'manaSolver' : c.fromSkeleton ? 'skeleton' : c.fromBracketStaples ? 'bracketStaples' : c.fromFallback ? 'heuristic' : c.fromWinconBackstop ? 'winconBackstop' : 'llm',
-    }))
-    const inDeckNames = new Set(deck.map(c => c.name.toLowerCase()))
-    const availablePool = legalNonLands.filter(c => !inDeckNames.has(c.name.toLowerCase()))
-    const chosenStrategy = llmResponse?.chosenStrategy ?? llmResponse?.strategySummary?.primaryStrategy ?? ''
+  let critiqueIterations = 0
+  const MAX_ITERATIONS = 4
+  const STAGNATION_LIMIT = 1
+  const allAppliedSwaps = []
+  const allRejectedSwaps = []
+  const swappedOutNames = new Set()    // cards we've removed — never swap back IN
 
-    critiqueResult = await critiqueDeck({
-      commander,
-      bracket,
-      deck: deckForCritique,
-      availablePool,
-      chosenStrategy,
-      onProgress,
-    })
-    if (critiqueResult) {
-      const { applied, rejected } = applyCritiqueSwaps(deck, critiqueResult.swaps ?? [], availablePool, usedNames)
-      if (critiqueResult.approved) {
-        explanation.push(`Critique pass: deck approved. ${critiqueResult.summary ?? ''}`)
+  if (!llmFailed) {
+    let stagnantStreak = 0
+    let approved = false
+
+    while (critiqueIterations < MAX_ITERATIONS && !approved) {
+      critiqueIterations++
+
+      const deckForCritique = deck.map(c => ({
+        name: c.name,
+        role: (c.roles ?? ['filler'])[0],
+        locked: !!c.fromManaSolver || !!c.fromSkeleton || !!c.fromBracketStaples,
+        source: c.fromManaSolver ? 'manaSolver' : c.fromSkeleton ? 'skeleton' : c.fromBracketStaples ? 'bracketStaples' : c.fromFallback ? 'heuristic' : c.fromWinconBackstop ? 'winconBackstop' : c.fromCritique ? 'critique' : c.fromHeuristicCritique ? 'heuristicCritique' : 'llm',
+      }))
+      const inDeckNames = new Set(deck.map(c => c.name.toLowerCase()))
+      const availablePool = legalNonLands.filter(c =>
+        !inDeckNames.has(c.name.toLowerCase()) && !swappedOutNames.has(c.name.toLowerCase())
+      )
+      const chosenStrategy = llmResponse?.chosenStrategy ?? llmResponse?.strategySummary?.primaryStrategy ?? ''
+
+      const iterResult = await critiqueDeck({
+        commander,
+        bracket,
+        deck: deckForCritique,
+        availablePool,
+        chosenStrategy,
+        onProgress,
+      })
+      if (!iterResult) {
+        // Critique call failed entirely — bail and ship the deck as-is.
+        explanation.push(`Critique pass ${critiqueIterations}: LLM call failed; shipping current deck.`)
+        break
+      }
+      critiqueResult = iterResult   // remember the latest for the return payload
+      approved = !!iterResult.approved
+
+      const { applied, rejected } = applyCritiqueSwaps(deck, iterResult.swaps ?? [], availablePool, usedNames)
+      for (const s of applied) {
+        swappedOutNames.add(s.out.toLowerCase())     // anti-oscillation
+        allAppliedSwaps.push({ ...s, iteration: critiqueIterations })
+      }
+      for (const r of rejected) allRejectedSwaps.push({ ...r, iteration: critiqueIterations })
+
+      if (approved) {
+        explanation.push(`Critique pass ${critiqueIterations}: APPROVED. ${iterResult.summary ?? ''}`)
+        break
       } else if (applied.length > 0) {
-        explanation.push(`Critique pass: applied ${applied.length} swap${applied.length === 1 ? '' : 's'}. ${critiqueResult.summary ?? ''}`)
+        explanation.push(`Critique pass ${critiqueIterations}: not approved — applied ${applied.length} swap${applied.length === 1 ? '' : 's'}. ${iterResult.summary ?? ''}`)
         for (const s of applied) explanation.push(`  Swap: -${s.out} → +${s.in} (${s.reason})`)
-        warnings.push({
-          severity: 'info',
-          message: `Final critique made ${applied.length} swap${applied.length === 1 ? '' : 's'} to upgrade the deck.`,
-        })
+        stagnantStreak = 0
       } else {
-        explanation.push(`Critique pass: ${critiqueResult.summary ?? '(no swaps applied)'}`)
+        // Zero swaps applied — model proposed only invalid swaps. Likely
+        // can't improve further from this collection.
+        stagnantStreak++
+        explanation.push(`Critique pass ${critiqueIterations}: not approved but no valid swaps proposed (stagnant ${stagnantStreak}/${STAGNATION_LIMIT}). ${iterResult.summary ?? ''}`)
+        if (stagnantStreak >= STAGNATION_LIMIT) {
+          explanation.push(`  Stopping critique — further iterations unlikely to help.`)
+          break
+        }
       }
-      if (rejected.length > 0) {
-        for (const r of rejected) explanation.push(`  Rejected swap: -${r.out} → +${r.in} (${r.reason})`)
+    }
+
+    if (allRejectedSwaps.length > 0) {
+      explanation.push(`Critique rejected swaps (across all iterations):`)
+      for (const r of allRejectedSwaps) {
+        explanation.push(`  [iter ${r.iteration}] -${r.out} → +${r.in} (${r.reason})`)
       }
+    }
+    if (critiqueIterations === MAX_ITERATIONS && !approved) {
+      explanation.push(`Critique pass: hit max ${MAX_ITERATIONS} iterations without final approval. Shipping deck with ${allAppliedSwaps.length} total swaps applied.`)
+      warnings.push({
+        severity: 'info',
+        message: `Critique loop hit its iteration cap. The deck shipped with ${allAppliedSwaps.length} swap${allAppliedSwaps.length === 1 ? '' : 's'} applied — additional improvements may require expanding your collection.`,
+      })
+    } else if (allAppliedSwaps.length > 0) {
+      warnings.push({
+        severity: 'info',
+        message: `Final critique made ${allAppliedSwaps.length} swap${allAppliedSwaps.length === 1 ? '' : 's'} across ${critiqueIterations} iteration${critiqueIterations === 1 ? '' : 's'} to upgrade the deck.`,
+      })
     }
   }
 
@@ -549,12 +633,14 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       invalidCards:   validation.invalidCards,
     },
     critique: critiqueResult ? {
-      approved: critiqueResult.approved ?? null,
-      summary:  critiqueResult.summary ?? '',
-      swapsProposed: (critiqueResult.swaps ?? []).length,
-      swapsApplied:  deck.filter(c => c.fromCritique).map(c => ({
-        name: c.name,
-        reason: c.critiqueReason ?? '',
+      approved:        !!critiqueResult.approved,
+      summary:         critiqueResult.summary ?? '',
+      iterations:      critiqueIterations,
+      swapsApplied:    allAppliedSwaps.map(s => ({
+        out: s.out, in: s.in, reason: s.reason, iteration: s.iteration,
+      })),
+      swapsRejected:   allRejectedSwaps.map(r => ({
+        out: r.out, in: r.in, reason: r.reason, iteration: r.iteration,
       })),
     } : null,
   }
@@ -582,8 +668,12 @@ function runHeuristicCritique({ deck, legalNonLands, commander, bracket, strateg
   // Score-delta threshold for triggering a swap. Lower at high brackets where
   // every point of optimization matters; higher at low brackets where we
   // want to preserve the user's chosen casual feel.
-  const MIN_DELTA = bracket >= 5 ? 6 : bracket >= 4 ? 9 : 12
-  const MAX_SWAPS = bracket >= 5 ? 12 : 8
+  const MIN_DELTA = bracket >= 5 ? 4  : bracket >= 4 ? 8  : 12
+  // MAX_SWAPS — at B5 we want unrestricted clean-up since users targeting
+  // cEDH expect aggressive optimization. The MIN_DELTA gate naturally caps
+  // total swaps to "real upgrades only", so a high MAX_SWAPS at B5 doesn't
+  // run away.
+  const MAX_SWAPS = bracket >= 5 ? 25 : bracket >= 4 ? 15 : 8
 
   // Off-theme penalty applied during scoring. A card that matches NO detected
   // archetype AND isn't a universal-role staple (ramp/draw/removal/etc.) is

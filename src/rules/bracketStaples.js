@@ -112,3 +112,28 @@ export function buildBracketStaples({ bracket, legalNonLands, alreadyLockedNames
   }
   return found
 }
+
+// Returns coverage stats: how many of the bracket's curated staples the user
+// actually owns, plus a list of the missing high-value cards. Used by the
+// orchestrator to surface "your collection is missing X cEDH staples" so the
+// user knows when their B5 deck can't truly hit B5 because the source material
+// isn't there.
+export function getStapleCoverage({ bracket, collectionNames, commanderColorIdentity = [] }) {
+  const stapleNames = getBracketStapleNames(bracket)
+  if (stapleNames.length === 0) {
+    return { total: 0, owned: 0, missing: [] }
+  }
+  const ownedSet = new Set(collectionNames.map(n => n.toLowerCase()))
+  const owned = []
+  const missing = []
+  for (const name of stapleNames) {
+    if (ownedSet.has(name.toLowerCase())) owned.push(name)
+    else missing.push(name)
+  }
+  return {
+    total:   stapleNames.length,
+    owned:   owned.length,
+    ownedNames: owned,
+    missing: missing,
+  }
+}

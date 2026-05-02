@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildBracketStaples, getBracketStapleNames } from './bracketStaples'
+import { buildBracketStaples, getBracketStapleNames, getStapleCoverage } from './bracketStaples'
 
 const card = (name, extra = {}) => ({
   name,
@@ -144,5 +144,44 @@ describe('buildBracketStaples', () => {
     const names = result.map(c => c.name).sort()
     expect(names).toContain('mana crypt')
     expect(names).toContain('DEMONIC TUTOR')
+  })
+})
+
+describe('getStapleCoverage', () => {
+  it('reports 0/N when collection has none of the staples', () => {
+    const cov = getStapleCoverage({
+      bracket: 5,
+      collectionNames: ['Forest', 'Mountain', 'Random Card'],
+    })
+    expect(cov.owned).toBe(0)
+    expect(cov.total).toBeGreaterThan(20)
+    expect(cov.missing.length).toBe(cov.total)
+  })
+
+  it('reports the right counts when the collection has some staples', () => {
+    const cov = getStapleCoverage({
+      bracket: 4,
+      collectionNames: ['Sol Ring', 'Mana Crypt', 'Demonic Tutor', 'Random Card'],
+    })
+    expect(cov.owned).toBe(3)
+    expect(cov.ownedNames.sort()).toEqual(['Demonic Tutor', 'Mana Crypt', 'Sol Ring'])
+    expect(cov.missing).toContain('Force of Will')   // user doesn't have it
+  })
+
+  it('case-insensitive', () => {
+    const cov = getStapleCoverage({
+      bracket: 5,
+      collectionNames: ['sol ring', 'MANA CRYPT'],
+    })
+    expect(cov.owned).toBe(2)
+  })
+
+  it('returns total: 0 at brackets with no staples', () => {
+    // After universal staples were added at every bracket, every bracket has
+    // staples. But the function should still gracefully handle an empty list
+    // if one ever exists.
+    const cov = getStapleCoverage({ bracket: 5, collectionNames: [] })
+    expect(cov.total).toBeGreaterThan(0)
+    expect(cov.owned).toBe(0)
   })
 })

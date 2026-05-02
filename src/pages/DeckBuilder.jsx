@@ -224,13 +224,13 @@ export default function DeckBuilder() {
           : aiStage === 'pass2'
           ? 'Pass 2: building deck (~40s)…'
           : aiStage === 'critique'
-          ? 'Pass 3: reviewing deck (~30s)…'
+          ? 'Pass 3: reviewing deck (iterative, ~30s/iter)…'
           : <><span style={styles.sparkle} aria-hidden>✦</span>Generate with AI</>}
       </button>
       {!generating && (
         <div style={styles.aiHint}>
           <span style={styles.aiHintIcon} aria-hidden>⏱</span>
-          Takes about <strong>90 to 120 seconds</strong>. Three OpenAI passes (strategy, build, then a final critique that swaps in better cards if needed).
+          Takes about <strong>90 seconds to 3 minutes</strong>. Strategy + build + iterative critique (the deck only ships when the AI approves it, or after 4 review cycles).
         </div>
       )}
 
