@@ -1226,12 +1226,30 @@ function capPoolForLLM(legalCardPool, commander, bracket, strategyContext) {
   // their secondary roles to the LLM via the roles array — the bucket is
   // only used for cap accounting here.
   //
-  // Archetype bias: when the user has locked a primary archetype, on-archetype
-  // cards get +25 (so they win their bucket against off-theme alternatives).
-  // When no primary is locked but archetypes are detected, on-archetype cards
-  // still get +15 — without this, a Tiamat dragon collection sends the LLM
-  // a pool full of random artifacts/enchantments mixed with its dragons.
+  // Three score adjustments before the per-role top-N selection:
+  //   1. Archetype bias: cards matching the locked primary get +25; cards
+  //      matching any detected archetype get +15. Without this, a Tiamat
+  //      dragon pool would mix dragons with random artifacts equally.
+  //   2. Off-theme penalty: cards that DON'T match any detected archetype
+  //      AND aren't a universal-role staple get -30. This stops Tragedy
+  //      Feaster, Twilight Prophet, and similar filler from surviving the
+  //      per-role cap. Previously the penalty only fired in the heuristic
+  //      critique step (post-LLM-pick), so the LLM still saw filler as
+  //      good options and frequently picked them.
+  //
+  // Universal-role cards (ramp/draw/removal/wipe/protection/tutor/
+  // win_condition) bypass the off-theme penalty — Sol Ring goes in every
+  // deck regardless of archetype.
+  const UNIVERSAL_ROLES = new Set(['land', 'ramp', 'draw', 'removal', 'wipe', 'protection', 'tutor', 'win_condition'])
   const detectedArchetypes = strategyContext.archetypes ?? []
+  const isOffTheme = (card) => {
+    const isUniversal = (card.roles ?? []).some(r => UNIVERSAL_ROLES.has(r))
+    if (isUniversal) return false
+    if (detectedArchetypes.length === 0) return false
+    return !detectedArchetypes.some(a => cardMatchesArchetype(card, a))
+  }
+  const OFF_THEME_PENALTY = 30
+
   const buckets = new Map()
   for (const card of legalCardPool) {
     const role = card.roles?.[0] ?? 'filler'
@@ -1240,6 +1258,9 @@ function capPoolForLLM(legalCardPool, commander, bracket, strategyContext) {
       score += 25
     } else if (detectedArchetypes.length > 0 && detectedArchetypes.some(a => cardMatchesArchetype(card, a))) {
       score += 15
+    }
+    if (isOffTheme(card)) {
+      score -= OFF_THEME_PENALTY
     }
     if (!buckets.has(role)) buckets.set(role, [])
     buckets.get(role).push({ card, score })

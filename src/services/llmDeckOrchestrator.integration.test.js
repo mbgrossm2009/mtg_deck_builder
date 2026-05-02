@@ -380,6 +380,54 @@ describe('Bracket-downgrade backstop — actual bracket matches target at B1-B3'
   })
 })
 
+// ─── Off-theme penalty in capPoolForLLM (not just critique) ───────────────
+
+describe('Off-theme penalty applies at LLM-pool capping', () => {
+  // The fix: off-theme cards (non-archetype, non-universal-role) are
+  // penalized -30 BEFORE the LLM sees them. Previously the penalty only
+  // fired in heuristic critique, so the LLM picked filler and the
+  // critique couldn't always swap it back out.
+
+  it('Tiamat (dragon tribal) with bulk filler in pool — LLM picks zero bulk filler', async () => {
+    const result = await generateWithMocks({
+      commander:  TIAMAT,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    // Bulk-filler bears (off-theme, non-universal) should not appear.
+    const bulkFillerInDeck = result.mainDeck.filter(c =>
+      /^(Black|Blue|Red|White|Green) Filler \d+$/.test(c.name)
+    ).length
+    expect(bulkFillerInDeck).toBe(0)
+  })
+
+  it('Krenko (goblin tribal) — non-goblin, non-universal cards are filtered from LLM pool', async () => {
+    const result = await generateWithMocks({
+      commander:  KRENKO,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    // Non-goblin creatures with no universal role should be rare.
+    // Acceptable: goblins, lands, ramp, draw, removal, etc.
+    // Not acceptable: random mono-R creatures with no archetype fit.
+    const llmPicks = result.mainDeck.filter(c => c.llmRole)
+    const offThemeLLMPicks = llmPicks.filter(c => {
+      const tl = (c.type_line ?? '').toLowerCase()
+      const roles = c.roles ?? []
+      const universal = ['land', 'ramp', 'draw', 'removal', 'wipe', 'protection', 'tutor', 'win_condition']
+      const isUniversal = roles.some(r => universal.includes(r))
+      const isGoblin = tl.includes('goblin')
+      return !isUniversal && !isGoblin
+    })
+    // Allow some off-theme picks — Krenko decks often want a few big
+    // creatures (dragons, etc.) as finishers even though they're not
+    // goblins. The penalty's job is to STOP THE FLOOD, not eliminate
+    // every off-theme card. ≤8 leaves room for finishers; 20+ would
+    // mean the penalty isn't doing anything.
+    expect(offThemeLLMPicks.length).toBeLessThanOrEqual(8)
+  })
+})
+
 // ─── Heuristic critique never adds off-theme cards ─────────────────────────
 
 describe('Critique passes never re-add off-theme cards', () => {
