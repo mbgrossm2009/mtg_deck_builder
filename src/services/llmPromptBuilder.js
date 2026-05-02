@@ -1006,6 +1006,99 @@ If below 70 → keep cutting / replacing until it passes. Report the post-cut de
   return { system, user }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PASS 3 — CRITIQUE
+// ─────────────────────────────────────────────────────────────────────────────
+// Self-evaluation pass. The deck has been assembled (mana base + skeleton +
+// LLM picks + heuristic fill + wincon backstop). Now we ask the model: "is
+// this a strong deck for this commander at this bracket?" If no, it returns
+// up to 5 specific swaps. We validate every swap (in pool, not already in
+// deck, not swapping out a locked card) and apply the valid ones.
+//
+// Single-shot only — no iteration. Iterating could oscillate (swap A→B
+// then on next pass swap B→A). One pass catches the worst picks; further
+// refinement is the user's call.
+
+export function buildCritiquePrompt({
+  commander,
+  bracket,
+  deck,                 // [{ name, role, locked: bool, source?: 'manaSolver'|'skeleton'|'llm'|'fallback' }]
+  availablePool,        // cards in user's legal collection but NOT in the deck
+  chosenStrategy = '',
+}) {
+  const bracketLabel   = BRACKET_LABELS[bracket] ?? 'Unknown'
+  const bracketMeaning = BRACKET_DESCRIPTIONS[bracket] ?? ''
+
+  const system = `You are an expert Magic: The Gathering Commander deck evaluator.
+
+A 99-card deck has been built for the commander below. The mana base, EDHREC
+staples, and core role slots are already filled. Your job is to perform a
+final critique pass.
+
+EVALUATE THE DECK against these questions:
+  1. Does this look like a strong, focused ${bracketLabel} deck for this commander?
+  2. Are there low-impact filler cards that should be replaced with better picks
+     from the available_pool? (Murder vs. Anguished Unmaking, Cancel vs.
+     Counterspell, Final Punishment vs. Damnation, etc.)
+  3. Does the deck have a clear win condition? Will it actually close games?
+  4. Are there obvious synergy gaps the deck should fill?
+  5. Are there cards that are off-strategy and should be cut for on-theme picks?
+
+OUTPUT ONE OF TWO SHAPES:
+
+If the deck is strong as-is:
+{
+  "approved": true,
+  "summary": "<1-2 sentence positive evaluation>"
+}
+
+If the deck has issues:
+{
+  "approved": false,
+  "summary": "<1-2 sentence diagnosis>",
+  "swaps": [
+    { "out": "<card name in deck>", "in": "<card name from available_pool>", "reason": "<why this is an upgrade>" }
+  ]
+}
+
+CRITICAL CONSTRAINTS ON SWAPS:
+- Maximum 5 swaps total. Quality over quantity. Pick the highest-impact ones.
+- "out" MUST be a card currently in the deck. Check the deck list below.
+- "out" MUST NOT have locked: true. Locked cards (mana base + EDHREC skeleton)
+  stay in the deck — do not propose swapping them out.
+- "in" MUST be a card from available_pool. Do NOT invent cards or suggest
+  upgrades the user doesn't own.
+- "in" MUST NOT already be in the deck.
+- Each swap should be a CLEAR upgrade for the deck's strategy and bracket
+  target. If you can't justify a swap with a concrete reason, don't propose it.
+
+If you can't find any high-confidence swaps, return approved: true. A clean
+"this deck is fine" is more useful than 5 marginal swaps that don't actually
+improve the deck.
+
+Return ONLY JSON. No markdown.`
+
+  const user = {
+    commander: compactCommander(commander),
+    bracket: {
+      number: bracket,
+      label: bracketLabel,
+      meaning: bracketMeaning,
+    },
+    chosen_strategy: chosenStrategy || '(strategy was not declared)',
+    deck: deck.map(c => ({
+      name: c.name,
+      role: c.role ?? (c.roles ?? ['filler'])[0],
+      locked: !!c.locked,
+      source: c.source ?? null,
+    })),
+    available_pool: availablePool.map(compactCard),
+    available_pool_size: availablePool.length,
+  }
+
+  return { system, user }
+}
+
 // Coarse token estimate (chars / 4). Useful for deciding whether the pool
 // needs trimming before we ship the prompt to a real model with a context cap.
 export function estimatePromptTokens({ system, user }) {

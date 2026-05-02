@@ -23,6 +23,7 @@ import {
   buildDeckGenerationPrompt,
   buildPass1Prompt,
   buildPass2Prompt,
+  buildCritiquePrompt,
   estimatePromptTokens,
 } from './llmPromptBuilder'
 
@@ -121,6 +122,44 @@ export async function generateDeckWithLLM({
   // lets us exercise the full pipeline end-to-end without paying for tokens.
   const mockPrompt = buildDeckGenerationPrompt({ commander, legalCardPool, bracket, deckRules, strategyContext })
   return mockLLMResponse({ commander, legalCardPool, bracket, deckRules, promptTokens: estimatePromptTokens(mockPrompt) })
+}
+
+/**
+ * critiqueDeck — Pass 3, after the deck is fully assembled.
+ *
+ * Sends the finished deck + remaining pool to the LLM and asks for a critique.
+ * Response shape: { approved: bool, summary: string, swaps?: [{ out, in, reason }] }.
+ *
+ * Returns the raw LLM response — caller is responsible for validating swaps
+ * against the actual deck and pool, then applying the valid ones.
+ *
+ * Returns null if the LLM is disabled or unreachable; caller should treat
+ * that as "no swaps" rather than an error (the deck still ships).
+ */
+export async function critiqueDeck({
+  commander,
+  bracket,
+  deck,
+  availablePool,
+  chosenStrategy,
+  onProgress,
+}) {
+  if (currentMode === LLM_MODE.DISABLED) return null
+  if (currentMode === LLM_MODE.MOCK) {
+    // Mock returns "approved" so the existing mock pipeline keeps working.
+    return { approved: true, summary: 'Mock critique — pass disabled in mock mode.', swaps: [] }
+  }
+
+  onProgress?.({ stage: 'critique' })
+  const prompt = buildCritiquePrompt({ commander, bracket, deck, availablePool, chosenStrategy })
+  try {
+    const out = await callBackend(prompt)
+    return { ...out, _meta: { promptTokens: estimatePromptTokens(prompt) } }
+  } catch (err) {
+    // Critique is best-effort. If it fails, ship the deck as-is.
+    console.warn('[critique] pass failed, shipping deck without critique:', err?.message ?? err)
+    return null
+  }
 }
 
 // POSTs the prompt to /api/llm and returns the parsed JSON content. The

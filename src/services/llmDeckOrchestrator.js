@@ -27,7 +27,7 @@ import { isLand, isBasicLand, getBasicLandsForCommander, avgCmc } from '../utils
 import { generateDeck } from '../rules/deckGenerator'
 import { scoreCard } from '../rules/deckScorer'
 import { cardMatchesArchetype } from '../rules/archetypeRules'
-import { generateDeckWithLLM } from './llmDeckService'
+import { generateDeckWithLLM, critiqueDeck } from './llmDeckService'
 import { validateLLMDeckResponse } from '../rules/llmDeckValidator'
 import { solveManaBase } from '../rules/manaBaseSolver'
 import { buildSkeleton, buildSkeletonFromMoxfield, mergeSkeletons, skeletonRoleCounts } from '../rules/deckSkeleton'
@@ -371,6 +371,50 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
 
   while (deck.length > 99) deck.pop()
 
+  // 11b. Critique pass (Pass 3) — ask the LLM to evaluate the assembled deck
+  // and propose up to 5 swaps. Single-shot, never iterates. Locked cards
+  // (mana base + skeleton) are off-limits to swaps. Best-effort: if the
+  // critique call fails, the deck ships as-is.
+  let critiqueResult = null
+  if (!llmFailed) {
+    const deckForCritique = deck.map(c => ({
+      name: c.name,
+      role: (c.roles ?? ['filler'])[0],
+      locked: !!c.fromManaSolver || !!c.fromSkeleton,
+      source: c.fromManaSolver ? 'manaSolver' : c.fromSkeleton ? 'skeleton' : c.fromFallback ? 'heuristic' : c.fromWinconBackstop ? 'winconBackstop' : 'llm',
+    }))
+    const inDeckNames = new Set(deck.map(c => c.name.toLowerCase()))
+    const availablePool = legalNonLands.filter(c => !inDeckNames.has(c.name.toLowerCase()))
+    const chosenStrategy = llmResponse?.chosenStrategy ?? llmResponse?.strategySummary?.primaryStrategy ?? ''
+
+    critiqueResult = await critiqueDeck({
+      commander,
+      bracket,
+      deck: deckForCritique,
+      availablePool,
+      chosenStrategy,
+      onProgress,
+    })
+    if (critiqueResult) {
+      const { applied, rejected } = applyCritiqueSwaps(deck, critiqueResult.swaps ?? [], availablePool, usedNames)
+      if (critiqueResult.approved) {
+        explanation.push(`Critique pass: deck approved. ${critiqueResult.summary ?? ''}`)
+      } else if (applied.length > 0) {
+        explanation.push(`Critique pass: applied ${applied.length} swap${applied.length === 1 ? '' : 's'}. ${critiqueResult.summary ?? ''}`)
+        for (const s of applied) explanation.push(`  Swap: -${s.out} → +${s.in} (${s.reason})`)
+        warnings.push({
+          severity: 'info',
+          message: `Final critique made ${applied.length} swap${applied.length === 1 ? '' : 's'} to upgrade the deck.`,
+        })
+      } else {
+        explanation.push(`Critique pass: ${critiqueResult.summary ?? '(no swaps applied)'}`)
+      }
+      if (rejected.length > 0) {
+        for (const r of rejected) explanation.push(`  Rejected swap: -${r.out} → +${r.in} (${r.reason})`)
+      }
+    }
+  }
+
   // 12. Post-processing — same as the heuristic generator does.
   const combos = detectCombos(deck.map(c => c.name))
   const { actualBracket, flaggedCards } = computeActualBracket(deck, combos)
@@ -442,10 +486,77 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       missingCount:   validation.missingCards,
       invalidCards:   validation.invalidCards,
     },
+    critique: critiqueResult ? {
+      approved: critiqueResult.approved ?? null,
+      summary:  critiqueResult.summary ?? '',
+      swapsProposed: (critiqueResult.swaps ?? []).length,
+      swapsApplied:  deck.filter(c => c.fromCritique).map(c => ({
+        name: c.name,
+        reason: c.critiqueReason ?? '',
+      })),
+    } : null,
   }
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────
+
+// Apply the swaps returned by the critique pass. Each swap is validated:
+//   - `out` must be a card currently in the deck AND not locked (mana base
+//     or skeleton). Locked cards stay regardless of LLM opinion.
+//   - `in` must be a card in the available pool (not already in deck).
+// Caps at 5 swaps total. Returns { applied, rejected } so callers can log
+// what happened.
+function applyCritiqueSwaps(deck, swaps, availablePool, usedNames) {
+  const applied = []
+  const rejected = []
+  if (!Array.isArray(swaps) || swaps.length === 0) return { applied, rejected }
+
+  const poolByName = new Map()
+  for (const c of availablePool) poolByName.set(c.name.toLowerCase(), c)
+
+  const MAX_SWAPS = 5
+  for (const swap of swaps.slice(0, MAX_SWAPS)) {
+    const outName = swap?.out
+    const inName  = swap?.in
+    const reason  = swap?.reason ?? ''
+    if (!outName || !inName) {
+      rejected.push({ out: outName, in: inName, reason: 'malformed swap (missing name)' })
+      continue
+    }
+
+    const outIdx = deck.findIndex(c => c.name.toLowerCase() === outName.toLowerCase())
+    if (outIdx === -1) {
+      rejected.push({ out: outName, in: inName, reason: 'out-card not in deck' })
+      continue
+    }
+    const outCard = deck[outIdx]
+    if (outCard.fromManaSolver || outCard.fromSkeleton) {
+      rejected.push({ out: outName, in: inName, reason: 'out-card is locked (mana base or skeleton)' })
+      continue
+    }
+
+    const inCard = poolByName.get(inName.toLowerCase())
+    if (!inCard) {
+      rejected.push({ out: outName, in: inName, reason: 'in-card not in available pool' })
+      continue
+    }
+    if (usedNames.has(inName.toLowerCase())) {
+      rejected.push({ out: outName, in: inName, reason: 'in-card already in deck' })
+      continue
+    }
+
+    // Apply the swap
+    usedNames.delete(outName.toLowerCase())
+    deck[outIdx] = { ...inCard, quantity: 1, fromCritique: true, critiqueReason: reason }
+    usedNames.add(inName.toLowerCase())
+    applied.push({ out: outName, in: inName, reason })
+    // Pull the in-card out of the pool so subsequent swaps don't re-suggest it
+    poolByName.delete(inName.toLowerCase())
+  }
+
+  return { applied, rejected }
+}
+
 
 // Cap the pool sent to the LLM with PER-ROLE caps. Each card is bucketed by
 // its primary role and only competes for slots in that bucket — so a

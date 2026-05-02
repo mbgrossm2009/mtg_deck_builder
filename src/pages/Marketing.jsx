@@ -52,9 +52,10 @@ export default function Marketing() {
           </div>
           <DeckCastDemo />
           <p style={styles.demoCaption}>
-            AI deck generation runs two passes (strategy and build) and typically
-            completes in <strong>60 to 90 seconds</strong> per deck. Each pass
-            generates ~5,000 tokens and is bottlenecked by OpenAI's output speed.
+            AI deck generation runs three passes (strategy, build, then a final
+            critique that swaps in better cards if needed) and typically completes
+            in <strong>90 to 120 seconds</strong> per deck. Bottlenecked by OpenAI's
+            output speed on JSON responses.
           </p>
         </div>
       </section>
