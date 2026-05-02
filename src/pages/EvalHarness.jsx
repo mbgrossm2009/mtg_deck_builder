@@ -35,6 +35,9 @@ export default function EvalHarness() {
   // ─── Configuration state ─────────────────────────────────────────────────
   const [commanderCount, setCommanderCount] = useState(5)
   const [brackets, setBrackets]             = useState([1, 2, 3, 4, 5])
+  const [pickMode, setPickMode]             = useState('random')   // 'random' | 'manual'
+  const [manualPicks, setManualPicks]       = useState([])         // Array<commander card>
+  const [search, setSearch]                 = useState('')
 
   // ─── Run state — lives in a module-level store so navigating away
   // doesn't kill the loop. The store survives unmount/remount and persists
@@ -46,13 +49,46 @@ export default function EvalHarness() {
   const collection = getCollection()
   const allCommanders = collection.filter(c => isLegalCommander(c))
 
+  // Effective commander list driving the run
+  const effectiveCount = pickMode === 'manual' ? manualPicks.length : commanderCount
+
   const totalDecks = (results?.commanders?.flatMap(c => c.brackets ?? []).length ?? 0)
-  const targetDecks = (results?.plannedCommanders?.length ?? commanderCount) * brackets.length
+  const targetDecks = (results?.plannedCommanders?.length ?? effectiveCount) * brackets.length
+
+  // Search-filtered candidate list for the manual picker. Cap at 50 results
+  // so the dropdown stays responsive even with a 7500-card collection.
+  const manualPickedNames = new Set(manualPicks.map(c => c.name.toLowerCase()))
+  const searchResults = pickMode === 'manual' && search.trim().length > 0
+    ? allCommanders
+        .filter(c =>
+          c.name.toLowerCase().includes(search.toLowerCase()) &&
+          !manualPickedNames.has(c.name.toLowerCase())
+        )
+        .slice(0, 50)
+    : []
+
+  function addManualPick(card) {
+    if (manualPicks.length >= 20) {
+      alert('Maximum 20 commanders per run. Remove one to add more.')
+      return
+    }
+    if (manualPickedNames.has(card.name.toLowerCase())) return
+    setManualPicks([...manualPicks, card])
+    setSearch('')
+  }
+
+  function removeManualPick(name) {
+    setManualPicks(manualPicks.filter(c => c.name !== name))
+  }
 
   function handleStart() {
-    const commanders = pickRandomCommanders(allCommanders, commanderCount)
+    const commanders = pickMode === 'manual'
+      ? manualPicks
+      : pickRandomCommanders(allCommanders, commanderCount)
     if (commanders.length === 0) {
-      alert('No legal commanders in your collection. Load a test collection first?')
+      alert(pickMode === 'manual'
+        ? 'Pick at least one commander manually.'
+        : 'No legal commanders in your collection. Load a test collection first?')
       return
     }
     if (brackets.length === 0) {
@@ -127,18 +163,112 @@ export default function EvalHarness() {
         <h2 style={styles.panelTitle}>Configuration</h2>
 
         <div style={styles.formRow}>
-          <label style={styles.label}>Commanders to test:</label>
-          <input
-            type="number"
-            min="1"
-            max="20"
-            value={commanderCount}
-            disabled={status === 'running'}
-            onChange={e => setCommanderCount(parseInt(e.target.value) || 1)}
-            style={styles.input}
-          />
-          <span style={styles.hint}>You have {allCommanders.length} legal commanders in your collection</span>
+          <label style={styles.label}>Pick mode:</label>
+          <div style={styles.bracketRow}>
+            <label style={styles.bracketChip}>
+              <input
+                type="radio"
+                name="pickMode"
+                checked={pickMode === 'random'}
+                disabled={status === 'running'}
+                onChange={() => setPickMode('random')}
+              />
+              Random
+            </label>
+            <label style={styles.bracketChip}>
+              <input
+                type="radio"
+                name="pickMode"
+                checked={pickMode === 'manual'}
+                disabled={status === 'running'}
+                onChange={() => setPickMode('manual')}
+              />
+              Manual (pick specific commanders)
+            </label>
+          </div>
         </div>
+
+        {pickMode === 'random' && (
+          <div style={styles.formRow}>
+            <label style={styles.label}>Commanders to test:</label>
+            <input
+              type="number"
+              min="1"
+              max="20"
+              value={commanderCount}
+              disabled={status === 'running'}
+              onChange={e => setCommanderCount(parseInt(e.target.value) || 1)}
+              style={styles.input}
+            />
+            <span style={styles.hint}>You have {allCommanders.length} legal commanders in your collection</span>
+          </div>
+        )}
+
+        {pickMode === 'manual' && (
+          <div style={styles.formRow}>
+            <label style={styles.label}>Pick commanders:</label>
+            <div style={styles.manualPicker}>
+              <input
+                type="text"
+                placeholder="Search by name…"
+                value={search}
+                disabled={status === 'running'}
+                onChange={e => setSearch(e.target.value)}
+                style={styles.searchInput}
+              />
+              {searchResults.length > 0 && (
+                <div style={styles.searchResults}>
+                  {searchResults.map(c => (
+                    <button
+                      key={c.id ?? c.name}
+                      type="button"
+                      style={styles.searchResultItem}
+                      onClick={() => addManualPick(c)}
+                    >
+                      <span style={styles.searchResultName}>{c.name}</span>
+                      <span style={styles.searchResultMeta}>
+                        {(c.color_identity ?? []).join('') || 'C'} · {c.type_line?.split('—')[1]?.trim() ?? ''}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {search.trim().length > 0 && searchResults.length === 0 && (
+                <div style={styles.searchEmpty}>
+                  No matching legal commanders in your collection.
+                </div>
+              )}
+
+              {manualPicks.length > 0 && (
+                <div style={styles.pickedList}>
+                  <div style={styles.pickedHeader}>
+                    Selected ({manualPicks.length}/20):
+                  </div>
+                  <div style={styles.chipRow}>
+                    {manualPicks.map(c => (
+                      <button
+                        key={c.id ?? c.name}
+                        type="button"
+                        style={styles.pickedChip}
+                        disabled={status === 'running'}
+                        onClick={() => removeManualPick(c.name)}
+                        title="Click to remove"
+                      >
+                        ✕ {c.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {manualPicks.length === 0 && (
+                <div style={styles.hint}>
+                  Search and click commanders to add them. Up to 20 per run.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div style={styles.formRow}>
           <label style={styles.label}>Brackets to test:</label>
@@ -163,8 +293,8 @@ export default function EvalHarness() {
         <div style={styles.formRow}>
           <label style={styles.label}>Estimate:</label>
           <span style={styles.hint}>
-            ~{commanderCount * brackets.length} decks · ~{Math.round(commanderCount * brackets.length * 2)} min ·
-            ~${(commanderCount * brackets.length * 0.05).toFixed(2)}
+            ~{effectiveCount * brackets.length} decks · ~{Math.round(effectiveCount * brackets.length * 2)} min ·
+            ~${(effectiveCount * brackets.length * 0.05).toFixed(2)}
           </span>
         </div>
 
@@ -363,6 +493,86 @@ const styles = {
     borderRadius: 'var(--radius-md)',
     background: 'var(--surface-2)',
     fontSize: 'var(--text-sm)',
+    cursor: 'pointer',
+  },
+  manualPicker: {
+    flex: 1,
+    minWidth: 300,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 'var(--space-2)',
+  },
+  searchInput: {
+    width: '100%',
+    padding: '8px 12px',
+    background: 'var(--surface-2)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: 'var(--radius-md)',
+    color: 'var(--text)',
+    fontSize: 'var(--text-sm)',
+  },
+  searchResults: {
+    background: 'var(--surface-2)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-md)',
+    maxHeight: 240,
+    overflowY: 'auto',
+  },
+  searchResultItem: {
+    display: 'flex',
+    width: '100%',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '8px 12px',
+    background: 'transparent',
+    border: 'none',
+    borderBottom: '1px solid var(--border)',
+    color: 'var(--text)',
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
+  searchResultName: {
+    fontWeight: 600,
+    fontSize: 'var(--text-sm)',
+  },
+  searchResultMeta: {
+    color: 'var(--text-subtle)',
+    fontSize: 'var(--text-xs)',
+    fontFamily: 'ui-monospace, monospace',
+  },
+  searchEmpty: {
+    color: 'var(--text-subtle)',
+    fontSize: 'var(--text-sm)',
+    fontStyle: 'italic',
+    padding: 'var(--space-2)',
+  },
+  pickedList: {
+    marginTop: 'var(--space-2)',
+  },
+  pickedHeader: {
+    fontSize: 'var(--text-xs)',
+    fontWeight: 600,
+    color: 'var(--text-subtle)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    marginBottom: 'var(--space-2)',
+  },
+  chipRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 'var(--space-2)',
+  },
+  pickedChip: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '4px 10px',
+    background: 'var(--accent-soft, rgba(124, 58, 237, 0.15))',
+    border: '1px solid var(--accent)',
+    borderRadius: 'var(--radius-md)',
+    color: 'var(--accent-hover, var(--accent))',
+    fontSize: 'var(--text-sm)',
+    fontWeight: 600,
     cursor: 'pointer',
   },
   actions: {

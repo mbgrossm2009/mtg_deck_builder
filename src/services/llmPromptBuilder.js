@@ -1142,6 +1142,126 @@ EVALUATION RUBRIC:
   Score 1-2 (broken):
     - Deck doesn't function — random pile of cards
 
+═══════════════════════════════════════════════════════════════════════════
+NEVER CALL THESE CARDS "FILLER" — they are universal Commander staples
+that go in nearly every deck of their color identity. Calling Sol Ring or
+Birds of Paradise "filler" is wrong; even if a more optimal alternative
+exists, these cards are objectively strong picks. List them as STRENGTHS,
+not weaknesses. They may be SUBOPTIMAL at very high brackets if a better
+specific card exists, but they are not "filler".
+═══════════════════════════════════════════════════════════════════════════
+
+UNIVERSAL MANA ROCKS (any color):
+Sol Ring, Arcane Signet, Mind Stone, Fellwar Stone, Thought Vessel,
+Wayfarer's Bauble, Mana Vault, Mana Crypt, Chromatic Lantern, Coalition Relic,
+Lightning Greaves, Swiftfoot Boots, Skullclamp, Sensei's Divining Top,
+Lifecrafter's Bestiary, Solemn Simulacrum, Burnished Hart, Pilgrim's Eye,
+Mox Diamond, Chrome Mox, Mox Opal, Mox Amber, Mox Tantalite, Lotus Petal,
+Jeweled Lotus, Jeweled Amulet, Ancient Tomb, Grim Monolith, Lion's Eye Diamond
+
+ALL TALISMANS AND ALL SIGNETS — every Talisman of X and every X Signet
+(Azorius, Dimir, Rakdos, Gruul, Selesnya, Orzhov, Izzet, Golgari, Boros,
+Simic) is a universal 2-color mana fixer.
+
+UNIVERSAL MANA DORKS:
+Birds of Paradise (THE classic — 1-mana 1/1 flying mana of any color),
+Llanowar Elves, Elvish Mystic, Fyndhorn Elves, Boreal Druid,
+Avacyn's Pilgrim, Noble Hierarch, Ignoble Hierarch, Arbor Elf,
+Bloom Tender, Faeburrow Elder, Priest of Titania, Heritage Druid,
+Wirewood Symbiote, Devoted Druid, Llanowar Visionary, Beast Whisperer,
+Selvala Heart of the Wilds, Selvala Explorer Returned
+
+UNIVERSAL REMOVAL — single-target:
+Swords to Plowshares, Path to Exile, Generous Gift, Beast Within,
+Chaos Warp, Anguished Unmaking, Assassin's Trophy, Despark, Mortify,
+Putrefy, Vindicate, Vanishing Verse, Krosan Grip, Nature's Claim,
+Naturalize, Disenchant, Aura Shards, Banishing Light, Oblivion Ring,
+Wear // Tear, Return to Dust, Boros Charm, Unexpectedly Absent
+
+UNIVERSAL REMOVAL — board wipes / mass:
+Cyclonic Rift, Toxic Deluge, Damnation, Wrath of God, Day of Judgment,
+Blasphemous Act, Crux of Fate, Hour of Devastation, Farewell, Damn,
+Supreme Verdict, Akroma's Will, Heroic Intervention, Teferi's Protection,
+Flawless Maneuver, Kindred Charge, Austere Command
+
+UNIVERSAL COUNTERSPELLS:
+Counterspell, Mana Drain, Force of Will, Force of Negation, Pact of Negation,
+Mana Leak, Negate, Swan Song, Arcane Denial, Dovin's Veto, Mental Misstep,
+Spell Pierce, Dispel, Flusterstorm, Fierce Guardianship, Deflecting Swat,
+Drannith Magistrate, Snapcaster Mage
+
+UNIVERSAL CARD DRAW ENGINES:
+Rhystic Study, Mystic Remora, Necropotence, Sylvan Library, Phyrexian Arena,
+Esper Sentinel, Smothering Tithe, Mind's Eye, Greater Good, Garruk's Uprising,
+Beast Whisperer, Guardian Project, Toski Bearer of Secrets, Lifecrafter's Bestiary,
+Sensei's Divining Top, Skullclamp, Reconnaissance Mission, Bident of Thassa,
+Coastal Piracy
+
+UNIVERSAL CANTRIPS / CARD ADVANTAGE:
+Brainstorm, Ponder, Preordain, Consider, Opt, Serum Visions, Mishra's Bauble,
+Frantic Search, Dig Through Time, Treasure Cruise, Night's Whisper,
+Sign in Blood, Painful Truths, Read the Bones, Ambition's Cost, Demand Answers,
+Faithless Looting, Cathartic Reunion, Tormenting Voice, Big Score, Underworld Breach
+
+UNIVERSAL TUTORS:
+Demonic Tutor, Vampiric Tutor, Imperial Seal, Mystical Tutor, Enlightened Tutor,
+Worldly Tutor, Green Sun's Zenith, Chord of Calling, Birthing Pod,
+Survival of the Fittest, Diabolic Intent, Diabolic Tutor, Eladamri's Call,
+Idyllic Tutor, Eldritch Evolution, Fauna Shaman, Wishclaw Talisman,
+Beseech the Mirror, Profane Tutor, Grim Tutor, Cruel Tutor, Personal Tutor,
+Sterling Grove, Wargate, Dark Petition, Yisan the Wanderer Bard
+
+UNIVERSAL RAMP:
+Cultivate, Kodama's Reach, Rampant Growth, Nature's Lore, Three Visits,
+Skyshroud Claim, Farseek, Sakura-Tribe Elder, Wood Elves, Farhaven Elf,
+Oracle of Mul Daya, Azusa Lost but Seeking, Dryad of the Ilysian Grove,
+Burgeoning, Exploration, Tireless Provisioner, Crop Rotation,
+Search for Tomorrow, Cultivator's Caravan
+
+UNIVERSAL RECURSION / GRAVEYARD VALUE:
+Eternal Witness, Reclamation Sage, Reflector Mage, Acidic Slime, Mulldrifter,
+Sun Titan, Karmic Guide, Body Double, Conjurer's Closet, Soulherder,
+Reanimate, Animate Dead, Necromancy, Persist, Victimize, Living Death,
+Patriarch's Bidding, Dread Return, Entomb, Buried Alive, Tortured Existence,
+Underworld Breach, Yawgmoth Thran Physician, Meren of Clan Nel Toth
+
+UNIVERSAL COMBO WINCONS (cEDH):
+Thassa's Oracle + Demonic Consultation, Thassa's Oracle + Tainted Pact,
+Laboratory Maniac + same, Jace Wielder of Mysteries + same,
+Heliod Sun-Crowned + Walking Ballista, Exquisite Blood + Sanguine Bond,
+Aetherflux Reservoir + Bolas's Citadel, Kiki-Jiki + Restoration Angel,
+Splinter Twin + Deceiver Exarch, Isochron Scepter + Dramatic Reversal,
+Demonic Consultation, Tainted Pact (combo enablers — even alone they are
+recognized cEDH staples for their combo potential)
+
+UNIVERSAL TOKEN PRODUCERS / DOUBLERS:
+Bitterblossom, Dockside Extortionist, Smothering Tithe, Anointed Procession,
+Parallel Lives, Doubling Season, Adrix and Nev, Mondrak Glory Dominus,
+Pir's Whim, Wedding Ritual, Storm Herd
+
+UNIVERSAL COUNTERS PAYOFFS:
+Doubling Season, Hardened Scales, Branching Evolution, Innkeeper's Talent,
+Conclave Mentor, Pir Imaginative Rascal, Toothy Imaginary Friend,
+Master Biomancer, Inspiring Call, Ozolith Shattered Spire
+
+UNIVERSAL SACRIFICE / ARISTOCRATS PAYOFFS:
+Blood Artist, Zulaport Cutthroat, Cruel Celebrant, Disciple of the Vault,
+Pawn of Ulamog, Ashnod's Altar, Phyrexian Altar, Viscera Seer, Carrion Feeder,
+Pitiless Plunderer, Yawgmoth Thran Physician, Dictate of Erebos, Grave Pact,
+Butcher of Malakir, Reassembling Skeleton, Bloodghast
+
+UNIVERSAL ETB / FLICKER ENGINE:
+Eternal Witness, Reflector Mage, Acidic Slime, Mulldrifter, Sun Titan,
+Karmic Guide, Conjurer's Closet, Soulherder, Brago King Eternal,
+Charming Prince, Restoration Angel, Felidar Guardian, Eldrazi Displacer
+
+UNIVERSAL UTILITY LANDS:
+Command Tower, Reflecting Pool, City of Brass, Mana Confluence, Exotic Orchard,
+Ancient Tomb, Cabal Coffers, Urborg Tomb of Yawgmoth, Field of the Dead,
+Strip Mine, Wasteland, Ghost Quarter, Maze of Ith, Boseiju Who Endures,
+Otawara Soaring City, Eiganjo Seat of the Empire, Takenuma Abandoned Mire,
+Sokenzan Crucible of Defiance, Bojuka Bog, Reliquary Tower
+
 OUTPUT FORMAT (JSON only — no markdown):
 
 {
@@ -1161,6 +1281,12 @@ either, fewer is fine — don't pad.
 
 Be concrete. "The deck is good" is useless. "This deck has Cyclonic Rift,
 Force of Will, and Mana Drain — strong B5 interaction package" is useful.
+
+When listing weaknesses, NEVER include cards from the universal staples
+list above unless the SPECIFIC reason they're weak is bracket-relevant
+(e.g., "Birds of Paradise is fine, but at B5 a Bloom Tender or Esper
+Sentinel would be a stronger pick"). Even then, prefer to identify
+genuinely weak cards over good cards.
 
 Return ONLY JSON.`
 
