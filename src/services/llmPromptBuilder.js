@@ -1116,6 +1116,34 @@ A 99-card deck has been built for the commander below at the target bracket.
 Your job: SCORE the deck and identify its strengths and weaknesses. You are
 NOT proposing swaps — only judging.
 
+═══════════════════════════════════════════════════════════════════════════
+USE THE PRECOMPUTED \`counts\` FIELD AT THE TOP OF THE USER PAYLOAD.
+The deck builder already counted tutors, removal, ramp, draw, fastMana,
+and wincons by tag. This count INCLUDES soft tutors (Goblin Matron,
+Eladamri's Call, Diabolic Intent, Birthing Pod, Survival of the Fittest,
+Chord of Calling, Worldly Tutor, Mystical Tutor, Green Sun's Zenith,
+Demonic/Vampiric Tutor, Imperial Seal, etc.). DO NOT recount tutors,
+removal, or wincons by reading the card list yourself — your eyeball
+count consistently misses soft tutors and tagged removal.
+
+WRONG (do NOT do this):
+  counts.tutors = 6, but evaluator writes:
+    "Only 4 tutors (Demonic, Vampiric, Imperial Seal, Gamble) — low for B4"
+  ❌ This invents a count of 4 by listing only the named-after-tutor cards.
+
+RIGHT:
+  counts.tutors = 6, evaluator writes:
+    "6 tutors is appropriate for B4" or
+    "6 tutors — could push to 8 for B5 consistency"
+  ✓ Trusts the precomputed count, focuses critique on actual gaps.
+
+Same rule applies to \`detected_wincon_patterns\`. If that field lists
+"aristocrats: sac outlet + Blood Artist" or "etb-drain: token producer
++ Impact Tremors" or "combat-tribal: 4 lords + 22 vampires", the deck
+HAS a win plan. Do NOT write "no clear win condition" when a pattern is
+listed — describe the pattern as the win plan instead.
+═══════════════════════════════════════════════════════════════════════════
+
 EVALUATION RUBRIC:
 
   Score 9-10 (excellent):
@@ -1388,12 +1416,15 @@ Impact Tremors" — those ARE the win plan.
 
 Return ONLY JSON.`
 
+  // counts and detected_wincon_patterns FIRST — LLMs weight earlier
+  // payload content more heavily. Putting these before the card list
+  // makes them harder to ignore than burying them after the deck array.
   const user = {
+    counts: criticalCardCounts ?? null,
+    detected_wincon_patterns: detectedWincons ?? [],
     commander: compactCommander(commander),
     bracket: { number: bracket, label: bracketLabel, meaning: bracketMeaning },
     deck_size: deck.length,
-    counts: criticalCardCounts ?? null,
-    detected_wincon_patterns: detectedWincons ?? [],
     deck: deck.map(c => ({
       name: c.name,
       role: (c.roles ?? ['filler'])[0],

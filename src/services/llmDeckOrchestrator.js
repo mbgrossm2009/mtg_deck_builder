@@ -330,6 +330,13 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       return true
     })
 
+    const fallbackCounts = countCriticalCards(heuristic.mainDeck)
+    const fallbackWincons = detectMultiCardWincons(heuristic.mainDeck, { archetypes: detectArchetypes(commander) })
+    const fallbackWarnings = filterStaleCountWarnings(
+      [...warnings, ...filteredHeuristicWarnings],
+      fallbackCounts,
+      fallbackWincons,
+    )
     return {
       ...heuristic,
       mainDeck: heuristic.mainDeck,   // mutated in place by downgrade
@@ -337,10 +344,10 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       combos: updatedCombos,
       generationMode: 'heuristic-fallback',
       explanation: [...explanation, ...(heuristic.explanation ?? [])],
-      warnings: [...warnings, ...filteredHeuristicWarnings],
+      warnings: fallbackWarnings,
       llmStrategy: null,
-      criticalCardCounts: countCriticalCards(heuristic.mainDeck),
-      detectedWincons: detectMultiCardWincons(heuristic.mainDeck, { archetypes: detectArchetypes(commander) }),
+      criticalCardCounts: fallbackCounts,
+      detectedWincons: fallbackWincons,
     }
   }
 
@@ -904,11 +911,18 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   const criticalCardCounts = countCriticalCards(deck)
   const detectedWincons = detectMultiCardWincons(deck, strategyContext)
 
+  // Filter stale warnings — the validator complains about "Only 0 removal"
+  // because it ran on the LLM's raw response BEFORE the floors added
+  // removal. Drop count-based warnings whose claim is no longer true
+  // against the final deck. Also drop "no clear win conditions" if a
+  // multi-card pattern was detected.
+  const filteredWarnings = filterStaleCountWarnings(warnings, criticalCardCounts, detectedWincons)
+
   return {
     commander,
     mainDeck: deck,
     excludedCards,
-    warnings,
+    warnings: filteredWarnings,
     stats,
     bracketAnalysis: { targetBracket: bracket, actualBracket, flaggedCards },
     combos,
@@ -1004,6 +1018,44 @@ function countCriticalCards(deck) {
   }
 }
 
+// Drop warnings that became stale after the floors ran. Two kinds:
+//   1. "Only N (ramp|removal|draw) ..." — these came from the validator
+//      that scanned the LLM's raw response. Floors may have raised the
+//      actual count above the threshold by the time we return.
+//   2. "No clear win conditions" — drop if a multi-card pattern was
+//      detected (Krenko + Impact Tremors IS a win plan).
+function filterStaleCountWarnings(warnings, counts, detectedWincons) {
+  if (!counts) return warnings
+  const RAMP_FLOOR = 6
+  const REMOVAL_FLOOR = 5     // matches deckValidator threshold
+  const DRAW_FLOOR = 6
+  const hasMultiCardWincon = (detectedWincons?.length ?? 0) > 0
+  const hasAnyWincon = (counts.wincons ?? 0) >= 1 || hasMultiCardWincon
+
+  return warnings.filter(w => {
+    const msg = typeof w === 'object' ? w.message : w
+    if (typeof msg !== 'string') return true
+
+    // Ramp count warnings — drop if final count is at floor.
+    const rampMatch = msg.match(/Only (\d+) ramp/i)
+    if (rampMatch && (counts.ramp ?? 0) >= RAMP_FLOOR) return false
+
+    // Removal count warnings — drop if final interaction is at floor.
+    // Note: validator counts only `removal` role; we use combined count.
+    const removalMatch = msg.match(/Only (\d+) removal/i)
+    if (removalMatch && (counts.interaction ?? 0) >= REMOVAL_FLOOR) return false
+
+    // Draw count warnings — drop if final draw is at floor.
+    const drawMatch = msg.match(/Only (\d+) draw/i)
+    if (drawMatch && (counts.draw ?? 0) >= DRAW_FLOOR) return false
+
+    // "No clear win conditions" — drop if any wincon (single-card OR pattern).
+    if (/no clear win conditions/i.test(msg) && hasAnyWincon) return false
+
+    return true
+  })
+}
+
 // Detect multi-card win-condition patterns that don't get tagged on any
 // single card. Without this, decks like "Krenko + Impact Tremors + sac
 // outlets" read as having zero wincons even though they close games
@@ -1053,13 +1105,34 @@ function detectMultiCardWincons(deck, strategyContext) {
   }
 
   // Combat tribal: 2+ lord-style anthems plus on-tribe density.
+  // A "lord" gives a static or triggered +N/+N to a tribe or to creatures
+  // you control. Many phrasings — "Goblin creatures get +1/+1", "Other
+  // Slivers get +1/+1", "All Vampires get +1/+1", "Creatures you control
+  // get +1/+1", or even Sliver Legion's "All Slivers get +1/+1 for each
+  // other Sliver". Match the +N/+N hallmark, exclude single-target buffs
+  // ("target creature gets +1/+1") and equipment ("equipped creature
+  // gets +1/+1") which aren't anthems.
   const tribalArchetype = strategyContext?.archetypes?.find(a => a.tribe)
   if (tribalArchetype) {
     const tribe = tribalArchetype.tribe
     const onTribe = deck.filter(c => (c.type_line ?? '').toLowerCase().includes(tribe)).length
-    // A "lord" gives an anthem to creatures of its type or to all your creatures.
-    const lordRegex = /(?:other |)\b[a-z]+s? (?:you control )?get \+\d+\/\+\d+|creatures you control get \+\d+\/\+\d+/
-    const lordCount = deck.filter(c => lordRegex.test(text(c))).length
+    const isLord = (c) => {
+      const t = text(c)
+      // Must contain a static +N/+N buff phrase.
+      if (!/\+\d+\/\+\d+/.test(t)) return false
+      // Exclude single-target / equipment buffs.
+      if (/target (?:creature|[a-z]+) gets \+\d+\/\+\d+/.test(t)) return false
+      if (/equipped creature gets \+\d+\/\+\d+/.test(t)) return false
+      if (/enchanted creature gets \+\d+\/\+\d+/.test(t)) return false
+      // Match anthem patterns.
+      if (/(?:other |all |)\b[a-z]+s? (?:you control )?get \+\d+\/\+\d+/.test(t)) return true
+      if (/creatures you control get \+\d+\/\+\d+/.test(t)) return true
+      if (/each other \w+ (?:you control |)gets? \+\d+\/\+\d+/.test(t)) return true
+      // Lord-of-the-tribe via commander tribe match (e.g. "All Slivers get").
+      if (new RegExp(`\\b${tribe}s? (?:you control )?(?:get|gets) \\+\\d+\\/\\+\\d+`).test(t)) return true
+      return false
+    }
+    const lordCount = deck.filter(isLord).length
     if (lordCount >= 2 && onTribe >= 18) {
       patterns.push(`combat-tribal: ${lordCount} lords + ${onTribe} ${tribe}s = swing wide`)
     }

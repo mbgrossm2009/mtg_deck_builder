@@ -138,9 +138,15 @@ async function runLoop(commanders, brackets, results, token) {
           deckResult = await generateDeckWithLLMAssist(bracket, null, { twoPass: true })
           if (deckResult?.error) throw new Error(deckResult.error)
 
+          // Use the EFFECTIVE post-cap bracket for evaluation. If the user
+          // requested B5 for a Krenko-class commander, the deck was actually
+          // built at B4 — judging it against B5 standards is unfair and
+          // produces score-6 outputs that read like "feels like a B4 deck"
+          // (because it IS a B4 deck).
+          const effectiveBracket = deckResult.bracketAnalysis?.targetBracket ?? bracket
           evalResult = await evaluateDeck({
             commander: cmdr,
-            bracket,
+            bracket: effectiveBracket,
             deck: deckResult.mainDeck,
             criticalCardCounts: deckResult.criticalCardCounts,
             detectedWincons: deckResult.detectedWincons,
