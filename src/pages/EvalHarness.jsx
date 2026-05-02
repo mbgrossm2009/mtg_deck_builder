@@ -18,30 +18,29 @@
 // Resilience: pause/resume controls so long runs don't have to be one shot;
 // auto-save after every deck so a crash loses at most one deck of progress.
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getCollection, getSelectedCommander, saveSelectedCommander } from '../utils/localStorage'
-import { generateDeckWithLLMAssist } from '../services/llmDeckOrchestrator'
-import { evaluateDeck } from '../services/llmDeckService'
+import { getCollection } from '../utils/localStorage'
+import {
+  useEvalRunStore,
+  startEvalRun,
+  resumeEvalRun,
+  pauseEvalRun,
+  resetEvalRun,
+} from '../lib/evalRunStore'
 
-const STORAGE_KEY = 'deckify-eval-harness-run'
 const ALL_BRACKETS = [1, 2, 3, 4, 5]
 
 export default function EvalHarness() {
   // ─── Configuration state ─────────────────────────────────────────────────
   const [commanderCount, setCommanderCount] = useState(5)
   const [brackets, setBrackets]             = useState([1, 2, 3, 4, 5])
-  const [pickMode, setPickMode]             = useState('random')   // 'random' | 'manual'
-  const [manualPicks, setManualPicks]       = useState([])         // Array<commander card>
 
-  // ─── Run state ───────────────────────────────────────────────────────────
-  const [status, setStatus] = useState('idle')   // 'idle' | 'running' | 'paused' | 'done' | 'error'
-  const [results, setResults] = useState(loadRun())
-  const [currentLabel, setCurrentLabel] = useState('')
-  const pauseRef = useRef(false)
-
-  // Persist results on every change
-  useEffect(() => { saveRun(results) }, [results])
+  // ─── Run state — lives in a module-level store so navigating away
+  // doesn't kill the loop. The store survives unmount/remount and persists
+  // results to localStorage on every change.
+  const run = useEvalRunStore()
+  const { status, results, currentLabel, errorMsg } = run
 
   // ─── Available commanders from the user's collection ─────────────────────
   const collection = getCollection()
@@ -50,82 +49,8 @@ export default function EvalHarness() {
   const totalDecks = (results?.commanders?.flatMap(c => c.brackets ?? []).length ?? 0)
   const targetDecks = (results?.plannedCommanders?.length ?? commanderCount) * brackets.length
 
-  // ─── Run loop ────────────────────────────────────────────────────────────
-  const runLoop = useCallback(async (commandersToRun, bracketsToRun, existingResults) => {
-    setStatus('running')
-    pauseRef.current = false
-    const originalCommander = getSelectedCommander()
-
-    try {
-      const updated = existingResults ?? newRunResults(commandersToRun, bracketsToRun)
-      setResults(updated)
-
-      for (const cmdr of commandersToRun) {
-        if (pauseRef.current) break
-
-        // Switch commander for this batch (orchestrator reads from localStorage)
-        saveSelectedCommander(cmdr)
-        const cmdrEntry = updated.commanders.find(c => c.name === cmdr.name)
-
-        for (const bracket of bracketsToRun) {
-          if (pauseRef.current) break
-
-          // Skip brackets we've already done in a prior session
-          if (cmdrEntry.brackets.find(b => b.bracket === bracket)) continue
-
-          setCurrentLabel(`${cmdr.name} · Bracket ${bracket}`)
-
-          let deckResult, evalResult
-          try {
-            deckResult = await generateDeckWithLLMAssist(bracket, null, { twoPass: true })
-            if (deckResult?.error) throw new Error(deckResult.error)
-
-            evalResult = await evaluateDeck({
-              commander: cmdr,
-              bracket,
-              deck: deckResult.mainDeck,
-            })
-          } catch (err) {
-            cmdrEntry.brackets.push({
-              bracket,
-              error: String(err?.message ?? err),
-              completedAt: new Date().toISOString(),
-            })
-            setResults({ ...updated })
-            continue
-          }
-
-          cmdrEntry.brackets.push({
-            bracket,
-            deckSize: deckResult.mainDeck.length,
-            actualBracket: deckResult.bracketAnalysis?.actualBracket ?? null,
-            warnings: (deckResult.warnings ?? []).filter(w => w.severity === 'warning' || w.severity === 'error').map(w => w.message),
-            criticalCardCounts: countCriticalCards(deckResult.mainDeck),
-            evaluation: evalResult ?? { score: null, summary: 'Eval call failed', strengths: [], weaknesses: [], bracketFitNotes: '' },
-            completedAt: new Date().toISOString(),
-          })
-          setResults({ ...updated })
-        }
-      }
-
-      updated.completedAt = new Date().toISOString()
-      setResults({ ...updated })
-      setStatus(pauseRef.current ? 'paused' : 'done')
-    } catch (err) {
-      console.error('[eval] run error', err)
-      setStatus('error')
-    } finally {
-      // Restore the user's original commander
-      if (originalCommander) saveSelectedCommander(originalCommander)
-      setCurrentLabel('')
-    }
-  }, [])
-
   function handleStart() {
-    const commanders = pickMode === 'manual' && manualPicks.length > 0
-      ? manualPicks
-      : pickRandomCommanders(allCommanders, commanderCount)
-
+    const commanders = pickRandomCommanders(allCommanders, commanderCount)
     if (commanders.length === 0) {
       alert('No legal commanders in your collection. Load a test collection first?')
       return
@@ -134,8 +59,7 @@ export default function EvalHarness() {
       alert('Pick at least one bracket.')
       return
     }
-
-    runLoop(commanders, brackets, null)
+    startEvalRun({ commanders, brackets })
   }
 
   function handleResume() {
@@ -143,19 +67,16 @@ export default function EvalHarness() {
     const remainingCommanders = results.plannedCommanders.map(name =>
       collection.find(c => c.name === name)
     ).filter(Boolean)
-    runLoop(remainingCommanders, brackets, results)
+    resumeEvalRun({ commanders: remainingCommanders, brackets })
   }
 
   function handlePause() {
-    pauseRef.current = true
-    setStatus('paused')
+    pauseEvalRun()
   }
 
   function handleReset() {
     if (!confirm('Discard the current run results?')) return
-    setResults(null)
-    setStatus('idle')
-    try { localStorage.removeItem(STORAGE_KEY) } catch { /* noop */ }
+    resetEvalRun()
   }
 
   function handleDownload() {
@@ -187,7 +108,19 @@ export default function EvalHarness() {
         Auto-generate decks across many commanders + brackets and have ChatGPT
         score each one. Each deck takes ~2 minutes and ~$0.05 in tokens.
         25-deck runs are roughly 50 minutes and $1-2.
+        <br />
+        <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>
+          The loop runs in the background — you can navigate away and come back.
+          It survives tab switches, page navigations, and (via auto-save) tab crashes.
+          Closing the tab entirely will pause it; resume by returning here.
+        </span>
       </p>
+
+      {errorMsg && (
+        <div style={styles.errorBanner}>
+          <strong>Run error:</strong> {errorMsg}
+        </div>
+      )}
 
       {/* Configuration panel — locked while running */}
       <div style={styles.panel}>
@@ -331,45 +264,6 @@ function pickRandomCommanders(pool, count) {
   return shuffled.slice(0, count)
 }
 
-function newRunResults(commanders, brackets) {
-  return {
-    runId: crypto.randomUUID?.() ?? `run-${Date.now()}`,
-    startedAt: new Date().toISOString(),
-    completedAt: null,
-    plannedCommanders: commanders.map(c => c.name),
-    plannedBrackets: brackets,
-    commanders: commanders.map(c => ({
-      name: c.name,
-      colorIdentity: c.color_identity,
-      brackets: [],
-    })),
-  }
-}
-
-function loadRun() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : null
-  } catch { return null }
-}
-
-function saveRun(run) {
-  try {
-    if (run) localStorage.setItem(STORAGE_KEY, JSON.stringify(run))
-    else localStorage.removeItem(STORAGE_KEY)
-  } catch { /* quota — ignore */ }
-}
-
-// Count cards in deck by category for a quick health-check column.
-function countCriticalCards(deck) {
-  const tutors      = deck.filter(c => (c.tags ?? []).includes('tutor')).length
-  const fastMana    = deck.filter(c => (c.tags ?? []).includes('fast_mana')).length
-  const wincons     = deck.filter(c => (c.roles ?? []).includes('win_condition') || (c.tags ?? []).includes('explosive_finisher')).length
-  const interaction = deck.filter(c => (c.roles ?? []).includes('removal') || (c.roles ?? []).includes('wipe')).length
-  const ramp        = deck.filter(c => (c.roles ?? []).includes('ramp')).length
-  return { tutors, fastMana, wincons, interaction, ramp }
-}
-
 function formatCriticalCards(c) {
   return `R${c.ramp}/T${c.tutors}/F${c.fastMana}/W${c.wincons}/I${c.interaction}`
 }
@@ -408,6 +302,15 @@ const styles = {
     fontSize: 'var(--text-sm)',
     lineHeight: 1.6,
     marginBottom: 'var(--space-5)',
+  },
+  errorBanner: {
+    background: 'rgba(244, 63, 94, 0.10)',
+    border: '1px solid rgba(244, 63, 94, 0.30)',
+    color: 'var(--danger)',
+    padding: 'var(--space-3)',
+    borderRadius: 'var(--radius-md)',
+    marginBottom: 'var(--space-4)',
+    fontSize: 'var(--text-sm)',
   },
   panel: {
     background: 'var(--surface-1)',
