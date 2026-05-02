@@ -264,25 +264,30 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     usedNames.add(v.card.name.toLowerCase())
   }
 
-  // 10. Fill missing slots from the heuristic generator. We run the heuristic
-  // separately and pull cards that the LLM didn't already pick. This guarantees
-  // the final deck respects role targets even when the LLM under-delivers.
+  // 10. Fill missing NON-LAND slots from the heuristic generator. We run the
+  // heuristic separately and pull cards that the LLM didn't already pick.
+  //
+  // CRITICAL: skip every land in the heuristic's output. The mana base is
+  // owned by the solver in step 4b — exactly 37 lands, period. The heuristic
+  // generator produces its OWN 99-card deck (including its own 37-land mana
+  // base), so without this filter we'd add solver lands + heuristic lands and
+  // ship 43+ land decks. Lands belong to the solver; non-lands are what we
+  // need from this fallback.
   if (deck.length < 99) {
     const heuristicSource = await generateDeck(bracket, primaryArchetypeId)
     if (!heuristicSource.error) {
       const beforeFill = deck.length
       for (const card of heuristicSource.mainDeck) {
         if (deck.length >= 99) break
+        if (isLand(card)) continue                              // solver owns the mana base
         const key = card.name.toLowerCase()
-        // Allow basic lands to repeat — basics in the heuristic deck are
-        // already individual entries, so they slot in cleanly.
-        if (!card.isBasicLand && usedNames.has(key)) continue
+        if (usedNames.has(key)) continue
         deck.push({ ...card, quantity: 1, fromFallback: true })
-        if (!card.isBasicLand) usedNames.add(key)
+        usedNames.add(key)
       }
       const filled = deck.length - beforeFill
       if (filled > 0) {
-        explanation.push(`Filled ${filled} remaining slot${filled === 1 ? '' : 's'} from the heuristic generator.`)
+        explanation.push(`Filled ${filled} remaining slot${filled === 1 ? '' : 's'} from the heuristic generator (non-lands only).`)
         warnings.push({
           severity: 'info',
           message: 'AI suggestion was adjusted to follow Commander rules and meet deck-structure targets.',
