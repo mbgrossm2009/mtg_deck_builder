@@ -11,9 +11,11 @@
 // `vercel env pull .env.local`.
 
 export const config = {
-  // OpenAI calls regularly take 20-40s for the Pass 2 prompt with a large
-  // collection. The Hobby plan default is 10s, which truncates real calls.
-  maxDuration: 60,
+  // Vercel Pro plan: maxDuration up to 300s (5 minutes). Pass 2 generation
+  // typically takes 30-60s; iterative critique passes can push to 90s+.
+  // Setting to 180s gives generous headroom while still failing fast on
+  // genuinely stuck calls (don't burn 5 min waiting on a hung request).
+  maxDuration: 180,
 }
 
 const DEFAULT_MODEL = 'gpt-4o-mini'
