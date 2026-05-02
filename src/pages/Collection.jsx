@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
-import { getCollection, removeFromCollection, addImportedCardsToCollection, saveCollection, trimScryfallCard, saveSelectedCommander, getSelectedCommander, clearCollection, removeFailedCards } from '../utils/localStorage'
+import { getCollection, removeFromCollection, addImportedCardsToCollection, saveCollection, replaceCollectionLocal, trimScryfallCard, saveSelectedCommander, getSelectedCommander, clearCollection, removeFailedCards } from '../utils/localStorage'
 import { getCardImageSmall, getCardsByNames } from '../utils/scryfallApi'
 import { parseCsvText, parseAuto, normalizeImportedCards, cleanCardName } from '../utils/cardImportParser'
 import { buildTestCollection } from '../utils/testCollectionBuilder'
@@ -122,8 +122,12 @@ function TestCollectionSection({ currentCollectionSize, onLoadComplete }) {
         onProgress: (state) => setProgress(state),
       })
       setProgress({ stage: 'mapping', count: cards.length })
-      // Replace the entire collection
-      saveCollection(cards)
+      // Replace the entire collection IN MEMORY ONLY. We deliberately don't
+      // persist 7500 cards to Supabase — it's slow (15MB upload, batched),
+      // partially-failing batches can leave a corrupted state, and the test
+      // collection is meant to be ephemeral. Reload = re-click the button
+      // (10 seconds with cache, ~3 with cache hits all the way through).
+      replaceCollectionLocal(cards)
       setBusy(false)
       setConfirming(false)
       setProgress(null)
@@ -138,15 +142,16 @@ function TestCollectionSection({ currentCollectionSize, onLoadComplete }) {
   if (confirming && !busy) {
     return (
       <div style={testStyles.panel}>
-        <div style={testStyles.confirmHeader}>⚠ Replace collection?</div>
+        <div style={testStyles.confirmHeader}>⚠ Load test collection?</div>
         <div style={testStyles.confirmBody}>
-          This will <strong>delete your current {currentCollectionSize}-card collection</strong> and
-          replace it with a 7500-card test collection (top 5000 EDH staples by EDHREC rank +
-          2500 random cards stratified across rarities, plus 150 basic lands).
+          This will <strong>temporarily replace your current {currentCollectionSize}-card collection in this browser session</strong> with
+          a 7500-card test pool (top 5000 EDH staples by EDHREC rank + 2500 random cards stratified across rarities, plus 150 basic lands).
           <br /><br />
-          Use this for testing the deck generator across many commanders without manually
-          building a collection. <strong>Make sure your real collection is exported elsewhere
-          if you want to keep it.</strong>
+          <strong>Session-only:</strong> the test collection is held in memory and is NOT saved to your account.
+          Refresh the page to restore your real Supabase-backed collection, or click "Load test collection" again to re-load
+          (cached, ~3 seconds after the first load).
+          <br /><br />
+          Your real collection on Supabase is <strong>untouched</strong> — this only changes what's loaded in this tab.
         </div>
         <div style={testStyles.confirmRow}>
           <button className="btn btn-danger" onClick={handleLoad}>Yes, replace my collection</button>

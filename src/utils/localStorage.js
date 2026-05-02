@@ -341,6 +341,15 @@ export function saveCollection(cards) {
   }
 }
 
+// Replace the local collection without touching Supabase. Used by the
+// test-collection loader — 7500-card bulk imports to Supabase are slow
+// (multi-MB payload, fire-and-forget batches that can fail partially)
+// and the test collection is meant to be ephemeral. Reload = re-click
+// the load button (10 seconds with the IndexedDB cache).
+export function replaceCollectionLocal(cards) {
+  dataStore.setState(s => ({ ...s, collection: cards }))
+}
+
 export function clearCollection() {
   dataStore.setState(s => ({ ...s, collection: [] }))
 
