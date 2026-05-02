@@ -585,6 +585,25 @@ function runHeuristicCritique({ deck, legalNonLands, commander, bracket, strateg
   const MIN_DELTA = bracket >= 5 ? 6 : bracket >= 4 ? 9 : 12
   const MAX_SWAPS = bracket >= 5 ? 12 : 8
 
+  // Off-theme penalty applied during scoring. A card that matches NO detected
+  // archetype AND isn't a universal-role staple (ramp/draw/removal/etc.) is
+  // almost always filler with no business in the deck. Heavy penalty so the
+  // critique aggressively swaps these for on-theme alternatives.
+  //
+  // Without this, an off-theme filler scored only ~12 points lower than an
+  // on-theme dragon — right at B3's swap threshold, often missed. Liar's
+  // Pendulum could ride into a Tiamat dragon deck. With this penalty,
+  // off-theme cards score ~40+ lower so the swap is unambiguous.
+  const UNIVERSAL_ROLES = new Set(['land', 'ramp', 'draw', 'removal', 'wipe', 'protection', 'tutor', 'win_condition'])
+  const detectedArchetypes = strategyContext.archetypes ?? []
+  const isOffTheme = (card) => {
+    const isUniversal = (card.roles ?? []).some(r => UNIVERSAL_ROLES.has(r))
+    if (isUniversal) return false
+    if (detectedArchetypes.length === 0) return false
+    return !detectedArchetypes.some(a => cardMatchesArchetype(card, a))
+  }
+  const OFF_THEME_PENALTY = 30
+
   // Build a lightweight scoring context. EDHREC rank is the most important
   // signal; combos and primary archetype matter too.
   const edhrecRank = new Map()
@@ -605,8 +624,11 @@ function runHeuristicCritique({ deck, legalNonLands, commander, bracket, strateg
     edhrecRank,
     edhrecRankTotal: Math.max(edhrecData?.topCards?.length ?? 1, 1),
   }
-  const scoreFor = (card) =>
-    scoreCard(card, (card.roles ?? ['filler'])[0], commander, bracket, scoringContext)
+  const scoreFor = (card) => {
+    let s = scoreCard(card, (card.roles ?? ['filler'])[0], commander, bracket, scoringContext)
+    if (isOffTheme(card)) s -= OFF_THEME_PENALTY
+    return s
+  }
 
   // Available pool: legal non-lands not currently in the deck.
   const inDeckNames = new Set(deck.map(c => c.name.toLowerCase()))
@@ -731,11 +753,22 @@ function capPoolForLLM(legalCardPool, commander, bracket, strategyContext) {
   // Bucket each card by its primary role. Multi-role cards still surface
   // their secondary roles to the LLM via the roles array — the bucket is
   // only used for cap accounting here.
+  //
+  // Archetype bias: when the user has locked a primary archetype, on-archetype
+  // cards get +25 (so they win their bucket against off-theme alternatives).
+  // When no primary is locked but archetypes are detected, on-archetype cards
+  // still get +15 — without this, a Tiamat dragon collection sends the LLM
+  // a pool full of random artifacts/enchantments mixed with its dragons.
+  const detectedArchetypes = strategyContext.archetypes ?? []
   const buckets = new Map()
   for (const card of legalCardPool) {
     const role = card.roles?.[0] ?? 'filler'
     let score = scoreCard(card, role, commander, bracket, scoringContext)
-    if (primary && cardMatchesArchetype(card, primary)) score += 25
+    if (primary && cardMatchesArchetype(card, primary)) {
+      score += 25
+    } else if (detectedArchetypes.length > 0 && detectedArchetypes.some(a => cardMatchesArchetype(card, a))) {
+      score += 15
+    }
     if (!buckets.has(role)) buckets.set(role, [])
     buckets.get(role).push({ card, score })
   }

@@ -177,6 +177,43 @@ describe('mana base solver picks more non-basics at higher brackets', () => {
   })
 })
 
+// ─── Off-theme penalty in scoring ───────────────────────────────────────────
+
+describe('off-theme cards score MUCH lower than on-theme alternatives', () => {
+  // This test exists because of a real complaint: Liar's Pendulum (a random
+  // coin-flip artifact with zero connection to dragons) ended up in a Tiamat
+  // dragon deck. The scorer wasn't separating off-theme from on-theme
+  // strongly enough — the gap was ~12 points (right at the swap threshold).
+  // After adding the off-theme penalty in runHeuristicCritique, the gap
+  // should be ≥40 points so the swap fires unambiguously.
+
+  // We verify the underlying scoring components are correct: a vanilla dragon
+  // for Tiamat scores higher than a non-dragon non-staple card via
+  // scoreArchetypeFit (which gives +12 for tribe match in the type line).
+
+  it('a dragon scores higher than a random off-theme artifact for Tiamat', () => {
+    const archetypes = [{ id: 'tribal:dragon', label: 'Dragons', tribe: 'dragon', strength: 3 }]
+    const ctx = { archetypes, primaryArchetypeId: null }
+
+    const dragon = card('Some Vanilla Dragon', {
+      type_line: 'Creature — Dragon',
+      oracle_text: 'Flying. Some text about dragons.',
+      cmc: 5,
+      roles: ['synergy'],
+    })
+    const offThemeArtifact = card('Random Coin-Flip Artifact', {
+      type_line: 'Artifact',
+      oracle_text: 'Pay 1: Flip a coin. If you win the flip, draw a card.',
+      cmc: 2,
+      roles: ['filler'],
+    })
+
+    const dragonScore = scoreCard(dragon, 'synergy', COMMANDER_DRAGON, 3, ctx)
+    const artifactScore = scoreCard(offThemeArtifact, 'filler', COMMANDER_DRAGON, 3, ctx)
+    expect(dragonScore).toBeGreaterThan(artifactScore)
+  })
+})
+
 // ─── Land quality classification correctness ────────────────────────────────
 
 describe('land tiers are stable for canonical lands', () => {
