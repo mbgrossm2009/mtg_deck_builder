@@ -31,6 +31,7 @@ import { generateDeckWithLLM, critiqueDeck } from './llmDeckService'
 import { validateLLMDeckResponse } from '../rules/llmDeckValidator'
 import { solveManaBase } from '../rules/manaBaseSolver'
 import { buildSkeleton, buildSkeletonFromMoxfield, mergeSkeletons, skeletonRoleCounts } from '../rules/deckSkeleton'
+import { buildBracketStaples } from '../rules/bracketStaples'
 import { fetchEdhrecCommander } from '../utils/edhrecApi'
 import { fetchMoxfieldConsensus } from '../utils/moxfieldApi'
 
@@ -146,13 +147,33 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   const skeleton = mergeSkeletons(edhrecSkeleton, moxfieldSkeleton)
   for (const e of skeleton.explanation) explanation.push(e)
 
-  // Names already locked by skeleton — strip from the LLM pool so the LLM
-  // doesn't waste prompt budget on cards it isn't allowed to pick.
+  // 4d. Bracket staples — for B4/B5, force-include curated cEDH-tier picks
+  // (Mana Crypt, Force of Will, Demonic Tutor, etc.) the user owns. EDHREC's
+  // top-cards data is bracket-agnostic, so for casual commanders played at
+  // high brackets the skeleton skews casual. Bracket staples enforce
+  // bracket-fit regardless of commander. Dedup against skeleton so a card
+  // present in both isn't double-locked.
   const skeletonNames = new Set(skeleton.staples.map(c => c.name.toLowerCase()))
-  const llmCandidatePool = legalNonLands.filter(c => !skeletonNames.has(c.name.toLowerCase()))
+  const bracketStaples = buildBracketStaples({
+    bracket,
+    legalNonLands,
+    alreadyLockedNames: skeletonNames,
+  })
+  if (bracketStaples.length > 0) {
+    explanation.push(`Bracket-${bracket} staples force-locked: ${bracketStaples.length} additional cards (${bracketStaples.slice(0, 5).map(c => c.name).join(', ')}${bracketStaples.length > 5 ? `, +${bracketStaples.length - 5} more` : ''}).`)
+  }
+  const allLockedNames = new Set([
+    ...skeletonNames,
+    ...bracketStaples.map(c => c.name.toLowerCase()),
+  ])
 
+  // Strip locked names from the LLM pool so the LLM doesn't waste prompt
+  // budget on cards it isn't allowed to pick.
+  const llmCandidatePool = legalNonLands.filter(c => !allLockedNames.has(c.name.toLowerCase()))
+
+  const totalLockedNonLands = skeleton.staples.length + bracketStaples.length
   const nonLandSlots = 99 - lockedLands.length
-  const llmSlots = nonLandSlots - skeleton.staples.length    // what the LLM still needs to pick
+  const llmSlots = nonLandSlots - totalLockedNonLands    // what the LLM still needs to pick
 
   // 5. Build deck-rule context for the prompt.
   const deckRules = {
@@ -254,6 +275,12 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   for (const card of skeleton.staples) {
     if (deck.length >= 99) break
     deck.push({ ...card, quantity: 1, fromSkeleton: true })
+    usedNames.add(card.name.toLowerCase())
+  }
+  for (const card of bracketStaples) {
+    if (deck.length >= 99) break
+    if (usedNames.has(card.name.toLowerCase())) continue   // belt + suspenders against skeleton overlap
+    deck.push({ ...card, quantity: 1, fromBracketStaples: true })
     usedNames.add(card.name.toLowerCase())
   }
   for (const v of validation.validCards) {
@@ -415,8 +442,8 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     const deckForCritique = deck.map(c => ({
       name: c.name,
       role: (c.roles ?? ['filler'])[0],
-      locked: !!c.fromManaSolver || !!c.fromSkeleton,
-      source: c.fromManaSolver ? 'manaSolver' : c.fromSkeleton ? 'skeleton' : c.fromFallback ? 'heuristic' : c.fromWinconBackstop ? 'winconBackstop' : 'llm',
+      locked: !!c.fromManaSolver || !!c.fromSkeleton || !!c.fromBracketStaples,
+      source: c.fromManaSolver ? 'manaSolver' : c.fromSkeleton ? 'skeleton' : c.fromBracketStaples ? 'bracketStaples' : c.fromFallback ? 'heuristic' : c.fromWinconBackstop ? 'winconBackstop' : 'llm',
     }))
     const inDeckNames = new Set(deck.map(c => c.name.toLowerCase()))
     const availablePool = legalNonLands.filter(c => !inDeckNames.has(c.name.toLowerCase()))
@@ -552,8 +579,11 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
 //   - Cap at 8 swaps per generation to prevent over-aggressive rewrites
 //   - Min score delta of 12 — swap only when the upgrade is meaningful
 function runHeuristicCritique({ deck, legalNonLands, commander, bracket, strategyContext, edhrecData }) {
-  const MIN_DELTA = 12
-  const MAX_SWAPS = 8
+  // Score-delta threshold for triggering a swap. Lower at high brackets where
+  // every point of optimization matters; higher at low brackets where we
+  // want to preserve the user's chosen casual feel.
+  const MIN_DELTA = bracket >= 5 ? 6 : bracket >= 4 ? 9 : 12
+  const MAX_SWAPS = bracket >= 5 ? 12 : 8
 
   // Build a lightweight scoring context. EDHREC rank is the most important
   // signal; combos and primary archetype matter too.
@@ -586,7 +616,7 @@ function runHeuristicCritique({ deck, legalNonLands, commander, bracket, strateg
   // strongest first.
   const swappableDeck = deck
     .map((c, idx) => ({ idx, card: c, score: scoreFor(c) }))
-    .filter(({ card }) => !card.fromManaSolver && !card.fromSkeleton)
+    .filter(({ card }) => !card.fromManaSolver && !card.fromSkeleton && !card.fromBracketStaples)
     .sort((a, b) => a.score - b.score)
 
   const scoredPool = pool
@@ -652,8 +682,8 @@ function applyCritiqueSwaps(deck, swaps, availablePool, usedNames) {
       continue
     }
     const outCard = deck[outIdx]
-    if (outCard.fromManaSolver || outCard.fromSkeleton) {
-      rejected.push({ out: outName, in: inName, reason: 'out-card is locked (mana base or skeleton)' })
+    if (outCard.fromManaSolver || outCard.fromSkeleton || outCard.fromBracketStaples) {
+      rejected.push({ out: outName, in: inName, reason: 'out-card is locked (mana base, skeleton, or bracket staple)' })
       continue
     }
 

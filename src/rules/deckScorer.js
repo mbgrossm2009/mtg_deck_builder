@@ -16,6 +16,7 @@ const DEADWEIGHT = new Set([
 ])
 
 const POWER_CARDS = new Set([
+  // Existing universal staples
   'Sol Ring', 'Arcane Signet', 'Cyclonic Rift', 'Swords to Plowshares',
   'Path to Exile', 'Cultivate', 'Kodama\'s Reach', 'Farseek',
   'Rhystic Study', 'Mystic Remora', 'Smothering Tithe', 'Sylvan Library',
@@ -24,6 +25,23 @@ const POWER_CARDS = new Set([
   'Swan Song', 'Negate', 'Damnation', 'Wrath of God', 'Toxic Deluge',
   'Blasphemous Act', 'Windfall', 'Wheel of Fortune', 'Survival of the Fittest',
   'Craterhoof Behemoth', 'Triumph of the Hordes',
+  // cEDH / B4+ optimized staples — were missing, which meant Mana Crypt could
+  // lose its slot to a mid-tier synergy card at B5. Adding them lifts their
+  // score so they win slots when the user owns them.
+  'Mana Crypt', 'Mana Vault', 'Mox Diamond', 'Chrome Mox', 'Mox Opal',
+  'Mox Amber', 'Lotus Petal', 'Jeweled Lotus', 'Jeweled Amulet',
+  'Dockside Extortionist', 'Grim Monolith', 'Ancient Tomb',
+  // High-tier tutors
+  'Imperial Seal', 'Mystical Tutor', 'Enlightened Tutor', 'Worldly Tutor',
+  'Green Sun\'s Zenith', 'Chord of Calling', 'Birthing Pod',
+  // Extra interaction
+  'Force of Negation', 'Pact of Negation', 'Flusterstorm', 'Esper Sentinel',
+  // Combo wincons
+  'Thassa\'s Oracle', 'Demonic Consultation', 'Tainted Pact',
+  'Laboratory Maniac', 'Jace, Wielder of Mysteries',
+  'Aetherflux Reservoir', 'Underworld Breach',
+  // Other top-tier value
+  'Yawgmoth, Thran Physician', 'Opposition Agent', 'Drannith Magistrate',
 ])
 
 // `context` carries the parts of state the scorer needs across calls:
