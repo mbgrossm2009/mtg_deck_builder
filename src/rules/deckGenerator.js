@@ -6,6 +6,7 @@ import { filterLegalCards } from './commanderRules'
 import { assignRoles } from './cardRoles'
 import { isBracketAllowed, computeActualBracket, targetLandCount, targetRoleCounts, targetAvgCmc, BRACKET_LABELS } from './bracketRules'
 import { scoreCard } from './deckScorer'
+import { solveManaBase } from './manaBaseSolver'
 import { detectCombos, registerCombos, getAllCombos } from './comboRules'
 import { detectArchetypes, anchorNamesFor, themesToArchetypes, mergeArchetypes, cardMatchesArchetype } from './archetypeRules'
 import { validateDeck, countRoles } from './deckValidator'
@@ -132,7 +133,20 @@ export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
   const targetCounts = targetRoleCounts(bracket, commander, archetypes)
   const landTarget = targetLandCount(bracket)
 
-  fillLands(deck, usedNames, buckets, commander, landTarget, explanation)
+  // Solve the mana base deterministically — same logic the LLM orchestrator
+  // uses, so the heuristic and LLM paths produce structurally identical mana
+  // bases. Picks fetches/shocks/etc. by tier and skips weak lands at B3+.
+  const manaBaseSolution = solveManaBase({
+    commander,
+    legalLands: candidates.filter(c => isLand(c) && !isBasicLand(c)),
+    targetLandCount: landTarget,
+    bracket,
+  })
+  for (const land of manaBaseSolution.lands) {
+    deck.push({ ...land, quantity: 1 })
+    if (!land.isBasicLand) usedNames.add(land.name.toLowerCase())
+  }
+  for (const e of manaBaseSolution.explanation) explanation.push(e)
 
   const roleOrder = ['ramp', 'draw', 'removal', 'wipe', 'protection', 'win_condition', 'tutor', 'synergy']
   for (const role of roleOrder) {
@@ -398,56 +412,6 @@ function buildBuckets(cards) {
     buckets[role].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
   }
   return buckets
-}
-
-function fillLands(deck, usedNames, buckets, commander, target, explanation) {
-  const nonBasicLands = (buckets['land'] ?? []).filter(c => !isBasicLand(c))
-  let added = 0
-  let nonBasicCount = 0
-
-  for (const card of nonBasicLands) {
-    if (deck.length >= 99) break
-    if (added >= target) break
-    if (usedNames.has(card.name.toLowerCase())) continue
-    // Force qty 1 — Commander allows only one copy of any non-basic regardless
-    // of how many the user owns in their collection.
-    deck.push({ ...card, quantity: 1 })
-    usedNames.add(card.name.toLowerCase())
-    added++
-    nonBasicCount++
-  }
-
-  const basicNames = getBasicLandsForCommander(commander)
-  let basicCount = 0
-  if (basicNames.length > 0) {
-    let basicIdx = 0
-    while (added < target && deck.length < 99) {
-      const basicName = basicNames[basicIdx % basicNames.length]
-      deck.push({
-        id: `basic_${basicName.toLowerCase().replace(/\s/g, '_')}_${added}`,
-        name: basicName,
-        type_line: 'Basic Land',
-        oracle_text: '',
-        mana_cost: '',
-        cmc: 0,
-        colors: [],
-        color_identity: [],
-        legalities: { commander: 'legal' },
-        image_uris: null,
-        card_faces: null,
-        isBasicLand: true,
-        roles: ['land'],
-        tags: [],
-        quantity: 1,
-      })
-      basicIdx++
-      added++
-      basicCount++
-    }
-  }
-
-  explanation.push(`Added ${added} lands (${nonBasicCount} non-basic, ${basicCount} basic).`)
-  return added
 }
 
 // scoringContext (optional) carries archetypes + primaryArchetypeId. When

@@ -1,6 +1,7 @@
 import { getOracleText } from '../utils/cardHelpers'
 import { scoreArchetypeFit, cardMatchesArchetype, isCompetingArchetypeAnchor } from './archetypeRules'
 import { targetAvgCmc } from './bracketRules'
+import { landTierScoreDelta } from './landQuality'
 
 // Cards that are explicitly weak/joke/limited-only and almost never belong in
 // a Commander deck. We hard-penalize these so they sink to the bottom of any
@@ -262,72 +263,9 @@ function isSafeRock(name) {
   return ['Sol Ring', 'Arcane Signet', 'Fellwar Stone', 'Mind Stone', 'Thought Vessel'].includes(name)
 }
 
-// Land quality scoring. Returns a delta to add to the base land score.
-// Curated lists pluck out the fetch / dual / fast / shock / utility tiers so
-// the land bucket fills with mana-fixing first and only takes utility lands
-// when the strong fixing is exhausted.
-const PREMIUM_LANDS = new Set([
-  // Fetchlands
-  'Polluted Delta', 'Flooded Strand', 'Bloodstained Mire', 'Wooded Foothills',
-  'Windswept Heath', 'Marsh Flats', 'Misty Rainforest', 'Scalding Tarn',
-  'Verdant Catacombs', 'Arid Mesa', 'Prismatic Vista', 'Fabled Passage',
-  // Original duals
-  'Underground Sea', 'Tundra', 'Volcanic Island', 'Tropical Island', 'Bayou',
-  'Badlands', 'Plateau', 'Savannah', 'Scrubland', 'Taiga',
-  // Shocks
-  'Watery Grave', 'Hallowed Fountain', 'Steam Vents', 'Overgrown Tomb',
-  'Sacred Foundry', 'Temple Garden', 'Stomping Ground', 'Breeding Pool',
-  'Godless Shrine', 'Blood Crypt',
-  // Fast lands
-  'Darkslick Shores', 'Seachrome Coast', 'Blackcleave Cliffs', 'Botanical Sanctum',
-  'Concealed Courtyard', 'Inspiring Vantage', 'Spirebluff Canal', 'Copperline Gorge',
-  'Razorverge Thicket', 'Blooming Marsh',
-  // Surveil/check/horizon lands and other premium
-  'Mana Confluence', 'City of Brass', 'Reflecting Pool', 'Forbidden Orchard',
-  'Ancient Tomb', 'Gaea\'s Cradle', 'Cabal Coffers', 'Bojuka Bog',
-  'Strip Mine', 'Wasteland', 'Field of the Dead', 'Maze of Ith',
-  'Boseiju, Who Endures', 'Otawara, Soaring City', 'Eiganjo, Seat of the Empire',
-  'Takenuma, Abandoned Mire', 'Sokenzan, Crucible of Defiance',
-])
-
-// Lands that ETB tapped with no payoff, or that fix only marginally. Penalized so
-// they only get picked when nothing better remains.
-const WEAK_LANDS = new Set([
-  'Crossroads Village', 'Hidden Grotto', 'Glimmerpost', 'Stalking Stones',
-  'Cave of Temptation', 'Daily Bugle Building', 'News Helicopter', 'Foul Roads',
-  'Helvault', 'Seafloor Debris', 'Svyelunite Temple', 'Tainted Isle',
-  'Warped Landscape', 'Terrain Generator', 'Temple of the False God',
-  'Urza\'s Tower', 'Urza\'s Mine', 'Urza\'s Power Plant',
-])
-
-function scoreLandQuality(card) {
-  const name = card.name
-  if (PREMIUM_LANDS.has(name)) return 25
-  if (WEAK_LANDS.has(name))    return -25
-
-  const nameLower = name.toLowerCase()
-  const text = getOracleText(card).toLowerCase()
-
-  // Category-wide weak tiers — the named WEAK_LANDS list only enumerates a
-  // handful of obvious junk lands; these patterns catch entire categories of
-  // always-tapped fixing that the LLM and heuristic would otherwise treat as
-  // mid-tier. Without this, a collection heavy in gates/gain lands fills the
-  // mana base ahead of an actual shock land and the deck feels a full bracket
-  // weaker than its target.
-  if (/\bguildgate\b/.test(nameLower)) return -22                                // Ravnica gates
-  if (/\bpanorama\b/.test(nameLower)) return -22                                 // Alara panoramas
-  if (/enters .* tapped/.test(text) && /you gain 1 life/.test(text)) return -22  // gain lands ("X Refuge")
-  if (/return .* land you control to .* hand/.test(text)) return -18             // bounce / Karoo lands
-  // Tri-lands (always tapped, three colors): "T: Add R, G, or W" or with commas
-  if (/enters .* tapped/.test(text) && /add \{[wubrg]\}, \{[wubrg]\}, or \{[wubrg]\}/.test(text)) return -16
-
-  // Generic ETB-tapped without a payoff (catches everything else)
-  if (/enters .* tapped/.test(text) && !/(draw|scry|search|create|discover)/.test(text)) return -10
-
-  // Untapped multi-color or any-color lands → small bonus
-  if (/add \{[wubrg]\}.*\{[wubrg]\}|any color/.test(text)) return 12
-  return 0
-}
+// Land quality scoring is delegated to landQuality.js — single source of truth
+// shared with manaBaseSolver.js and the LLM prompt builder.
+const scoreLandQuality = landTierScoreDelta
 
 const MEANINGFUL_WORDS = [
   'counter', 'token', 'sacrifice', 'graveyard', 'enchantment', 'artifact',

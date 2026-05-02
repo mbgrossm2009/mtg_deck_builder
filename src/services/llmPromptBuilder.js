@@ -90,14 +90,20 @@ export function buildDeckGenerationPrompt({
 
   const targets = deckRules.targetCounts ?? {}
   const landTarget = deckRules.landTarget ?? 37
+  const nonLandSlots = deckRules.nonLandSlots ?? null   // when set, mana base is solver-locked
+  const manaBaseStats = deckRules.manaBaseStats ?? null
 
   const archetypes = strategyContext.archetypes ?? []
   const primaryArchetypeId = strategyContext.primaryArchetypeId ?? null
   const primaryArchetype = archetypes.find(a => a.id === primaryArchetypeId) ?? null
 
+  const manaBaseClause = nonLandSlots
+    ? `\n\nMANA BASE LOCKED: The mana base for this deck (${landTarget} lands) has already been built deterministically by a constraint solver. You MUST NOT include any land in your "deck" output. Pick only the ${nonLandSlots} non-land cards. The legal_card_pool below contains only spells.`
+    : ''
+
   const system = `You are an expert Magic: The Gathering Commander deck builder.
 
-Your task is to build a highly optimized Commander deck using ONLY the cards provided.
+Your task is to build a highly optimized Commander deck using ONLY the cards provided.${manaBaseClause}
 
 ---
 
@@ -418,19 +424,34 @@ If forced to choose:
       label: bracketLabel,
       meaning: bracketMeaning,
     },
-    deck_structure_targets: {
-      total_cards: 99,
-      lands: landTarget,
-      ramp: targets.ramp ?? 10,
-      card_draw: targets.draw ?? 10,
-      single_target_removal: targets.removal ?? 9,
-      board_wipes: targets.wipe ?? 4,
-      protection: targets.protection ?? 3,
-      win_conditions: targets.win_condition ?? 2,
-      tutors_allowed: targets.tutor ?? 0,
-      synergy_pieces: targets.synergy ?? 20,
-      notes: 'Targets are guidance, not exact. Hit them within ±2 unless your strategy demands otherwise (e.g. tribal decks lean heavy on synergy).',
-    },
+    deck_structure_targets: nonLandSlots
+      ? {
+          // Mana base solver mode — LLM picks non-land cards only.
+          non_land_picks_required: nonLandSlots,
+          mana_base_locked: `${landTarget} lands pre-built by solver — DO NOT include any land in your output.`,
+          ramp: targets.ramp ?? 10,
+          card_draw: targets.draw ?? 10,
+          single_target_removal: targets.removal ?? 9,
+          board_wipes: targets.wipe ?? 4,
+          protection: targets.protection ?? 3,
+          win_conditions: targets.win_condition ?? 2,
+          tutors_allowed: targets.tutor ?? 0,
+          synergy_pieces: targets.synergy ?? 20,
+          notes: 'Hit non-role targets within ±2. The mana base is solver-locked — do NOT include lands.',
+        }
+      : {
+          total_cards: 99,
+          lands: landTarget,
+          ramp: targets.ramp ?? 10,
+          card_draw: targets.draw ?? 10,
+          single_target_removal: targets.removal ?? 9,
+          board_wipes: targets.wipe ?? 4,
+          protection: targets.protection ?? 3,
+          win_conditions: targets.win_condition ?? 2,
+          tutors_allowed: targets.tutor ?? 0,
+          synergy_pieces: targets.synergy ?? 20,
+          notes: 'Targets are guidance, not exact. Hit them within ±2 unless your strategy demands otherwise (e.g. tribal decks lean heavy on synergy).',
+        },
     detected_archetypes: archetypes.map(a => ({
       id: a.id,
       label: a.label,
@@ -439,6 +460,15 @@ If forced to choose:
     })),
     legal_card_pool: legalCardPool.map(compactCard),
     pool_size: legalCardPool.length,
+  }
+
+  if (manaBaseStats) {
+    user.solved_mana_base = {
+      land_count: landTarget,
+      sources_per_color: manaBaseStats.sourcesPerColor,
+      tier_breakdown: manaBaseStats.byTier,
+      note: 'These mana sources are guaranteed. Use them when reasoning about color requirements for spells.',
+    }
   }
 
   // Strategy directive: only include when the user has explicitly locked one.
@@ -657,10 +687,16 @@ export function buildPass2Prompt({
   const bracketMeaning = BRACKET_DESCRIPTIONS[bracket] ?? ''
   const targets        = deckRules.targetCounts ?? {}
   const landTarget     = deckRules.landTarget ?? 37
+  const nonLandSlots   = deckRules.nonLandSlots ?? null
+  const manaBaseStats  = deckRules.manaBaseStats ?? null
+
+  const manaBaseClause = nonLandSlots
+    ? `\n\nMANA BASE LOCKED: A constraint solver has already built the mana base (${landTarget} lands). You MUST NOT include any land in your output. Pick only the ${nonLandSlots} non-land cards. The legal_card_pool below contains only spells.`
+    : ''
 
   const system = `You are an expert Magic: The Gathering Commander deck builder.
 
-This is PASS 2 of a two-pass deck-build process. Pass 1 already determined the strategy and selected the core engine. Your job is to BUILD THE FULL 99-CARD DECK around those locked-in choices.
+This is PASS 2 of a two-pass deck-build process. Pass 1 already determined the strategy and selected the core engine. Your job is to BUILD ${nonLandSlots ? `THE ${nonLandSlots} NON-LAND CARDS` : 'THE FULL 99-CARD DECK'} around those locked-in choices.${manaBaseClause}
 
 ---
 
@@ -711,7 +747,7 @@ After this step, you should have ~15-25 cards committed and ~74-84 slots remaini
 
 STEP 3 — FILL ROLE GAPS (BUILD ORDER)
 
-Fill the remaining slots in this order:
+Fill the remaining NON-LAND slots in this order:
 
 1. Ramp (target ~10) — prefer cards in pass1.cardsToPrioritize first, then anything else from the pool.
 2. Card draw (target ~10)
@@ -719,10 +755,11 @@ Fill the remaining slots in this order:
 4. Board wipes (target 2–4)
 5. Protection (target 2–5)
 6. Win conditions (target 2–4) — note that some core engine cards may already be wincons.
-7. Lands (target ~37)
-8. Remaining slots — high-synergy cards from pass1.cardsToPrioritize that aren't already in.
+7. Remaining slots — high-synergy cards from pass1.cardsToPrioritize that aren't already in.
 
-DO NOT include random off-theme cards just to hit 99. Every slot must serve the chosen strategy or fill a critical role gap.
+The mana base is built separately by a deterministic solver. DO NOT include any land in your output — the legal_card_pool below contains only spells.
+
+DO NOT include random off-theme cards just to hit the slot count. Every slot must serve the chosen strategy or fill a critical role gap.
 
 ---
 
@@ -810,9 +847,10 @@ FINAL RULES:
 
 - NEVER include cards outside legal_card_pool.
 - NEVER include cards from pass1.cardsToAvoid.
+- NEVER include any land in your output — the mana base is solver-locked.
 - ALWAYS include every card from pass1.coreEngine.
-- The "deck" array must contain exactly 99 entries (commander is the 100th, not in this list).
-- Singleton: each non-basic card appears at most once. Basic lands may repeat.
+- The "deck" array must contain exactly the non_land_picks_required count from deck_structure_targets (when present), otherwise 99.
+- Singleton: each non-basic card appears at most once.
 
 MINIMUM STRATEGY DENSITY:
 
@@ -827,22 +865,45 @@ If below 70 → keep cutting / replacing until it passes. Report the post-cut de
       label: bracketLabel,
       meaning: bracketMeaning,
     },
-    deck_structure_targets: {
-      total_cards: 99,
-      lands: landTarget,
-      ramp: targets.ramp ?? 10,
-      card_draw: targets.draw ?? 10,
-      single_target_removal: targets.removal ?? 9,
-      board_wipes: targets.wipe ?? 4,
-      protection: targets.protection ?? 3,
-      win_conditions: targets.win_condition ?? 2,
-      tutors_allowed: targets.tutor ?? 0,
-      synergy_pieces: targets.synergy ?? 20,
-      notes: 'Targets are guidance, not exact. Hit them within ±2 unless your strategy demands otherwise.',
-    },
+    deck_structure_targets: nonLandSlots
+      ? {
+          non_land_picks_required: nonLandSlots,
+          mana_base_locked: `${landTarget} lands pre-built by solver — DO NOT include any land in your output.`,
+          ramp: targets.ramp ?? 10,
+          card_draw: targets.draw ?? 10,
+          single_target_removal: targets.removal ?? 9,
+          board_wipes: targets.wipe ?? 4,
+          protection: targets.protection ?? 3,
+          win_conditions: targets.win_condition ?? 2,
+          tutors_allowed: targets.tutor ?? 0,
+          synergy_pieces: targets.synergy ?? 20,
+          notes: 'Hit non-role targets within ±2. The mana base is solver-locked — do NOT include lands.',
+        }
+      : {
+          total_cards: 99,
+          lands: landTarget,
+          ramp: targets.ramp ?? 10,
+          card_draw: targets.draw ?? 10,
+          single_target_removal: targets.removal ?? 9,
+          board_wipes: targets.wipe ?? 4,
+          protection: targets.protection ?? 3,
+          win_conditions: targets.win_condition ?? 2,
+          tutors_allowed: targets.tutor ?? 0,
+          synergy_pieces: targets.synergy ?? 20,
+          notes: 'Targets are guidance, not exact. Hit them within ±2 unless your strategy demands otherwise.',
+        },
     pass1: pass1Output,
     legal_card_pool: legalCardPool.map(compactCard),
     pool_size: legalCardPool.length,
+  }
+
+  if (manaBaseStats) {
+    user.solved_mana_base = {
+      land_count: landTarget,
+      sources_per_color: manaBaseStats.sourcesPerColor,
+      tier_breakdown: manaBaseStats.byTier,
+      note: 'These mana sources are guaranteed. Use them when reasoning about color requirements for spells.',
+    }
   }
 
   return { system, user }

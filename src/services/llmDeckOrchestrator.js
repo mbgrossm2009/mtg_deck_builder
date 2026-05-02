@@ -29,6 +29,7 @@ import { scoreCard } from '../rules/deckScorer'
 import { cardMatchesArchetype } from '../rules/archetypeRules'
 import { generateDeckWithLLM } from './llmDeckService'
 import { validateLLMDeckResponse } from '../rules/llmDeckValidator'
+import { solveManaBase } from '../rules/manaBaseSolver'
 
 // Adaptive cap on the pool sent to the LLM. Two layers:
 //   1. Below the threshold (≤ 500 cards): send EVERYTHING — small collections
@@ -96,21 +97,42 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   })
   explanation.push(`Bracket ${bracket} filter: ${legalCardPool.length} candidates remain.`)
 
+  // 4b. Solve the mana base BEFORE the LLM call. The LLM is bad at land
+  // selection — it picks gates over shocks and weights tapped lands too
+  // generously. The deterministic solver picks the strongest 37-ish lands
+  // available and we hand the LLM a non-land pool so it focuses on the 62
+  // spells where its judgment matters.
+  const legalLands    = legalCardPool.filter(c => isLand(c))
+  const legalNonLands = legalCardPool.filter(c => !isLand(c))
+  const manaBaseSolution = solveManaBase({
+    commander,
+    legalLands,
+    targetLandCount: targetLandCount(bracket),
+    bracket,
+  })
+  for (const e of manaBaseSolution.explanation) explanation.push(e)
+  const lockedLands = manaBaseSolution.lands       // 37-ish Card objects (basics + non-basics)
+  const nonLandSlots = 99 - lockedLands.length
+
   // 5. Build deck-rule context for the prompt.
   const deckRules = {
-    landTarget: targetLandCount(bracket),
+    landTarget: lockedLands.length,
+    nonLandSlots,
     targetCounts: targetRoleCounts(bracket, commander, archetypes),
+    manaBaseStats: manaBaseSolution.stats,
   }
   const strategyContext = {
     archetypes,
     primaryArchetypeId: archetypes.some(a => a.id === primaryArchetypeId) ? primaryArchetypeId : null,
   }
 
-  // 5b. Cap the pool sent to the LLM. Heuristic fallback receives the full pool.
-  const llmPool = capPoolForLLM(legalCardPool, commander, bracket, strategyContext)
-  if (llmPool.length < legalCardPool.length) {
+  // 5b. Cap the NON-LAND pool sent to the LLM. Heuristic fallback receives
+  // the full pool. Lands are excluded — they're already locked by the solver
+  // and the LLM doesn't get to pick any.
+  const llmPool = capPoolForLLM(legalNonLands, commander, bracket, strategyContext)
+  if (llmPool.length < legalNonLands.length) {
     explanation.push(
-      `Capped LLM pool to top ${llmPool.length} of ${legalCardPool.length} candidates ` +
+      `Capped LLM pool to top ${llmPool.length} of ${legalNonLands.length} non-land candidates ` +
       `(prevents prompt timeout / context-limit failures).`
     )
   }
@@ -152,13 +174,16 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     }
   }
 
-  // 8. Validate the LLM response against the authoritative rules.
+  // 8. Validate the LLM response against the authoritative rules. Pass the
+  // full pool (including lands) so the validator can correctly classify any
+  // land the LLM tried to pick (even though we asked it not to).
   const validation = validateLLMDeckResponse({
     llmDeck: llmResponse,
     commander,
     legalCardPool,
     collection: rawCollection,
     bracket,
+    expectedDeckSize: nonLandSlots,   // we only asked for non-land picks
   })
 
   for (const w of validation.warnings) {
@@ -168,11 +193,17 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     explanation.push(`Rejected "${c.name}" — ${c.rejectionReason}`)
   }
 
-  // 9. Build the deck from valid LLM picks.
-  const deck = []
+  // 9. Build the deck. Mana base goes in first (locked by the solver), then
+  // the LLM's non-land picks. If the LLM tried to pick a land despite being
+  // told not to, skip it — the solver already owns the mana base.
+  const deck = lockedLands.map(l => ({ ...l, quantity: 1, fromManaSolver: true }))
   const usedNames = new Set([commander.name.toLowerCase()])
+  for (const card of deck) {
+    if (!card.isBasicLand) usedNames.add(card.name.toLowerCase())
+  }
   for (const v of validation.validCards) {
     if (deck.length >= 99) break
+    if (isLand(v.card)) continue   // solver owns lands; ignore stray LLM land picks
     deck.push({ ...v.card, quantity: 1, llmReason: v.reason, llmRole: v.role })
     usedNames.add(v.card.name.toLowerCase())
   }

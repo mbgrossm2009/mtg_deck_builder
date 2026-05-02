@@ -45,6 +45,7 @@ export function validateLLMDeckResponse({
   commander,
   legalCardPool,
   collection,
+  expectedDeckSize = 99,    // when mana base is solver-locked, this is 99 - lockedLands
 }) {
   const validCards = []
   const invalidCards = []
@@ -56,7 +57,7 @@ export function validateLLMDeckResponse({
       isValid: false,
       validCards: [],
       invalidCards: [],
-      missingCards: 99,
+      missingCards: expectedDeckSize,
       duplicateCards: [],
       warnings: ['LLM response missing or has no "deck" array.'],
     }
@@ -136,8 +137,10 @@ export function validateLLMDeckResponse({
     if (count > 1) duplicateCards.push({ name: key, count })
   }
 
-  // Slot accounting — anything short of 99 needs to be filled by the heuristic fallback.
-  const missingCards = Math.max(0, 99 - validCards.length)
+  // Slot accounting — anything short of expected needs to be filled by the
+  // heuristic fallback. expectedDeckSize is 99 by default, or 99 - lockedLands
+  // when the orchestrator pre-solved the mana base.
+  const missingCards = Math.max(0, expectedDeckSize - validCards.length)
 
   if (missingCards > 0) {
     warnings.push(`LLM returned ${validCards.length} valid cards — need to fill ${missingCards} more slots from the heuristic fallback.`)
@@ -150,10 +153,14 @@ export function validateLLMDeckResponse({
   }
 
   // Light role-balance feedback (purely informational; the heuristic fallback
-  // is what actually fixes underweight roles).
+  // is what actually fixes underweight roles). Skip the land warning when the
+  // orchestrator solved the mana base separately — the LLM was correctly told
+  // not to pick lands.
   const roleCounts = {}
   for (const v of validCards) roleCounts[v.role] = (roleCounts[v.role] ?? 0) + 1
-  if ((roleCounts.land ?? 0) < 33)        warnings.push(`Only ${roleCounts.land ?? 0} lands — likely mana issues.`)
+  if (expectedDeckSize === 99 && (roleCounts.land ?? 0) < 33) {
+    warnings.push(`Only ${roleCounts.land ?? 0} lands — likely mana issues.`)
+  }
   if ((roleCounts.ramp ?? 0) < 6)         warnings.push(`Only ${roleCounts.ramp ?? 0} ramp pieces — deck may be slow.`)
   if ((roleCounts.removal ?? 0) < 5)      warnings.push(`Only ${roleCounts.removal ?? 0} removal — may struggle to answer threats.`)
 
