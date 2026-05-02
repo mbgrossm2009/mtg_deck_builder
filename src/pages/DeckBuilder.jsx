@@ -5,6 +5,7 @@ import { getCardImage } from '../utils/scryfallApi'
 import { generateDeck } from '../rules/deckGenerator'
 import { generateDeckWithLLMAssist } from '../services/llmDeckOrchestrator'
 import { BRACKET_LABELS } from '../rules/bracketRules'
+import { useGenerationStore, startGeneration, clearGeneration } from '../lib/generationStore'
 
 const COLOR_PIPS = {
   W: { bg: '#f5f0e8', color: '#4a3728' },
@@ -40,11 +41,6 @@ export default function DeckBuilder() {
   const initialDeck = loadDeckId ? getDeck(loadDeckId) : null
 
   const [bracket, setBracket]         = useState(3)
-  const [result, setResult]           = useState(() => initialDeck ? deckToResult(initialDeck, 3) : null)
-  const [generating, setGenerating]   = useState(false)
-  // null while idle, 'pass1' while waiting on the strategy call, 'pass2' while
-  // waiting on the full-deck call. Drives the AI button's label.
-  const [aiStage, setAiStage]         = useState(null)
   const [showExcluded, setShowExcluded] = useState(false)
   const [showExplanation, setShowExplanation] = useState(false)
   const [hoveredCard, setHoveredCard] = useState(null)
@@ -54,6 +50,20 @@ export default function DeckBuilder() {
   const [saveToast, setSaveToast]     = useState(null)
   const [primaryArchetype, setPrimaryArchetype] = useState(null)
 
+  // Generation state lives in a module-level store (src/lib/generationStore.js)
+  // so it survives page navigation. The Promise runs in the store; the
+  // component just subscribes. Persisted to localStorage so a completed deck
+  // also survives reloads (24h TTL).
+  const gen = useGenerationStore()
+  const generating = gen.status === 'generating'
+  const aiStage    = gen.stage
+  // A loaded saved deck takes precedence (Supabase-backed, persistent on its
+  // own). Otherwise show the latest generation result. Errors are also
+  // displayed via the same channel.
+  const result = loadedDeck
+    ? deckToResult(loadedDeck, bracket)
+    : (gen.status === 'error' ? { error: gen.error } : gen.result)
+
   const commander = loadedDeck?.commander ?? getSelectedCommander()
 
   // Clear the location state so a refresh doesn't re-load the same deck.
@@ -62,47 +72,32 @@ export default function DeckBuilder() {
   }, [loadDeckId, navigate, location.pathname])
 
   const handleGenerate = useCallback(() => {
-    setGenerating(true)
-    setResult(null)
     setLoadedDeck(null)
     setSaveName('')
-    setTimeout(async () => {
-      try {
-        const deck = await generateDeck(bracket, primaryArchetype)
-        setResult(deck)
-      } catch (err) {
-        setResult({ error: `Generation failed: ${err?.message ?? err}` })
-      } finally {
-        setGenerating(false)
-      }
-    }, 0)
+    startGeneration({
+      bracket,
+      primaryArchetype,
+      generator: () => generateDeck(bracket, primaryArchetype),
+    })
   }, [bracket, primaryArchetype])
 
-  // Automated two-pass AI generation. Pass 1 picks the strategy + core engine,
-  // Pass 2 fills the remaining slots around it. Both calls go through the
-  // /api/llm Vercel function so the OpenAI key never leaves the server.
-  // If /api/llm fails (no key configured, network error, etc.) the orchestrator
-  // falls back to the heuristic generator and surfaces a warning.
+  // Automated three-pass AI generation. Pass 1 picks the strategy + core engine,
+  // Pass 2 fills the remaining slots around it, Pass 3 critiques the finished
+  // deck and applies up to 5 targeted swaps. All calls go through the /api/llm
+  // Vercel function so the OpenAI key never leaves the server. If /api/llm
+  // fails the orchestrator falls back to the heuristic generator and surfaces
+  // a warning.
   const handleGenerateAI = useCallback(() => {
-    setGenerating(true)
-    setAiStage('pass1')
-    setResult(null)
     setLoadedDeck(null)
     setSaveName('')
-    setTimeout(async () => {
-      try {
-        const deck = await generateDeckWithLLMAssist(bracket, primaryArchetype, {
-          twoPass: true,
-          onProgress: ({ stage }) => setAiStage(stage),
-        })
-        setResult(deck)
-      } catch (err) {
-        setResult({ error: `AI generation failed: ${err?.message ?? err}` })
-      } finally {
-        setGenerating(false)
-        setAiStage(null)
-      }
-    }, 0)
+    startGeneration({
+      bracket,
+      primaryArchetype,
+      generator: ({ onProgress }) => generateDeckWithLLMAssist(bracket, primaryArchetype, {
+        twoPass: true,
+        onProgress,
+      }),
+    })
   }, [bracket, primaryArchetype])
 
   const handleOpenSave = useCallback(() => {
