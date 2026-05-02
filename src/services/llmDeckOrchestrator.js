@@ -323,21 +323,49 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   // base), so without this filter we'd add solver lands + heuristic lands and
   // ship 43+ land decks. Lands belong to the solver; non-lands are what we
   // need from this fallback.
+  //
+  // Two-pass fill: first round prefers on-theme cards (matching detected
+  // archetypes) and universal-role staples (ramp/draw/removal/etc.). Second
+  // round picks off-theme cards only if the deck is still under 99. This
+  // prevents the heuristic from defaulting to random artifacts (Liar's
+  // Pendulum, Idol of False Gods, etc.) when better on-theme alternatives
+  // exist in the user's collection.
   if (deck.length < 99) {
     const heuristicSource = await generateDeck(bracket, primaryArchetypeId)
     if (!heuristicSource.error) {
       const beforeFill = deck.length
+      const UNIVERSAL_FILL_ROLES = new Set(['land', 'ramp', 'draw', 'removal', 'wipe', 'protection', 'tutor', 'win_condition'])
+      const detectedArchs = strategyContext.archetypes ?? []
+      const isOnThemeOrUniversal = (card) => {
+        const isUniversal = (card.roles ?? []).some(r => UNIVERSAL_FILL_ROLES.has(r))
+        if (isUniversal) return true
+        if (detectedArchs.length === 0) return true   // no archetypes → don't filter
+        return detectedArchs.some(a => cardMatchesArchetype(card, a))
+      }
+      // Pass 1: on-theme + universal only.
       for (const card of heuristicSource.mainDeck) {
         if (deck.length >= 99) break
-        if (isLand(card)) continue                              // solver owns the mana base
+        if (isLand(card)) continue
+        if (!isOnThemeOrUniversal(card)) continue
         const key = card.name.toLowerCase()
         if (usedNames.has(key)) continue
         deck.push({ ...card, quantity: 1, fromFallback: true })
         usedNames.add(key)
       }
+      // Pass 2: off-theme cards as last resort if we still need bodies.
+      if (deck.length < 99) {
+        for (const card of heuristicSource.mainDeck) {
+          if (deck.length >= 99) break
+          if (isLand(card)) continue
+          const key = card.name.toLowerCase()
+          if (usedNames.has(key)) continue
+          deck.push({ ...card, quantity: 1, fromFallback: true })
+          usedNames.add(key)
+        }
+      }
       const filled = deck.length - beforeFill
       if (filled > 0) {
-        explanation.push(`Filled ${filled} remaining slot${filled === 1 ? '' : 's'} from the heuristic generator (non-lands only).`)
+        explanation.push(`Filled ${filled} remaining slot${filled === 1 ? '' : 's'} from the heuristic generator (on-theme + universal preferred).`)
         warnings.push({
           severity: 'info',
           message: 'AI suggestion was adjusted to follow Commander rules and meet deck-structure targets.',
@@ -720,9 +748,16 @@ function runHeuristicCritique({ deck, legalNonLands, commander, bracket, strateg
     return s
   }
 
-  // Available pool: legal non-lands not currently in the deck.
+  // Available pool: legal non-lands not currently in the deck. ALSO exclude
+  // off-theme cards from swap candidates — without this, the critique
+  // happily swaps one piece of off-theme filler for another (e.g.,
+  // -Idol of False Gods → +Liar's Pendulum, where both are random
+  // artifacts with no relation to the dragon theme). That's not an
+  // upgrade. Off-theme cards just shouldn't be swap-in candidates at all.
   const inDeckNames = new Set(deck.map(c => c.name.toLowerCase()))
-  const pool = legalNonLands.filter(c => !inDeckNames.has(c.name.toLowerCase()))
+  const pool = legalNonLands.filter(c =>
+    !inDeckNames.has(c.name.toLowerCase()) && !isOffTheme(c)
+  )
 
   // Score the deck (unlocked only) and pool. Sort: deck weakest first, pool
   // strongest first.

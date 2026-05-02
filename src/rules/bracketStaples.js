@@ -56,16 +56,34 @@ const B4_PLUS_STAPLES = [
   'Mana Crypt', 'Mana Vault', 'Grim Monolith',
   'Mox Diamond', 'Chrome Mox', 'Mox Opal', 'Mox Amber', 'Lotus Petal',
   'Jeweled Lotus', 'Jeweled Amulet', 'Dockside Extortionist', 'Ancient Tomb',
+  'Lion\'s Eye Diamond',
+  // Talismans (10) — every multi-color cEDH deck runs the on-color ones
+  'Talisman of Conviction', 'Talisman of Creativity', 'Talisman of Curiosity',
+  'Talisman of Dominance', 'Talisman of Hierarchy', 'Talisman of Impulse',
+  'Talisman of Indulgence', 'Talisman of Progress', 'Talisman of Resilience',
+  'Talisman of Unity',
+  // Signets (10) — same role as Talismans, equally universal
+  'Azorius Signet', 'Boros Signet', 'Dimir Signet', 'Golgari Signet',
+  'Gruul Signet', 'Izzet Signet', 'Orzhov Signet', 'Rakdos Signet',
+  'Selesnya Signet', 'Simic Signet',
+  // Other essential 2-mana fixing
+  'Coalition Relic', 'Chromatic Lantern',
   // High-tier tutors
   'Demonic Tutor', 'Vampiric Tutor', 'Imperial Seal', 'Mystical Tutor',
   'Enlightened Tutor', 'Worldly Tutor', "Green Sun's Zenith",
   'Chord of Calling', 'Birthing Pod', 'Survival of the Fittest',
+  'Idyllic Tutor', 'Eladamri\'s Call', 'Finale of Devastation',
+  'Natural Order',
   // Card-advantage engines
   'Rhystic Study', 'Mystic Remora', 'Necropotence', 'Sylvan Library',
   'Esper Sentinel', 'Smothering Tithe', 'Sylvan Tutor',
+  'Brainstorm', 'Ponder', 'Preordain', 'Consider', 'Dig Through Time',
+  'Treasure Cruise', 'Night\'s Whisper', 'Sign in Blood',
   // Top-tier interaction (free / cheap)
   'Force of Will', 'Force of Negation', 'Pact of Negation', 'Mana Drain',
-  'Flusterstorm', "Teferi's Protection",
+  'Flusterstorm', "Teferi's Protection", 'Mental Misstep',
+  'Daze', 'Spell Pierce', 'Dispel', 'Swan Song',
+  'Snapcaster Mage', 'Cyclonic Rift',
 ]
 
 // B5 adds explicit cEDH wincon enablers. These tend to be off-strategy at
