@@ -3,6 +3,7 @@ import { getCollection, removeFromCollection, addImportedCardsToCollection, save
 import { getCardImageSmall, getCardsByNames } from '../utils/scryfallApi'
 import { parseCsvText, parseAuto, normalizeImportedCards, cleanCardName } from '../utils/cardImportParser'
 import { buildTestCollection } from '../utils/testCollectionBuilder'
+import { clearScryfallBulkCache } from '../utils/scryfallBulk'
 
 const PAGE_SIZE = 60
 
@@ -180,10 +181,30 @@ function TestCollectionSection({ currentCollectionSize, onLoadComplete }) {
           Replace your collection with 7500 EDH cards for fast multi-commander testing
         </span>
       </div>
-      {error && <div style={testStyles.errorBox}>Error: {error}</div>}
+      {error && (
+        <div style={testStyles.errorBox}>
+          <div>Error: {error}</div>
+          <div style={{ marginTop: 8 }}>
+            <button
+              className="btn btn-ghost"
+              style={{ fontSize: 'var(--text-xs)' }}
+              onClick={async () => {
+                await clearScryfallBulkCache()
+                setError(null)
+                alert('Cleared Scryfall bulk cache. Click "Load test collection" to re-fetch from Scryfall.')
+              }}
+            >
+              Clear Scryfall cache
+            </button>
+          </div>
+        </div>
+      )}
       <button className="btn btn-primary" onClick={() => setConfirming(true)}>
         Load test collection (7500 mixed)
       </button>
+      <span style={{ ...testStyles.panelHint, marginLeft: 12 }}>
+        Open browser console (F12) to see detailed progress logs
+      </span>
     </div>
   )
 }

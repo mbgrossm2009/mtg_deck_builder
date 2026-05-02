@@ -54,15 +54,38 @@ export async function buildTestCollection({ preset = '7500-mixed', onProgress } 
 
   // 1. Fetch (or read from cache) every unique card on Scryfall
   const allCards = await fetchOracleCards({ onProgress })
+  console.log('[buildTestCollection] Scryfall returned', allCards.length, 'total cards')
+
+  // SAFEGUARD: Scryfall's oracle_cards bulk should have ~30k cards. If we
+  // got far less, the cache has bad data — clear it and force a re-fetch
+  // next time, then surface a clear error to the user this run.
+  if (allCards.length < 10000) {
+    console.error('[buildTestCollection] Suspiciously small dataset — clearing cache so next attempt re-fetches.')
+    const { clearScryfallBulkCache } = await import('./scryfallBulk')
+    await clearScryfallBulkCache()
+    throw new Error(
+      `Scryfall bulk download returned only ${allCards.length} cards (expected ~30,000). ` +
+      `Network or CORS issue. Cache cleared — please retry.`
+    )
+  }
 
   // 2. Filter to EDH-legal, English, non-token, non-emblem
   const eligible = allCards.filter(isEdhEligible)
+  console.log('[buildTestCollection] After EDH eligibility filter:', eligible.length, 'cards')
   onProgress?.({ stage: 'filtering', eligibleCount: eligible.length })
+
+  if (eligible.length < 5000) {
+    throw new Error(
+      `Only ${eligible.length} cards passed the EDH legality filter — expected 20,000+. ` +
+      `Scryfall response may have an unexpected shape. Open the browser console for details.`
+    )
+  }
 
   // 3a. Top N by EDHREC rank
   const ranked = eligible
     .filter(c => typeof c.edhrec_rank === 'number')
     .sort((a, b) => a.edhrec_rank - b.edhrec_rank)
+  console.log('[buildTestCollection] Cards with EDHREC rank:', ranked.length)
   const topPicks = ranked.slice(0, config.topCount)
   const topNames = new Set(topPicks.map(c => c.name.toLowerCase()))
 
@@ -71,6 +94,7 @@ export async function buildTestCollection({ preset = '7500-mixed', onProgress } 
   const samplePicks = config.sampleCount > 0
     ? stratifiedSample(remainder, config.sampleCount, RARITY_PROPORTIONS)
     : []
+  console.log('[buildTestCollection] Top picks:', topPicks.length, '+ sample:', samplePicks.length)
 
   onProgress?.({ stage: 'sampling', topCount: topPicks.length, sampleCount: samplePicks.length })
 
@@ -84,6 +108,17 @@ export async function buildTestCollection({ preset = '7500-mixed', onProgress } 
   // have zero or one of each basic, starving the solver.
   const basics = makeBasicLandPool()
   const final = [...mapped, ...basics]
+  console.log('[buildTestCollection] Final card count:', final.length, '(', mapped.length, 'meta +', basics.length, 'basics)')
+
+  // SAFEGUARD: if the final result is suspiciously small, something
+  // upstream went wrong even though no error fired. Surface it.
+  if (final.length < 1000) {
+    throw new Error(
+      `Test collection ended up with only ${final.length} cards (expected 7500+). ` +
+      `Console has trace. Likely causes: stratified sample failed (rarity field missing), ` +
+      `or top-N filter produced zero (edhrec_rank field missing).`
+    )
+  }
 
   onProgress?.({ stage: 'done', count: final.length })
   return final

@@ -10,11 +10,11 @@ vi.mock('./scryfallBulk', () => ({
 
 import { buildTestCollection } from './testCollectionBuilder'
 
-// Build a synthetic Scryfall response: 1000 cards across rarities, with
-// edhrec_rank populated for half of them.
+// Build a synthetic Scryfall response: 11000 cards (above the 10k safeguard
+// threshold) across rarities, with edhrec_rank populated for half of them.
 const mockCards = []
 const RARITIES = ['common', 'uncommon', 'rare', 'mythic']
-for (let i = 0; i < 1000; i++) {
+for (let i = 0; i < 11000; i++) {
   mockCards.push({
     id:             `card-${i}`,
     name:           `Card ${i}`,
@@ -26,7 +26,7 @@ for (let i = 0; i < 1000; i++) {
     color_identity: ['G'],
     legalities:     { commander: 'legal' },
     rarity:         RARITIES[i % 4],
-    edhrec_rank:    i < 500 ? i + 1 : null,
+    edhrec_rank:    i < 5500 ? i + 1 : null,
     layout:         'normal',
     lang:           'en',
   })
@@ -125,12 +125,9 @@ describe('buildTestCollection', () => {
   it('7500-mixed includes a stratified random sample beyond the top picks', async () => {
     const cards = await buildTestCollection({ preset: '7500-mixed' })
     const nonBasics = cards.filter(c => !c.isBasicLand)
-    // Mock has 500 ranked + 500 unranked (rejected by sampling? no — by `topPicks` only).
-    // Sampling pulls from the unranked remainder. So we should have rank-based cards
-    // PLUS some sampled cards from the unranked half.
-    // Our mock has 500 ranked. topCount = 5000, so we take all 500 ranked.
-    // Then sampleCount = 2500, but only 500 unranked exist. Stratified sample
-    // returns up to 500.
-    expect(nonBasics.length).toBeGreaterThan(500)   // some sample cards present
+    // Mock has 5500 ranked + 5500 unranked. topCount=5000 takes 5000 ranked.
+    // sampleCount=2500 pulls from the remaining 6000 cards.
+    // Total expected: 5000 + 2500 = 7500 non-basics.
+    expect(nonBasics.length).toBeGreaterThan(5000)
   })
 })
