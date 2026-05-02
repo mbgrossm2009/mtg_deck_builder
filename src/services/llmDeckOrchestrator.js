@@ -35,6 +35,7 @@ import { buildSkeleton, buildSkeletonFromMoxfield, mergeSkeletons, skeletonRoleC
 import { buildBracketStaples, getStapleCoverage } from '../rules/bracketStaples'
 import { fetchEdhrecCommander } from '../utils/edhrecApi'
 import { fetchMoxfieldConsensus } from '../utils/moxfieldApi'
+import { applyCommanderBracketCap } from '../rules/commanderPowerCeiling'
 
 // Adaptive cap on the pool sent to the LLM. Two layers:
 //   1. Below the threshold (≤ 500 cards): send EVERYTHING — small collections
@@ -73,6 +74,19 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
 
   const explanation = []
   const warnings = []
+
+  // Cap the bracket per commander — Krenko/Edgar/Marwyn-class commanders
+  // can't honestly hit B5. Build at the realistic ceiling instead of
+  // pretending to build B5 and getting eval-scored as B3.
+  const { effective: cappedBracket, capped, ceiling } = applyCommanderBracketCap(commander, bracket)
+  if (capped) {
+    explanation.push(`Bracket capped: ${commander.name} realistically maxes at B${ceiling}; building at B${cappedBracket} instead of requested B${bracket}.`)
+    warnings.push({
+      severity: 'info',
+      message: `${commander.name} doesn't have a cEDH-tier game plan — building at B${cappedBracket} (its realistic ceiling) instead of B${bracket}.`,
+    })
+    bracket = cappedBracket
+  }
 
   // 1. Pre-filter for legality + color identity + banned + commander itself.
   const { legal, excluded: illegalExcluded } = filterLegalCards(rawCollection, commander)
@@ -325,6 +339,8 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       explanation: [...explanation, ...(heuristic.explanation ?? [])],
       warnings: [...warnings, ...filteredHeuristicWarnings],
       llmStrategy: null,
+      criticalCardCounts: countCriticalCards(heuristic.mainDeck),
+      detectedWincons: detectMultiCardWincons(heuristic.mainDeck, { archetypes: detectArchetypes(commander) }),
     }
   }
 
@@ -441,11 +457,19 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   // skeleton + LLM picks + heuristic fill all under-delivered, force-add the
   // best available wincons from the legal pool, kicking out the lowest-priority
   // non-skeleton/non-mana-base picks to make room.
+  //
+  // Counts BOTH single-card wincons AND multi-card patterns (aristocrats:
+  // sac outlet + drain payoff; etb-drain: token producer + Impact Tremors;
+  // combat tribal: lord stack + tribal density). Without pattern detection
+  // a Krenko + Goblin Bombardment + Impact Tremors deck reads as "0 wincons"
+  // even though it can close the game easily.
   const MIN_WINCONS = 2
   const isWincon = (c) => (c.roles ?? []).includes('win_condition') ||
                           (c.tags ?? []).includes('explosive_finisher')
   const winconCount = deck.filter(isWincon).length
-  if (winconCount < MIN_WINCONS) {
+  const multiCardWincons = detectMultiCardWincons(deck, strategyContext)
+  const effectiveWinconCount = winconCount + multiCardWincons.length
+  if (effectiveWinconCount < MIN_WINCONS) {
     const winconCandidates = legalNonLands
       .filter(c => isWincon(c) && !usedNames.has(c.name.toLowerCase()))
       // Prefer cards in the strong-recommendations list, then by EDHREC rank
@@ -458,7 +482,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
 
     let addedWincons = 0
     for (const wc of winconCandidates) {
-      if (winconCount + addedWincons >= MIN_WINCONS) break
+      if (effectiveWinconCount + addedWincons >= MIN_WINCONS) break
       // Find a swappable slot: not skeleton, not mana base, and not already a wincon.
       // Pick from the END of the deck (lowest-priority heuristic fill first).
       let swapIdx = -1
@@ -488,7 +512,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       addedWincons++
     }
     if (addedWincons > 0) {
-      explanation.push(`Wincon backstop: forced ${addedWincons} win condition${addedWincons === 1 ? '' : 's'} into the deck (had only ${winconCount} after LLM/heuristic).`)
+      explanation.push(`Wincon backstop: forced ${addedWincons} win condition${addedWincons === 1 ? '' : 's'} into the deck (had ${winconCount} cards + ${multiCardWincons.length} multi-card pattern${multiCardWincons.length === 1 ? '' : 's'} after LLM/heuristic).`)
       warnings.push({
         severity: 'info',
         message: `Added ${addedWincons} win condition${addedWincons === 1 ? '' : 's'} so the deck has a clear way to close games.`,
@@ -498,6 +522,96 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
         severity: 'warning',
         message: `Your collection has no clear win conditions for this commander — deck may struggle to close games. Consider adding a Craterhoof Behemoth, Triumph of the Hordes, or similar finisher.`,
       })
+    }
+  }
+
+  // 10b.1. Tutor floor — bracket-appropriate minimum tutors. The LLM
+  // and heuristic generator both consistently under-pick tutors at higher
+  // brackets (B4 should have 6+, often ships with 1-2). Same swap pattern
+  // as the wincon backstop: lowest-priority unlocked picks make room.
+  // ONLY runs at B3+ — tutors at B1/B2 violate bracket norms (the
+  // downgrade pass actively REMOVES them at low brackets).
+  const TUTOR_FLOOR_BY_BRACKET = { 1: 0, 2: 0, 3: 3, 4: 6, 5: 8 }
+  const tutorFloor = TUTOR_FLOOR_BY_BRACKET[bracket] ?? 0
+  if (tutorFloor > 0) {
+    const isTutor = (c) => (c.tags ?? []).includes('tutor')
+    const tutorCount = deck.filter(isTutor).length
+    if (tutorCount < tutorFloor) {
+      const tutorCandidates = legalNonLands
+        .filter(c => isTutor(c) && !usedNames.has(c.name.toLowerCase()))
+        .sort((a, b) => (a.edhrecRank ?? 9999) - (b.edhrecRank ?? 9999))
+
+      let added = 0
+      for (const tutor of tutorCandidates) {
+        if (tutorCount + added >= tutorFloor) break
+        let swapIdx = -1
+        for (let i = deck.length - 1; i >= 0; i--) {
+          const c = deck[i]
+          if (c.fromManaSolver || c.fromSkeleton || c.fromBracketStaples) continue
+          if (c.fromTribalFloor || c.fromWinconBackstop) continue
+          if (isTutor(c)) continue
+          swapIdx = i
+          break
+        }
+        if (swapIdx === -1) break
+        const removed = deck[swapIdx]
+        usedNames.delete(removed.name.toLowerCase())
+        deck[swapIdx] = { ...tutor, quantity: 1, fromTutorFloor: true }
+        usedNames.add(tutor.name.toLowerCase())
+        added++
+      }
+      if (added > 0) {
+        explanation.push(`Tutor floor: forced ${added} tutor${added === 1 ? '' : 's'} into the deck (was ${tutorCount}/${tutorFloor}, now ${tutorCount + added}).`)
+      } else if (tutorCandidates.length === 0 && tutorCount < tutorFloor) {
+        warnings.push({
+          severity: 'warning',
+          message: `Only ${tutorCount} tutors in deck (B${bracket} target ${tutorFloor}+). Your collection lacks more tutors — consider adding Demonic/Vampiric/Mystical/Worldly Tutor or Birthing Pod.`,
+        })
+      }
+    }
+  }
+
+  // 10b.2. Removal floor — every deck needs answers. The LLM keeps
+  // shipping decks with 1-3 removal pieces, which is what the eval
+  // evaluator complains about. Combined removal + wipe count vs floor.
+  const REMOVAL_FLOOR_BY_BRACKET = { 1: 5, 2: 6, 3: 7, 4: 7, 5: 6 }
+  const removalFloor = REMOVAL_FLOOR_BY_BRACKET[bracket] ?? 6
+  {
+    const isRemoval = (c) => (c.roles ?? []).includes('removal') ||
+                             (c.roles ?? []).includes('wipe')
+    const removalCount = deck.filter(isRemoval).length
+    if (removalCount < removalFloor) {
+      const removalCandidates = legalNonLands
+        .filter(c => isRemoval(c) && !usedNames.has(c.name.toLowerCase()))
+        .sort((a, b) => (a.edhrecRank ?? 9999) - (b.edhrecRank ?? 9999))
+
+      let added = 0
+      for (const r of removalCandidates) {
+        if (removalCount + added >= removalFloor) break
+        let swapIdx = -1
+        for (let i = deck.length - 1; i >= 0; i--) {
+          const c = deck[i]
+          if (c.fromManaSolver || c.fromSkeleton || c.fromBracketStaples) continue
+          if (c.fromTribalFloor || c.fromWinconBackstop || c.fromTutorFloor) continue
+          if (isRemoval(c)) continue
+          swapIdx = i
+          break
+        }
+        if (swapIdx === -1) break
+        const removed = deck[swapIdx]
+        usedNames.delete(removed.name.toLowerCase())
+        deck[swapIdx] = { ...r, quantity: 1, fromRemovalFloor: true }
+        usedNames.add(r.name.toLowerCase())
+        added++
+      }
+      if (added > 0) {
+        explanation.push(`Removal floor: forced ${added} removal/wipe${added === 1 ? '' : 's'} into the deck (was ${removalCount}/${removalFloor}, now ${removalCount + added}).`)
+      } else if (removalCandidates.length === 0 && removalCount < removalFloor) {
+        warnings.push({
+          severity: 'warning',
+          message: `Only ${removalCount} removal pieces in deck (B${bracket} target ${removalFloor}+). Your collection lacks more answers — consider adding Swords to Plowshares, Path to Exile, Beast Within, or Cyclonic Rift.`,
+        })
+      }
     }
   }
 
@@ -531,6 +645,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
         for (let i = deck.length - 1; i >= 0; i--) {
           const c = deck[i]
           if (c.fromManaSolver || c.fromSkeleton || c.fromBracketStaples) continue
+          if (c.fromTutorFloor || c.fromRemovalFloor || c.fromWinconBackstop) continue
           if (isOnTribe(c)) continue
           swapIdx = i
           break
@@ -648,8 +763,8 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       const deckForCritique = deck.map(c => ({
         name: c.name,
         role: (c.roles ?? ['filler'])[0],
-        locked: !!c.fromManaSolver || !!c.fromSkeleton || !!c.fromBracketStaples || !!c.fromTribalFloor,
-        source: c.fromManaSolver ? 'manaSolver' : c.fromSkeleton ? 'skeleton' : c.fromBracketStaples ? 'bracketStaples' : c.fromTribalFloor ? 'tribalFloor' : c.fromFallback ? 'heuristic' : c.fromWinconBackstop ? 'winconBackstop' : c.fromCritique ? 'critique' : c.fromHeuristicCritique ? 'heuristicCritique' : 'llm',
+        locked: !!c.fromManaSolver || !!c.fromSkeleton || !!c.fromBracketStaples || !!c.fromTribalFloor || !!c.fromTutorFloor || !!c.fromRemovalFloor || !!c.fromWinconBackstop,
+        source: c.fromManaSolver ? 'manaSolver' : c.fromSkeleton ? 'skeleton' : c.fromBracketStaples ? 'bracketStaples' : c.fromTribalFloor ? 'tribalFloor' : c.fromTutorFloor ? 'tutorFloor' : c.fromRemovalFloor ? 'removalFloor' : c.fromWinconBackstop ? 'winconBackstop' : c.fromFallback ? 'heuristic' : c.fromCritique ? 'critique' : c.fromHeuristicCritique ? 'heuristicCritique' : 'llm',
       }))
       const inDeckNames = new Set(deck.map(c => c.name.toLowerCase()))
       const availablePool = legalNonLands.filter(c =>
@@ -783,6 +898,12 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     })),
   ]
 
+  // Final critical-card counts and detected wincon patterns. Surfaced to
+  // the eval harness AND passed into the eval prompt so the LLM evaluator
+  // doesn't have to count tutors/removal/etc. by eyeballing card names.
+  const criticalCardCounts = countCriticalCards(deck)
+  const detectedWincons = detectMultiCardWincons(deck, strategyContext)
+
   return {
     commander,
     mainDeck: deck,
@@ -793,6 +914,8 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     combos,
     archetypes,
     explanation,
+    criticalCardCounts,
+    detectedWincons,
 
     // LLM-specific extras the UI can show but doesn't have to.
     generationMode: 'llm-assisted',
@@ -865,6 +988,86 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
 // (bracket-staples are already bracket-aware so they shouldn't be the
 // problem). Skeleton picks CAN be swapped — if the skeleton gave us a
 // combo piece at B3, bracket fit beats EDHREC fidelity.
+// Count critical-role cards in a finished deck. Used both for the eval
+// payload (so the LLM evaluator stops eyeballing tutor counts from card
+// names) and for in-orchestrator decisions.
+function countCriticalCards(deck) {
+  return {
+    tutors:      deck.filter(c => (c.tags ?? []).includes('tutor')).length,
+    fastMana:    deck.filter(c => (c.tags ?? []).includes('fast_mana')).length,
+    wincons:     deck.filter(c => (c.roles ?? []).includes('win_condition') ||
+                                  (c.tags ?? []).includes('explosive_finisher')).length,
+    interaction: deck.filter(c => (c.roles ?? []).includes('removal') ||
+                                  (c.roles ?? []).includes('wipe')).length,
+    ramp:        deck.filter(c => (c.roles ?? []).includes('ramp')).length,
+    draw:        deck.filter(c => (c.roles ?? []).includes('draw')).length,
+  }
+}
+
+// Detect multi-card win-condition patterns that don't get tagged on any
+// single card. Without this, decks like "Krenko + Impact Tremors + sac
+// outlets" read as having zero wincons even though they close games
+// reliably. Returns an array of detected pattern descriptions.
+//
+// Patterns checked:
+//   - aristocrats:   sac outlet + drain payoff (Blood Artist class)
+//   - etb_drain:     token producer + ETB damage trigger (Impact Tremors,
+//                    Purphoros, Terror of the Peaks, Hellrider)
+//   - combat_tribal: 2+ tribal lords + 18+ on-tribe creatures = "swing
+//                    wide for the win" plan
+function detectMultiCardWincons(deck, strategyContext) {
+  const patterns = []
+  const tags = (c) => c.tags ?? []
+  const text = (c) => (c.oracle_text ?? '').toLowerCase()
+  const name = (c) => (c.name ?? '').toLowerCase()
+
+  // Drain payoffs — cards that drain life when creatures die or ETB.
+  const DRAIN_PAYOFFS = new Set([
+    'blood artist', 'zulaport cutthroat', 'cruel celebrant',
+    'bastion of remembrance', 'falkenrath noble', 'syr konrad the grim',
+    'corpse knight', 'vindictive vampire', 'judith the scourge diva',
+    'disciple of the vault', 'pawn of ulamog', 'marionette master',
+    'massacre girl', 'bloodtracker', 'dread presence', 'sangromancer',
+    'twilight prophet', 'bloodthirsty conqueror',
+  ])
+  // ETB damage triggers — the "every token deals 1" enablers.
+  const ETB_DAMAGE = new Set([
+    'impact tremors', 'purphoros, god of the forge', 'warstorm surge',
+    'terror of the peaks', 'hellrider', 'goblin bombardment',
+    'outpost siege', 'pandemonium', 'witty roastmaster',
+    'electrostatic field', 'firebrand archer', 'guttersnipe',
+  ])
+
+  const hasSacOutlet  = deck.some(c => tags(c).includes('sac_outlet'))
+  const hasTokenProd  = deck.some(c => tags(c).includes('token_producer'))
+  const hasDrain      = deck.some(c => DRAIN_PAYOFFS.has(name(c)))
+  const hasEtbDamage  = deck.some(c => ETB_DAMAGE.has(name(c)))
+
+  if (hasSacOutlet && hasDrain) {
+    const drainCard = deck.find(c => DRAIN_PAYOFFS.has(name(c)))
+    patterns.push(`aristocrats: sac outlet + ${drainCard.name}`)
+  }
+  if (hasTokenProd && hasEtbDamage) {
+    const etbCard = deck.find(c => ETB_DAMAGE.has(name(c)))
+    patterns.push(`etb-drain: token producer + ${etbCard.name}`)
+  }
+
+  // Combat tribal: 2+ lord-style anthems plus on-tribe density.
+  const tribalArchetype = strategyContext?.archetypes?.find(a => a.tribe)
+  if (tribalArchetype) {
+    const tribe = tribalArchetype.tribe
+    const onTribe = deck.filter(c => (c.type_line ?? '').toLowerCase().includes(tribe)).length
+    // A "lord" gives an anthem to creatures of its type or to all your creatures.
+    const lordRegex = /(?:other |)\b[a-z]+s? (?:you control )?get \+\d+\/\+\d+|creatures you control get \+\d+\/\+\d+/
+    const lordCount = deck.filter(c => lordRegex.test(text(c))).length
+    if (lordCount >= 2 && onTribe >= 18) {
+      patterns.push(`combat-tribal: ${lordCount} lords + ${onTribe} ${tribe}s = swing wide`)
+    }
+  }
+
+  return patterns
+}
+
 function downgradeBracketIfOverShot({ deck, targetBracket, legalNonLands, usedNames }) {
   const swaps = []
   const MAX_ATTEMPTS = 25

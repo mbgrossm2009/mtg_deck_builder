@@ -102,7 +102,12 @@ describe('Universal invariants — apply to every commander', () => {
     })
     const lands = result.mainDeck.filter(c => (c.type_line ?? '').toLowerCase().includes('land'))
     const landCount = lands.length
-    const expected = bracket === 5 ? 28 : bracket === 3 ? 37 : 38
+    // Use the EFFECTIVE bracket from bracketAnalysis — the orchestrator may
+    // cap a B5 request down to B4 for commanders that can't honestly hit
+    // cEDH speed (Krenko, Edgar, Marwyn, etc.). Land count follows the
+    // effective build bracket, not the requested one.
+    const effective = result.bracketAnalysis?.targetBracket ?? bracket
+    const expected = effective === 5 ? 28 : effective === 4 ? 36 : effective === 3 ? 37 : 38
     expect(landCount).toBe(expected)
   })
 

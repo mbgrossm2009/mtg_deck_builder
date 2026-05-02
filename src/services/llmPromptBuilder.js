@@ -1106,7 +1106,7 @@ Return ONLY JSON. No markdown.`
 // and reports strengths/weaknesses. Used by the eval harness to grade
 // many generations across many commanders without trying to mutate them.
 
-export function buildEvaluationPrompt({ commander, bracket, deck }) {
+export function buildEvaluationPrompt({ commander, bracket, deck, criticalCardCounts, detectedWincons }) {
   const bracketLabel   = BRACKET_LABELS[bracket] ?? 'Unknown'
   const bracketMeaning = BRACKET_DESCRIPTIONS[bracket] ?? ''
 
@@ -1374,18 +1374,39 @@ list above unless the SPECIFIC reason they're weak is bracket-relevant
 Sentinel would be a stronger pick"). Even then, prefer to identify
 genuinely weak cards over good cards.
 
+═══════════════════════════════════════════════════════════════════════════
+PRECOMPUTED COUNTS — when the user payload includes \`counts\` and
+\`detected_wincon_patterns\`, TRUST THEM. The orchestrator already counted
+tutors, removal, ramp, etc. by tag — including soft tutors (Goblin Matron,
+Eladamri's Call, Diabolic Intent) and pattern-based wincons that aren't
+tagged on any single card. Do NOT recount from card names and complain
+"only 3 tutors" when \`counts.tutors\` says 8. Do NOT say "no clear win
+condition" when \`detected_wincon_patterns\` lists a pattern like
+"aristocrats: sac outlet + Blood Artist" or "etb-drain: token producer +
+Impact Tremors" — those ARE the win plan.
+═══════════════════════════════════════════════════════════════════════════
+
 Return ONLY JSON.`
 
   const user = {
     commander: compactCommander(commander),
     bracket: { number: bracket, label: bracketLabel, meaning: bracketMeaning },
     deck_size: deck.length,
+    counts: criticalCardCounts ?? null,
+    detected_wincon_patterns: detectedWincons ?? [],
     deck: deck.map(c => ({
       name: c.name,
       role: (c.roles ?? ['filler'])[0],
       cmc:  c.cmc ?? 0,
       type_line: c.type_line ?? '',
-      source: c.fromManaSolver ? 'mana-solver' : c.fromSkeleton ? 'skeleton' : c.fromBracketStaples ? 'bracket-staples' : c.fromTribalFloor ? 'tribal-floor' : 'llm-pick',
+      source: c.fromManaSolver ? 'mana-solver'
+            : c.fromSkeleton ? 'skeleton'
+            : c.fromBracketStaples ? 'bracket-staples'
+            : c.fromTribalFloor ? 'tribal-floor'
+            : c.fromTutorFloor ? 'tutor-floor'
+            : c.fromRemovalFloor ? 'removal-floor'
+            : c.fromWinconBackstop ? 'wincon-backstop'
+            : 'llm-pick',
     })),
   }
 

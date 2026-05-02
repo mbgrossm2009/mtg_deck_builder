@@ -142,6 +142,8 @@ async function runLoop(commanders, brackets, results, token) {
             commander: cmdr,
             bracket,
             deck: deckResult.mainDeck,
+            criticalCardCounts: deckResult.criticalCardCounts,
+            detectedWincons: deckResult.detectedWincons,
           })
         } catch (err) {
           if (state.runToken !== token) return
@@ -162,7 +164,8 @@ async function runLoop(commanders, brackets, results, token) {
           warnings: (deckResult.warnings ?? [])
             .filter(w => w.severity === 'warning' || w.severity === 'error')
             .map(w => w.message),
-          criticalCardCounts: countCriticalCards(deckResult.mainDeck),
+          criticalCardCounts: deckResult.criticalCardCounts ?? countCriticalCards(deckResult.mainDeck),
+          detectedWincons: deckResult.detectedWincons ?? [],
           evaluation: evalResult ?? {
             score: null,
             summary: 'Eval call failed',
