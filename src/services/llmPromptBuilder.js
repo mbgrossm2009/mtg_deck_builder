@@ -113,7 +113,7 @@ export function buildDeckGenerationPrompt({
     : ''
 
   const skeletonClause = (skeletonStats?.size > 0)
-    ? `\n\nSKELETON LOCKED (${skeletonStats.size} cards): A deck skeleton has been pre-built from EDHREC inclusion data — these are the cards that real, successful decks for this commander run in 40%+ of lists. They are LOCKED into the final deck. You MUST NOT include any of these in your output (the skeleton goes in automatically). Your job is to pick the remaining ${llmSlots} cards to round out the deck around them. The skeleton already covers: ${formatRoleCounts(skeletonStats.roleCounts)}. Adjust your role targets accordingly — you only need to fill the gaps.`
+    ? `\n\nSKELETON LOCKED (${skeletonStats.size} cards): A deck skeleton has been pre-built from two data sources: (1) EDHREC inclusion data — cards in 40%+ of all decks for this commander; (2) Moxfield consensus — cards appearing in 4+ of the 10 most-viewed top decks for this commander. These are real, vetted meta picks. They are LOCKED into the final deck. You MUST NOT include any of these in your output (the skeleton goes in automatically). Your job is to pick the remaining ${llmSlots} cards to round out the deck around them. The skeleton already covers: ${formatRoleCounts(skeletonStats.roleCounts)}. Cards confirmed by BOTH sources are the highest-confidence picks. Adjust your role targets accordingly — you only need to fill the gaps.`
     : ''
 
   const system = `You are an expert Magic: The Gathering Commander deck builder.
@@ -492,7 +492,9 @@ If forced to choose:
       cards: skeleton.map(c => ({
         name: c.name,
         role: (c.roles ?? ['filler'])[0],
-        edhrec_inclusion_pct: Math.round((c.edhrecInclusion ?? 0) * 100),
+        edhrec_inclusion_pct:    c.edhrecInclusion    != null ? Math.round(c.edhrecInclusion    * 100) : null,
+        moxfield_top_decks_pct:  c.moxfieldFrequency  != null ? Math.round(c.moxfieldFrequency  * 100) : null,
+        sources: c.sources ?? null,
       })),
       note: 'These cards are LOCKED into the final deck. DO NOT include them in your output — they are added automatically. Build around them.',
     }
@@ -504,7 +506,9 @@ If forced to choose:
       cards: skeletonStrong.slice(0, 30).map(c => ({
         name: c.name,
         role: (c.roles ?? ['filler'])[0],
-        edhrec_inclusion_pct: Math.round((c.edhrecInclusion ?? 0) * 100),
+        edhrec_inclusion_pct:    c.edhrecInclusion    != null ? Math.round(c.edhrecInclusion    * 100) : null,
+        moxfield_top_decks_pct:  c.moxfieldFrequency  != null ? Math.round(c.moxfieldFrequency  * 100) : null,
+        sources: c.sources ?? null,
       })),
     }
   }
@@ -553,7 +557,7 @@ export function buildPass1Prompt({
   const skeleton          = strategyContext.skeleton ?? []
 
   const skeletonClause1 = (skeleton.length > 0)
-    ? `\n\nDECK SKELETON ALREADY LOCKED (${skeleton.length} cards): The system has pre-locked ${skeleton.length} cards from EDHREC inclusion data — these are real meta picks for this commander that will appear in the final deck regardless of your output. Use this as context when choosing your strategy and core engine. Your coreEngine list should COMPLEMENT the skeleton (don't re-list cards already locked) — pick the strategic anchors that the skeleton doesn't cover.`
+    ? `\n\nDECK SKELETON ALREADY LOCKED (${skeleton.length} cards): The system has pre-locked ${skeleton.length} cards from EDHREC inclusion data + Moxfield top-deck consensus — these are real meta picks for this commander that will appear in the final deck regardless of your output. Use this as context when choosing your strategy and core engine. Your coreEngine list should COMPLEMENT the skeleton (don't re-list cards already locked) — pick the strategic anchors that the skeleton doesn't cover.`
     : ''
 
   const system = `You are an expert Magic: The Gathering Commander deck builder.
@@ -712,7 +716,9 @@ FINAL RULES:
       cards: skeleton.map(c => ({
         name: c.name,
         role: (c.roles ?? ['filler'])[0],
-        edhrec_inclusion_pct: Math.round((c.edhrecInclusion ?? 0) * 100),
+        edhrec_inclusion_pct:    c.edhrecInclusion    != null ? Math.round(c.edhrecInclusion    * 100) : null,
+        moxfield_top_decks_pct:  c.moxfieldFrequency  != null ? Math.round(c.moxfieldFrequency  * 100) : null,
+        sources: c.sources ?? null,
       })),
       note: 'These cards are LOCKED into the final deck. Build your strategy and core engine around them.',
     }
@@ -755,7 +761,7 @@ export function buildPass2Prompt({
     : ''
 
   const skeletonClause = (skeletonStats?.size > 0)
-    ? `\n\nSKELETON LOCKED (${skeletonStats.size} cards): A deck skeleton has been pre-built from EDHREC inclusion data — cards in 40%+ of real decks for this commander. They are LOCKED into the final deck. You MUST NOT include any of these in your output (they're added automatically). Your job is to pick the remaining ${llmSlots} cards. The skeleton already covers: ${formatRoleCounts(skeletonStats.roleCounts)}. Adjust your role targets — you only need to fill the gaps.`
+    ? `\n\nSKELETON LOCKED (${skeletonStats.size} cards): A deck skeleton has been pre-built from EDHREC inclusion data + Moxfield top-deck consensus. These are real, vetted meta picks for this commander. They are LOCKED into the final deck. You MUST NOT include any of these in your output (they're added automatically). Your job is to pick the remaining ${llmSlots} cards. The skeleton already covers: ${formatRoleCounts(skeletonStats.roleCounts)}. Adjust your role targets — you only need to fill the gaps.`
     : ''
 
   const system = `You are an expert Magic: The Gathering Commander deck builder.
@@ -976,7 +982,9 @@ If below 70 → keep cutting / replacing until it passes. Report the post-cut de
       cards: skeleton.map(c => ({
         name: c.name,
         role: (c.roles ?? ['filler'])[0],
-        edhrec_inclusion_pct: Math.round((c.edhrecInclusion ?? 0) * 100),
+        edhrec_inclusion_pct:    c.edhrecInclusion    != null ? Math.round(c.edhrecInclusion    * 100) : null,
+        moxfield_top_decks_pct:  c.moxfieldFrequency  != null ? Math.round(c.moxfieldFrequency  * 100) : null,
+        sources: c.sources ?? null,
       })),
       note: 'These cards are LOCKED into the final deck. DO NOT include them in your output — they are added automatically.',
     }
@@ -988,7 +996,9 @@ If below 70 → keep cutting / replacing until it passes. Report the post-cut de
       cards: skeletonStrong.slice(0, 30).map(c => ({
         name: c.name,
         role: (c.roles ?? ['filler'])[0],
-        edhrec_inclusion_pct: Math.round((c.edhrecInclusion ?? 0) * 100),
+        edhrec_inclusion_pct:    c.edhrecInclusion    != null ? Math.round(c.edhrecInclusion    * 100) : null,
+        moxfield_top_decks_pct:  c.moxfieldFrequency  != null ? Math.round(c.moxfieldFrequency  * 100) : null,
+        sources: c.sources ?? null,
       })),
     }
   }

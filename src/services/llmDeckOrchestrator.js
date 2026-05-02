@@ -30,8 +30,9 @@ import { cardMatchesArchetype } from '../rules/archetypeRules'
 import { generateDeckWithLLM } from './llmDeckService'
 import { validateLLMDeckResponse } from '../rules/llmDeckValidator'
 import { solveManaBase } from '../rules/manaBaseSolver'
-import { buildSkeleton, skeletonRoleCounts } from '../rules/deckSkeleton'
+import { buildSkeleton, buildSkeletonFromMoxfield, mergeSkeletons, skeletonRoleCounts } from '../rules/deckSkeleton'
 import { fetchEdhrecCommander } from '../utils/edhrecApi'
+import { fetchMoxfieldConsensus } from '../utils/moxfieldApi'
 
 // Adaptive cap on the pool sent to the LLM. Two layers:
 //   1. Below the threshold (≤ 500 cards): send EVERYTHING — small collections
@@ -115,24 +116,34 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   for (const e of manaBaseSolution.explanation) explanation.push(e)
   const lockedLands = manaBaseSolution.lands       // 37-ish Card objects (basics + non-basics)
 
-  // 4c. Build the skeleton from EDHREC inclusion data. Cards in ≥40% of real
-  // decks for this commander get LOCKED into the deck before the LLM sees
-  // anything. This grounds the deck in actual meta picks instead of relying
-  // on the LLM to predict what's good. Best-effort fetch — if EDHREC is
-  // unreachable we degrade to no-skeleton (LLM picks normally).
-  let edhrecData = { topCards: [], themes: [] }
-  try {
-    edhrecData = await fetchEdhrecCommander(commander)
-    if (edhrecData.topCards.length > 0) {
-      explanation.push(`Loaded ${edhrecData.topCards.length} EDHREC top cards for ${commander.name}.`)
-    }
-  } catch {
-    // edhrecApi already logs; degrade silently
+  // 4c. Build the skeleton. Two data sources:
+  //   - EDHREC inclusion: cards in ≥40% of all decks for this commander.
+  //     Bracket-agnostic but high signal for "real meta picks."
+  //   - Moxfield consensus: cards appearing in ≥4 of the top 10 most-viewed
+  //     decks. Bracket-relevant — top-viewed decks tend to cluster in the
+  //     upper-middle range.
+  // Both fetched in parallel (best-effort). Merged: cards in BOTH sources get
+  // priority and a confidence boost. If both unreachable, skeleton is empty
+  // and LLM picks normally.
+  const [edhrecData, moxfieldData] = await Promise.all([
+    fetchEdhrecCommander(commander).catch(() => ({ topCards: [], themes: [] })),
+    fetchMoxfieldConsensus(commander).catch(() => ({ decksAnalyzed: 0, totalDecksFound: 0, cards: [] })),
+  ])
+  if (edhrecData.topCards.length > 0) {
+    explanation.push(`Loaded ${edhrecData.topCards.length} EDHREC top cards for ${commander.name}.`)
   }
-  const skeleton = buildSkeleton({
+  if (moxfieldData.decksAnalyzed > 0) {
+    explanation.push(`Analyzed ${moxfieldData.decksAnalyzed} top Moxfield decks for ${commander.name}.`)
+  }
+  const edhrecSkeleton = buildSkeleton({
     edhrecTopCards: edhrecData.topCards,
     legalCardPool: legalNonLands,
   })
+  const moxfieldSkeleton = buildSkeletonFromMoxfield({
+    moxfieldCards: moxfieldData.cards,
+    legalCardPool: legalNonLands,
+  })
+  const skeleton = mergeSkeletons(edhrecSkeleton, moxfieldSkeleton)
   for (const e of skeleton.explanation) explanation.push(e)
 
   // Names already locked by skeleton — strip from the LLM pool so the LLM

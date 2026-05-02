@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildSkeleton, skeletonRoleCounts } from './deckSkeleton'
+import { buildSkeleton, buildSkeletonFromMoxfield, mergeSkeletons, skeletonRoleCounts } from './deckSkeleton'
 
 const card = (name, roles = ['filler'], extra = {}) => ({
   name,
@@ -157,6 +157,108 @@ describe('buildSkeleton — size cap', () => {
     }
     const result = buildSkeleton({ edhrecTopCards: tops, legalCardPool: pool })
     expect(result.staples.length).toBeLessThanOrEqual(35)
+  })
+})
+
+describe('buildSkeletonFromMoxfield', () => {
+  const mox = (name, frequency, decks = null) => ({ name, frequency, decks: decks ?? Math.round(frequency * 10) })
+
+  it('returns empty when no Moxfield data', () => {
+    const result = buildSkeletonFromMoxfield({ moxfieldCards: [], legalCardPool: [card('A')] })
+    expect(result.staples).toEqual([])
+    expect(result.stats.source).toBe('moxfield')
+  })
+
+  it('locks cards with frequency ≥ 40% as staples', () => {
+    const result = buildSkeletonFromMoxfield({
+      moxfieldCards: [
+        mox('Sol Ring', 1.0),       // 10 of 10 decks
+        mox('Cultivate', 0.5),      // 5 of 10
+        mox('Mind Stone', 0.4),     // 4 of 10
+        mox('Lightning Bolt', 0.2), // 2 of 10
+      ],
+      legalCardPool: [
+        card('Sol Ring', ['ramp']),
+        card('Cultivate', ['ramp']),
+        card('Mind Stone', ['ramp']),
+        card('Lightning Bolt', ['removal']),
+      ],
+    })
+    const stapleNames = result.staples.map(c => c.name).sort()
+    expect(stapleNames).toEqual(['Cultivate', 'Mind Stone', 'Sol Ring'])
+    expect(result.strong.map(c => c.name)).toEqual(['Lightning Bolt'])
+  })
+
+  it('attaches moxfieldFrequency to skeleton cards', () => {
+    const result = buildSkeletonFromMoxfield({
+      moxfieldCards: [mox('Sol Ring', 1.0, 10)],
+      legalCardPool: [card('Sol Ring', ['ramp'])],
+    })
+    expect(result.staples[0].moxfieldFrequency).toBe(1.0)
+    expect(result.staples[0].moxfieldDecks).toBe(10)
+  })
+
+  it('strips lands by default', () => {
+    const result = buildSkeletonFromMoxfield({
+      moxfieldCards: [mox('Steam Vents', 0.9)],
+      legalCardPool: [card('Steam Vents', ['land'], { type_line: 'Land' })],
+    })
+    expect(result.staples).toEqual([])
+  })
+})
+
+describe('mergeSkeletons', () => {
+  const edhrecCard = (name, inclusion) => ({ name, edhrecInclusion: inclusion, roles: ['ramp'] })
+  const moxCard    = (name, frequency) => ({ name, moxfieldFrequency: frequency, roles: ['ramp'] })
+
+  it('unions staples from both sources', () => {
+    const merged = mergeSkeletons(
+      { staples: [edhrecCard('A', 0.9)], strong: [] },
+      { staples: [moxCard('B', 0.8)], strong: [] },
+    )
+    expect(merged.staples.map(c => c.name).sort()).toEqual(['A', 'B'])
+  })
+
+  it('marks cards present in both sources with sources=[edhrec, moxfield]', () => {
+    const merged = mergeSkeletons(
+      { staples: [edhrecCard('Sol Ring', 0.95)], strong: [] },
+      { staples: [moxCard('Sol Ring', 1.0)], strong: [] },
+    )
+    expect(merged.staples).toHaveLength(1)
+    expect(merged.staples[0].sources).toEqual(['edhrec', 'moxfield'])
+    expect(merged.staples[0].edhrecInclusion).toBe(0.95)
+    expect(merged.staples[0].moxfieldFrequency).toBe(1.0)
+  })
+
+  it('reports bothSourceCount in stats', () => {
+    const merged = mergeSkeletons(
+      { staples: [edhrecCard('A', 0.9), edhrecCard('B', 0.7)], strong: [] },
+      { staples: [moxCard('A', 0.8), moxCard('C', 0.6)], strong: [] },
+    )
+    expect(merged.stats.bothSourceCount).toBe(1)   // only A is in both
+    expect(merged.stats.source).toBe('merged')
+  })
+
+  it('sorts both-source cards before single-source cards', () => {
+    const merged = mergeSkeletons(
+      { staples: [edhrecCard('Single', 0.99)], strong: [] },
+      { staples: [moxCard('Both', 0.8), moxCard('Single', 0.5)] /* Single now in both */, strong: [] },
+    )
+    // Both was 80% Mox, Single is now in both. Both should sort before any single-source pick.
+    // Actually Single is in BOTH after merge since edhrec also has it.
+    // So: Single (both, 99% edhrec) then Both (single-mox).
+    expect(merged.staples[0].name).toBe('Single')
+    expect(merged.staples[0].sources).toContain('edhrec')
+    expect(merged.staples[0].sources).toContain('moxfield')
+  })
+
+  it('does not double-list a card that is staple in one source AND strong in another', () => {
+    const merged = mergeSkeletons(
+      { staples: [edhrecCard('Sol Ring', 0.95)], strong: [] },
+      { staples: [], strong: [moxCard('Sol Ring', 0.3)] },
+    )
+    expect(merged.staples).toHaveLength(1)
+    expect(merged.strong).toHaveLength(0)
   })
 })
 
