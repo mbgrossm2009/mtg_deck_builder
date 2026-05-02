@@ -1099,6 +1099,87 @@ Return ONLY JSON. No markdown.`
   return { system, user }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// EVALUATION (separate from CRITIQUE)
+// ─────────────────────────────────────────────────────────────────────────────
+// Critique tries to FIX a deck (proposes swaps). Evaluation just SCORES it
+// and reports strengths/weaknesses. Used by the eval harness to grade
+// many generations across many commanders without trying to mutate them.
+
+export function buildEvaluationPrompt({ commander, bracket, deck }) {
+  const bracketLabel   = BRACKET_LABELS[bracket] ?? 'Unknown'
+  const bracketMeaning = BRACKET_DESCRIPTIONS[bracket] ?? ''
+
+  const system = `You are an expert Magic: The Gathering Commander deck evaluator.
+
+A 99-card deck has been built for the commander below at the target bracket.
+Your job: SCORE the deck and identify its strengths and weaknesses. You are
+NOT proposing swaps — only judging.
+
+EVALUATION RUBRIC:
+
+  Score 9-10 (excellent):
+    - Deck is a strong representative of its target bracket
+    - Mana base is appropriate (premium fixing for high brackets, basic-leaning for low)
+    - Card quality matches the bracket (cEDH staples at B5; precon-tier at B2)
+    - Strong commander synergy — most non-staple slots advance the strategy
+    - Clear, executable win plan
+
+  Score 7-8 (good):
+    - Most of the above, but with 2-3 weak picks or a thin spot
+    - Mana base or removal package slightly off-pace for the bracket
+
+  Score 5-6 (mediocre):
+    - Functional but feels like the wrong bracket (B5 deck plays like B3, etc.)
+    - Generic synergy, lots of filler
+    - Win plan vague or slow
+
+  Score 3-4 (poor):
+    - Lots of off-strategy picks
+    - Mana base actively hurts (slow, color-screwed)
+    - No clear win plan
+
+  Score 1-2 (broken):
+    - Deck doesn't function — random pile of cards
+
+OUTPUT FORMAT (JSON only — no markdown):
+
+{
+  "score": <integer 1-10>,
+  "summary": "<1-2 sentence overall judgment>",
+  "strengths": [
+    "<concrete observation about a strong aspect — e.g., 'mana base is well-tuned for B5 with 10 fast mana sources and untapped fixing'>"
+  ],
+  "weaknesses": [
+    "<concrete observation about a weakness — e.g., 'only 2 tutors in a B5 deck — should be 8-12'>"
+  ],
+  "bracketFitNotes": "<does this deck actually feel like ${bracketLabel}? what's off?>"
+}
+
+Aim for 3 strengths and 3 weaknesses. If the deck genuinely has fewer of
+either, fewer is fine — don't pad.
+
+Be concrete. "The deck is good" is useless. "This deck has Cyclonic Rift,
+Force of Will, and Mana Drain — strong B5 interaction package" is useful.
+
+Return ONLY JSON.`
+
+  const user = {
+    commander: compactCommander(commander),
+    bracket: { number: bracket, label: bracketLabel, meaning: bracketMeaning },
+    deck_size: deck.length,
+    deck: deck.map(c => ({
+      name: c.name,
+      role: (c.roles ?? ['filler'])[0],
+      cmc:  c.cmc ?? 0,
+      type_line: c.type_line ?? '',
+      source: c.fromManaSolver ? 'mana-solver' : c.fromSkeleton ? 'skeleton' : c.fromBracketStaples ? 'bracket-staples' : c.fromTribalFloor ? 'tribal-floor' : 'llm-pick',
+    })),
+  }
+
+  return { system, user }
+}
+
 // Coarse token estimate (chars / 4). Useful for deciding whether the pool
 // needs trimming before we ship the prompt to a real model with a context cap.
 export function estimatePromptTokens({ system, user }) {

@@ -24,6 +24,7 @@ import {
   buildPass1Prompt,
   buildPass2Prompt,
   buildCritiquePrompt,
+  buildEvaluationPrompt,
   estimatePromptTokens,
 } from './llmPromptBuilder'
 
@@ -158,6 +159,40 @@ export async function critiqueDeck({
   } catch (err) {
     // Critique is best-effort. If it fails, ship the deck as-is.
     console.warn('[critique] pass failed, shipping deck without critique:', err?.message ?? err)
+    return null
+  }
+}
+
+/**
+ * evaluateDeck — judge a finished deck. SEPARATE from critiqueDeck.
+ *
+ * Critique tries to FIX (proposes swaps). Evaluation just SCORES.
+ * Used by the eval harness to grade many decks across many commanders.
+ *
+ * Returns: { score, summary, strengths[], weaknesses[], bracketFitNotes }
+ * Returns null if the LLM is disabled or the call fails — callers should
+ * treat null as "evaluation unavailable" not "deck is bad".
+ */
+export async function evaluateDeck({ commander, bracket, deck, onProgress }) {
+  if (currentMode === LLM_MODE.DISABLED) return null
+  if (currentMode === LLM_MODE.MOCK) {
+    return {
+      score: 7,
+      summary: 'Mock evaluation — pass disabled in mock mode.',
+      strengths: ['Mock mode is deterministic for tests.'],
+      weaknesses: ['No real judgment available.'],
+      bracketFitNotes: 'Mock — bypassed real LLM.',
+      _meta: { mode: 'mock' },
+    }
+  }
+
+  onProgress?.({ stage: 'evaluate' })
+  const prompt = buildEvaluationPrompt({ commander, bracket, deck })
+  try {
+    const out = await callBackend(prompt)
+    return { ...out, _meta: { promptTokens: estimatePromptTokens(prompt) } }
+  } catch (err) {
+    console.warn('[evaluate] pass failed:', err?.message ?? err)
     return null
   }
 }
