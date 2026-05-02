@@ -36,61 +36,53 @@ describe('buildSkeleton — empty inputs', () => {
   })
 })
 
-describe('buildSkeleton — inclusion thresholds', () => {
-  it('locks cards with inclusion ≥ 40% as staples', () => {
-    const result = buildSkeleton({
-      edhrecTopCards: [
-        top('Sol Ring', 0.95),
-        top('Cultivate', 0.55),
-        top('Arcane Signet', 0.40),
-      ],
-      legalCardPool: [
-        card('Sol Ring', ['ramp']),
-        card('Cultivate', ['ramp']),
-        card('Arcane Signet', ['ramp']),
-      ],
-    })
-    expect(result.staples.map(c => c.name).sort()).toEqual(['Arcane Signet', 'Cultivate', 'Sol Ring'])
+describe('buildSkeleton — top-N by EDHREC rank', () => {
+  it('locks the top 30 EDHREC cards available in collection as staples', () => {
+    // 35 ranked cards in collection — only top 30 should be staples, next 5 strong
+    const tops = []
+    const pool = []
+    for (let i = 0; i < 35; i++) {
+      tops.push(top(`Card ${i}`, 0.5))
+      pool.push(card(`Card ${i}`, ['filler']))
+    }
+    const result = buildSkeleton({ edhrecTopCards: tops, legalCardPool: pool })
+    expect(result.staples).toHaveLength(30)
+    expect(result.strong).toHaveLength(5)
+    // Top staples should be the highest-ranked cards
+    expect(result.staples[0].name).toBe('Card 0')
+    expect(result.staples[29].name).toBe('Card 29')
   })
 
-  it('routes 20-40% inclusion to "strong" not "staples"', () => {
+  it('does NOT gate by inclusion % — top-ranked cards lock even if inclusion is low', () => {
+    // Lathliss-like scenario: card is real EDHREC top pick but inclusion is "only" 35%
     const result = buildSkeleton({
       edhrecTopCards: [
-        top('Sol Ring', 0.95),       // staple
-        top('Mind Stone', 0.30),     // strong
-        top('Wayfarer\'s Bauble', 0.15),  // niche — neither
+        top('Lathliss, Dragon Queen', 0.35),
+        top('Dragon Tempest', 0.38),
       ],
       legalCardPool: [
-        card('Sol Ring', ['ramp']),
-        card('Mind Stone', ['ramp']),
-        card('Wayfarer\'s Bauble', ['ramp']),
+        card('Lathliss, Dragon Queen', ['synergy']),
+        card('Dragon Tempest', ['synergy']),
       ],
     })
-    expect(result.staples.map(c => c.name)).toEqual(['Sol Ring'])
-    expect(result.strong.map(c => c.name)).toEqual(['Mind Stone'])
+    expect(result.staples.map(c => c.name).sort()).toEqual(['Dragon Tempest', 'Lathliss, Dragon Queen'])
   })
 
-  it('handles inclusion as 0-100 percentage too (defensive)', () => {
+  it('still locks cards even when inclusion field is missing', () => {
+    // EDHREC sometimes omits inclusion; we should still lock by rank.
     const result = buildSkeleton({
-      edhrecTopCards: [
-        top('Sol Ring', 95),       // 0-100 form → 95% → staple
-        top('Mind Stone', 30),     // 30% → strong
-      ],
-      legalCardPool: [
-        card('Sol Ring', ['ramp']),
-        card('Mind Stone', ['ramp']),
-      ],
-    })
-    expect(result.staples.map(c => c.name)).toEqual(['Sol Ring'])
-    expect(result.strong.map(c => c.name)).toEqual(['Mind Stone'])
-  })
-
-  it('skips cards with no inclusion signal', () => {
-    const result = buildSkeleton({
-      edhrecTopCards: [{ name: 'Sol Ring', inclusion: null }],
+      edhrecTopCards: [{ name: 'Sol Ring', inclusion: null, num_decks: 5000 }],
       legalCardPool: [card('Sol Ring', ['ramp'])],
     })
-    expect(result.staples).toEqual([])
+    expect(result.staples.map(c => c.name)).toEqual(['Sol Ring'])
+  })
+
+  it('still attaches inclusion% to skeleton cards when EDHREC provides it', () => {
+    const result = buildSkeleton({
+      edhrecTopCards: [top('Sol Ring', 0.95)],
+      legalCardPool: [card('Sol Ring', ['ramp'])],
+    })
+    expect(result.staples[0].edhrecInclusion).toBe(0.95)
   })
 })
 

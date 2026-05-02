@@ -18,17 +18,19 @@
 
 import { isLand } from '../utils/cardHelpers'
 
-// Thresholds for splitting EDHREC inclusion into tiers. A card included in
-// ≥40% of real decks for this commander is a STAPLE — non-negotiable. A card
-// in 20-40% is a STRONG recommendation but not locked. Below 20% is "niche"
-// and we let the LLM pick from the remaining pool.
-const STAPLE_THRESHOLD = 0.40
-const STRONG_THRESHOLD = 0.20
-
-// Cap the locked skeleton size so the LLM still has meaningful agency over
-// the deck. Above this we'd be telling the LLM "here's 70 locked cards, pick
-// 8 more" — at which point the LLM contributes nothing.
-const MAX_SKELETON_SIZE = 35
+// Skeleton sizing — lock the top N EDHREC cards by RANK rather than
+// thresholding on inclusion %. Reasons:
+//   1. EDHREC's `inclusion` field isn't always populated — gating on it
+//      caused real staples (Lathliss, Dragon Tempest) to slip through
+//      when their inclusion wasn't reported.
+//   2. Rank IS the empirical signal. EDHREC ranks cards by how often
+//      they're played in real decks. Top 30 = real staples by definition.
+//   3. Top-N is robust across commanders. A focused commander has high
+//      inclusion %s; a sprawling 5c commander has dispersed %s. Rank
+//      adapts; threshold doesn't.
+const TARGET_STAPLE_COUNT = 30   // lock the top 30 ranked cards available
+const TARGET_STRONG_COUNT = 50   // surface the next 50 as "strong" recommendations
+const MAX_SKELETON_SIZE   = 35   // hard cap (TARGET + slack)
 
 export function buildSkeleton({
   edhrecTopCards = [],
@@ -64,28 +66,27 @@ export function buildSkeleton({
     if (!card) continue                          // not in user's legal pool
     if (stripLands && isLand(card)) continue     // mana base solver owns lands
 
-    const inclusion = normalizeInclusion(top.inclusion)
-    if (inclusion == null) continue              // EDHREC didn't give us a signal — skip
-
     const annotated = {
       ...card,
-      edhrecInclusion: inclusion,
+      edhrecInclusion: normalizeInclusion(top.inclusion),
       edhrecRank: rank + 1,
       edhrecSynergy: top.synergy ?? null,
     }
 
-    if (inclusion >= STAPLE_THRESHOLD && staples.length < MAX_SKELETON_SIZE) {
+    if (staples.length < TARGET_STAPLE_COUNT) {
       staples.push(annotated)
-    } else if (inclusion >= STRONG_THRESHOLD) {
+    } else if (staples.length + strong.length < TARGET_STAPLE_COUNT + TARGET_STRONG_COUNT) {
       strong.push(annotated)
+    } else {
+      break
     }
   }
 
   const explanation = [
-    `Skeleton: ${staples.length} EDHREC staples locked (≥${Math.round(STAPLE_THRESHOLD * 100)}% inclusion in real decks for this commander).`,
+    `Skeleton: ${staples.length} EDHREC top-ranked cards locked (top ${TARGET_STAPLE_COUNT} most-played for this commander, available in your collection).`,
   ]
   if (strong.length > 0) {
-    explanation.push(`+ ${strong.length} strong recommendations (${Math.round(STRONG_THRESHOLD * 100)}-${Math.round(STAPLE_THRESHOLD * 100)}% inclusion) surfaced to LLM.`)
+    explanation.push(`+ ${strong.length} additional EDHREC picks surfaced to LLM as strong recommendations.`)
   }
 
   return {

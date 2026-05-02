@@ -45,25 +45,30 @@ function targetSourcesPerColor(commanderColors) {
 }
 
 // Min number of non-basic lands we want to keep to allow utility/wildcards.
-// Below the LLM_POOL threshold the user's collection is small and we should
-// use more of it; above we can be picky.
-function targetNonBasicCount(bracket, totalLandCount) {
-  // B1: ≤ 6 non-basics (mostly basics, simple fixing)
-  // B2: ≤ 10
-  // B3: ~ 18
-  // B4: ~ 24
-  // B5: ~ 30  (cEDH lists run very few basics)
-  const map = { 1: 6, 2: 10, 3: 18, 4: 24, 5: 30 }
-  return Math.min(map[bracket] ?? 18, totalLandCount - 4)  // always keep ≥4 basics
+// Scales with color count — 4-5 color decks NEED many multi-color lands or
+// they end up drawing the wrong colors.
+function targetNonBasicCount(bracket, totalLandCount, colorCount) {
+  // Base by bracket, then bumped for high color counts.
+  const baseMap = { 1: 6, 2: 10, 3: 18, 4: 24, 5: 30 }
+  const base = baseMap[bracket] ?? 18
+  // 4-color: +4. 5-color: +8. Keeps a 5c B3 deck around 26 non-basics, which
+  // is enough multi-color fixing to actually reach color floors.
+  const colorBump = colorCount >= 5 ? 8 : colorCount === 4 ? 4 : 0
+  return Math.min(base + colorBump, totalLandCount - 4)
 }
 
 // Should this tier's lands be considered at this bracket? At low brackets we
 // don't reach for fast lands or premium fixing because the deck doesn't need
 // the speed AND the user usually doesn't own them anyway.
-function shouldUseTier(tier, bracket) {
-  if (bracket >= 3) return tier !== 'weak'                       // B3+ avoid weak entirely
-  if (bracket === 2) return tier === 'good' || tier === 'mid'    // B2 prefers honest mid-tier fixing
-  return tier === 'mid'                                           // B1 sticks to safe utility lands
+//
+// 5-color decks ALWAYS allow weak-tier multi-color fixing — a guildgate
+// fixing 2 colors is strictly better than a basic at fixing color demand.
+function shouldUseTier(tier, bracket, colorCount = 2) {
+  if (colorCount >= 5) return true                                // 5c desperately needs fixing — accept weak tier
+  if (colorCount === 4 && tier === 'weak') return bracket <= 4    // 4c at low/mid brackets accepts weak tier
+  if (bracket >= 3) return tier !== 'weak'                        // B3+ avoid weak entirely (in 1-3 color)
+  if (bracket === 2) return tier === 'good' || tier === 'mid'
+  return tier === 'mid'
 }
 
 export function solveManaBase({ commander, legalLands, targetLandCount = 37, bracket = 3 }) {
@@ -94,14 +99,14 @@ export function solveManaBase({ commander, legalLands, targetLandCount = 37, bra
   }
 
   // Greedy fill: walk tier order, picking lands that reduce the largest
-  // remaining color deficit. Cap non-basic count by bracket.
+  // remaining color deficit. Cap non-basic count by bracket and color count.
   const picked = []
   const pickedNames = new Set()
-  const nonBasicCap = targetNonBasicCount(bracket, targetLandCount)
+  const nonBasicCap = targetNonBasicCount(bracket, targetLandCount, colorIdentity.length)
   const sourcesPerColor = Object.fromEntries(colorIdentity.map(c => [c, 0]))
 
   for (const tier of ['premium', 'good', 'mid', 'weak']) {
-    if (!shouldUseTier(tier, bracket)) continue
+    if (!shouldUseTier(tier, bracket, colorIdentity.length)) continue
 
     const tierLands = byTier[tier].filter(c => !pickedNames.has(c.name))
     while (tierLands.length > 0 && picked.length < nonBasicCap && picked.length < targetLandCount) {
@@ -144,6 +149,38 @@ export function solveManaBase({ commander, legalLands, targetLandCount = 37, bra
     }
 
     if (picked.length >= nonBasicCap || picked.length >= targetLandCount) break
+  }
+
+  // Fallback pass: only for 4-5 color decks. A guildgate in 2-3 color is
+  // strictly worse than a basic (basics ETB untapped); but a guildgate in
+  // 4-5 color is genuinely useful because color demand can't be met from
+  // basics alone. Triggers when we're well below cap AND deficit is high.
+  const totalDeficit = colorIdentity.reduce((s, c) => s + Math.max(0, need[c] - sourcesPerColor[c]), 0)
+  if (colorIdentity.length >= 4 && totalDeficit > colorIdentity.length * 2 && picked.length < nonBasicCap / 2) {
+    const weakLands = byTier.weak.filter(c => !pickedNames.has(c.name))
+    while (weakLands.length > 0 && picked.length < nonBasicCap && picked.length < targetLandCount) {
+      const deficits = colorIdentity
+        .map(c => ({ c, deficit: Math.max(0, need[c] - sourcesPerColor[c]) }))
+        .sort((a, b) => b.deficit - a.deficit)
+      const worstColor = deficits[0]
+      if (worstColor.deficit === 0) break
+
+      let bestIdx = -1, bestScore = -Infinity
+      for (let i = 0; i < weakLands.length; i++) {
+        const colors = landColorsProduced(weakLands[i])
+        if (!colors.has(worstColor.c)) continue
+        // Score = how many DEFICIENT colors this land contributes to
+        const score = [...colors].filter(c => colorIdentity.includes(c) && need[c] > sourcesPerColor[c]).length
+        if (score > bestScore) { bestScore = score; bestIdx = i }
+      }
+      if (bestIdx === -1) break
+
+      const chosen = weakLands.splice(bestIdx, 1)[0]
+      picked.push(chosen)
+      pickedNames.add(chosen.name)
+      const colors = landColorsProduced(chosen)
+      for (const c of colorIdentity) if (colors.has(c)) sourcesPerColor[c]++
+    }
   }
 
   // Fill remainder with basics. Distribute proportional to remaining deficit

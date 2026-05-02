@@ -291,6 +291,68 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     }
   }
 
+  // 10b. Wincon backstop — every deck needs at least 2 win conditions. If
+  // skeleton + LLM picks + heuristic fill all under-delivered, force-add the
+  // best available wincons from the legal pool, kicking out the lowest-priority
+  // non-skeleton/non-mana-base picks to make room.
+  const MIN_WINCONS = 2
+  const isWincon = (c) => (c.roles ?? []).includes('win_condition') ||
+                          (c.tags ?? []).includes('explosive_finisher')
+  const winconCount = deck.filter(isWincon).length
+  if (winconCount < MIN_WINCONS) {
+    const winconCandidates = legalNonLands
+      .filter(c => isWincon(c) && !usedNames.has(c.name.toLowerCase()))
+      // Prefer cards in the strong-recommendations list, then by EDHREC rank
+      .sort((a, b) => {
+        const aStrong = skeleton.strong.some(s => s.name === a.name) ? 1 : 0
+        const bStrong = skeleton.strong.some(s => s.name === b.name) ? 1 : 0
+        if (aStrong !== bStrong) return bStrong - aStrong
+        return (a.edhrecRank ?? 9999) - (b.edhrecRank ?? 9999)
+      })
+
+    let addedWincons = 0
+    for (const wc of winconCandidates) {
+      if (winconCount + addedWincons >= MIN_WINCONS) break
+      // Find a swappable slot: not skeleton, not mana base, and not already a wincon.
+      // Pick from the END of the deck (lowest-priority heuristic fill first).
+      let swapIdx = -1
+      for (let i = deck.length - 1; i >= 0; i--) {
+        const c = deck[i]
+        if (c.fromManaSolver) continue
+        if (c.fromSkeleton) continue
+        if (isWincon(c)) continue
+        swapIdx = i
+        break
+      }
+      if (swapIdx === -1) {
+        // No room to swap — append if we're under 99. Shouldn't happen often.
+        if (deck.length < 99) {
+          deck.push({ ...wc, quantity: 1, fromWinconBackstop: true })
+          usedNames.add(wc.name.toLowerCase())
+          addedWincons++
+        }
+        continue
+      }
+      const removed = deck[swapIdx]
+      usedNames.delete(removed.name.toLowerCase())
+      deck[swapIdx] = { ...wc, quantity: 1, fromWinconBackstop: true }
+      usedNames.add(wc.name.toLowerCase())
+      addedWincons++
+    }
+    if (addedWincons > 0) {
+      explanation.push(`Wincon backstop: forced ${addedWincons} win condition${addedWincons === 1 ? '' : 's'} into the deck (had only ${winconCount} after LLM/heuristic).`)
+      warnings.push({
+        severity: 'info',
+        message: `Added ${addedWincons} win condition${addedWincons === 1 ? '' : 's'} so the deck has a clear way to close games.`,
+      })
+    } else if (winconCandidates.length === 0) {
+      warnings.push({
+        severity: 'warning',
+        message: `Your collection has no clear win conditions for this commander — deck may struggle to close games. Consider adding a Craterhoof Behemoth, Triumph of the Hordes, or similar finisher.`,
+      })
+    }
+  }
+
   // 11. Hard backstop — if we still don't have 99, pad with basics so the
   // deck is at least well-formed for the validator. This shouldn't trigger
   // in practice unless the collection is tiny.
