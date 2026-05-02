@@ -403,6 +403,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
         const c = deck[i]
         if (c.fromManaSolver) continue
         if (c.fromSkeleton) continue
+        if (c.fromBracketStaples) continue   // bracket staples are locked; never swap them
         if (isWincon(c)) continue
         swapIdx = i
         break
