@@ -30,6 +30,8 @@ import { cardMatchesArchetype } from '../rules/archetypeRules'
 import { generateDeckWithLLM } from './llmDeckService'
 import { validateLLMDeckResponse } from '../rules/llmDeckValidator'
 import { solveManaBase } from '../rules/manaBaseSolver'
+import { buildSkeleton, skeletonRoleCounts } from '../rules/deckSkeleton'
+import { fetchEdhrecCommander } from '../utils/edhrecApi'
 
 // Adaptive cap on the pool sent to the LLM. Two layers:
 //   1. Below the threshold (≤ 500 cards): send EVERYTHING — small collections
@@ -112,27 +114,61 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   })
   for (const e of manaBaseSolution.explanation) explanation.push(e)
   const lockedLands = manaBaseSolution.lands       // 37-ish Card objects (basics + non-basics)
+
+  // 4c. Build the skeleton from EDHREC inclusion data. Cards in ≥40% of real
+  // decks for this commander get LOCKED into the deck before the LLM sees
+  // anything. This grounds the deck in actual meta picks instead of relying
+  // on the LLM to predict what's good. Best-effort fetch — if EDHREC is
+  // unreachable we degrade to no-skeleton (LLM picks normally).
+  let edhrecData = { topCards: [], themes: [] }
+  try {
+    edhrecData = await fetchEdhrecCommander(commander)
+    if (edhrecData.topCards.length > 0) {
+      explanation.push(`Loaded ${edhrecData.topCards.length} EDHREC top cards for ${commander.name}.`)
+    }
+  } catch {
+    // edhrecApi already logs; degrade silently
+  }
+  const skeleton = buildSkeleton({
+    edhrecTopCards: edhrecData.topCards,
+    legalCardPool: legalNonLands,
+  })
+  for (const e of skeleton.explanation) explanation.push(e)
+
+  // Names already locked by skeleton — strip from the LLM pool so the LLM
+  // doesn't waste prompt budget on cards it isn't allowed to pick.
+  const skeletonNames = new Set(skeleton.staples.map(c => c.name.toLowerCase()))
+  const llmCandidatePool = legalNonLands.filter(c => !skeletonNames.has(c.name.toLowerCase()))
+
   const nonLandSlots = 99 - lockedLands.length
+  const llmSlots = nonLandSlots - skeleton.staples.length    // what the LLM still needs to pick
 
   // 5. Build deck-rule context for the prompt.
   const deckRules = {
     landTarget: lockedLands.length,
     nonLandSlots,
+    llmSlots,                                               // how many cards the LLM still picks
     targetCounts: targetRoleCounts(bracket, commander, archetypes),
     manaBaseStats: manaBaseSolution.stats,
+    skeletonStats: {
+      size: skeleton.staples.length,
+      roleCounts: skeletonRoleCounts(skeleton.staples),
+    },
   }
   const strategyContext = {
     archetypes,
     primaryArchetypeId: archetypes.some(a => a.id === primaryArchetypeId) ? primaryArchetypeId : null,
+    skeleton: skeleton.staples,
+    skeletonStrong: skeleton.strong,
   }
 
-  // 5b. Cap the NON-LAND pool sent to the LLM. Heuristic fallback receives
-  // the full pool. Lands are excluded — they're already locked by the solver
-  // and the LLM doesn't get to pick any.
-  const llmPool = capPoolForLLM(legalNonLands, commander, bracket, strategyContext)
-  if (llmPool.length < legalNonLands.length) {
+  // 5b. Cap the LLM-candidate pool (non-lands MINUS skeleton). Heuristic
+  // fallback receives the full pool. Lands and skeleton picks are excluded —
+  // both are already locked.
+  const llmPool = capPoolForLLM(llmCandidatePool, commander, bracket, strategyContext)
+  if (llmPool.length < llmCandidatePool.length) {
     explanation.push(
-      `Capped LLM pool to top ${llmPool.length} of ${legalNonLands.length} non-land candidates ` +
+      `Capped LLM pool to top ${llmPool.length} of ${llmCandidatePool.length} non-land/non-skeleton candidates ` +
       `(prevents prompt timeout / context-limit failures).`
     )
   }
@@ -183,7 +219,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     legalCardPool,
     collection: rawCollection,
     bracket,
-    expectedDeckSize: nonLandSlots,   // we only asked for non-land picks
+    expectedDeckSize: llmSlots,   // we only asked for the slots not covered by skeleton
   })
 
   for (const w of validation.warnings) {
@@ -193,17 +229,26 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     explanation.push(`Rejected "${c.name}" — ${c.rejectionReason}`)
   }
 
-  // 9. Build the deck. Mana base goes in first (locked by the solver), then
-  // the LLM's non-land picks. If the LLM tried to pick a land despite being
-  // told not to, skip it — the solver already owns the mana base.
+  // 9. Build the deck:
+  //   - Mana base (locked by solver)
+  //   - Skeleton (locked by EDHREC inclusion %)
+  //   - LLM picks (non-land, non-skeleton)
+  // If the LLM tried to pick a land or a skeleton card despite being told not
+  // to, skip it — those slots are already filled.
   const deck = lockedLands.map(l => ({ ...l, quantity: 1, fromManaSolver: true }))
   const usedNames = new Set([commander.name.toLowerCase()])
   for (const card of deck) {
     if (!card.isBasicLand) usedNames.add(card.name.toLowerCase())
   }
+  for (const card of skeleton.staples) {
+    if (deck.length >= 99) break
+    deck.push({ ...card, quantity: 1, fromSkeleton: true })
+    usedNames.add(card.name.toLowerCase())
+  }
   for (const v of validation.validCards) {
     if (deck.length >= 99) break
-    if (isLand(v.card)) continue   // solver owns lands; ignore stray LLM land picks
+    if (isLand(v.card)) continue                                   // solver owns lands
+    if (usedNames.has(v.card.name.toLowerCase())) continue          // already in skeleton
     deck.push({ ...v.card, quantity: 1, llmReason: v.reason, llmRole: v.role })
     usedNames.add(v.card.name.toLowerCase())
   }

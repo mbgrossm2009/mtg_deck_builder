@@ -94,7 +94,7 @@ export async function generateDeckWithLLM({
       // Returns the same shape as the single-pass response, so the validator
       // and orchestrator handle it identically.
       onProgress?.({ stage: 'pass2' })
-      const pass2Prompt = buildPass2Prompt({ commander, legalCardPool, bracket, deckRules, pass1Output })
+      const pass2Prompt = buildPass2Prompt({ commander, legalCardPool, bracket, deckRules, strategyContext, pass1Output })
       const pass2Tokens = estimatePromptTokens(pass2Prompt)
       const pass2Output = await callBackend(pass2Prompt)
 

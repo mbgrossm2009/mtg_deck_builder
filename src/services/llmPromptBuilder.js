@@ -53,6 +53,13 @@ function compactCard(card) {
   return out
 }
 
+// "ramp: 8, draw: 5, removal: 6" — used in skeleton context message so the
+// LLM knows which roles are already covered.
+function formatRoleCounts(counts) {
+  if (!counts || Object.keys(counts).length === 0) return '(none)'
+  return Object.entries(counts).map(([k, v]) => `${k}: ${v}`).join(', ')
+}
+
 function compactCommander(commander) {
   return {
     name: commander.name,
@@ -91,19 +98,27 @@ export function buildDeckGenerationPrompt({
   const targets = deckRules.targetCounts ?? {}
   const landTarget = deckRules.landTarget ?? 37
   const nonLandSlots = deckRules.nonLandSlots ?? null   // when set, mana base is solver-locked
+  const llmSlots     = deckRules.llmSlots ?? nonLandSlots   // slots after skeleton is locked
   const manaBaseStats = deckRules.manaBaseStats ?? null
+  const skeletonStats = deckRules.skeletonStats ?? null
 
   const archetypes = strategyContext.archetypes ?? []
   const primaryArchetypeId = strategyContext.primaryArchetypeId ?? null
   const primaryArchetype = archetypes.find(a => a.id === primaryArchetypeId) ?? null
+  const skeleton       = strategyContext.skeleton ?? []
+  const skeletonStrong = strategyContext.skeletonStrong ?? []
 
   const manaBaseClause = nonLandSlots
-    ? `\n\nMANA BASE LOCKED: The mana base for this deck (${landTarget} lands) has already been built deterministically by a constraint solver. You MUST NOT include any land in your "deck" output. Pick only the ${nonLandSlots} non-land cards. The legal_card_pool below contains only spells.`
+    ? `\n\nMANA BASE LOCKED: The mana base for this deck (${landTarget} lands) has already been built deterministically by a constraint solver. You MUST NOT include any land in your "deck" output. The legal_card_pool below contains only spells.`
+    : ''
+
+  const skeletonClause = (skeletonStats?.size > 0)
+    ? `\n\nSKELETON LOCKED (${skeletonStats.size} cards): A deck skeleton has been pre-built from EDHREC inclusion data — these are the cards that real, successful decks for this commander run in 40%+ of lists. They are LOCKED into the final deck. You MUST NOT include any of these in your output (the skeleton goes in automatically). Your job is to pick the remaining ${llmSlots} cards to round out the deck around them. The skeleton already covers: ${formatRoleCounts(skeletonStats.roleCounts)}. Adjust your role targets accordingly — you only need to fill the gaps.`
     : ''
 
   const system = `You are an expert Magic: The Gathering Commander deck builder.
 
-Your task is to build a highly optimized Commander deck using ONLY the cards provided.${manaBaseClause}
+Your task is to build a highly optimized Commander deck using ONLY the cards provided.${manaBaseClause}${skeletonClause}
 
 ---
 
@@ -471,6 +486,29 @@ If forced to choose:
     }
   }
 
+  if (skeleton.length > 0) {
+    user.locked_skeleton = {
+      count: skeleton.length,
+      cards: skeleton.map(c => ({
+        name: c.name,
+        role: (c.roles ?? ['filler'])[0],
+        edhrec_inclusion_pct: Math.round((c.edhrecInclusion ?? 0) * 100),
+      })),
+      note: 'These cards are LOCKED into the final deck. DO NOT include them in your output — they are added automatically. Build around them.',
+    }
+  }
+  if (skeletonStrong.length > 0) {
+    user.skeleton_strong_recommendations = {
+      count: skeletonStrong.length,
+      note: 'Cards with 20-40% inclusion in real decks for this commander. Strongly preferred but not locked — pick from these first when filling role gaps.',
+      cards: skeletonStrong.slice(0, 30).map(c => ({
+        name: c.name,
+        role: (c.roles ?? ['filler'])[0],
+        edhrec_inclusion_pct: Math.round((c.edhrecInclusion ?? 0) * 100),
+      })),
+    }
+  }
+
   // Strategy directive: only include when the user has explicitly locked one.
   // When unlocked, leave it out entirely so STEP 1 of the prompt drives strategy
   // determination — a vague "do your best" line here would undermine that step
@@ -512,10 +550,15 @@ export function buildPass1Prompt({
   const primaryArchetypeId = strategyContext.primaryArchetypeId ?? null
   const primaryArchetype  = archetypes.find(a => a.id === primaryArchetypeId) ?? null
   const typeChanging      = isTypeChangingCommander(commander)
+  const skeleton          = strategyContext.skeleton ?? []
+
+  const skeletonClause1 = (skeleton.length > 0)
+    ? `\n\nDECK SKELETON ALREADY LOCKED (${skeleton.length} cards): The system has pre-locked ${skeleton.length} cards from EDHREC inclusion data — these are real meta picks for this commander that will appear in the final deck regardless of your output. Use this as context when choosing your strategy and core engine. Your coreEngine list should COMPLEMENT the skeleton (don't re-list cards already locked) — pick the strategic anchors that the skeleton doesn't cover.`
+    : ''
 
   const system = `You are an expert Magic: The Gathering Commander deck builder.
 
-This is PASS 1 of a TWO-PASS deck-build process.
+This is PASS 1 of a TWO-PASS deck-build process.${skeletonClause1}
 
 You are NOT building the full 99-card deck yet. Your only job in Pass 1 is to:
 - DECIDE the strategy
@@ -663,6 +706,18 @@ FINAL RULES:
     pool_size: legalCardPool.length,
   }
 
+  if (skeleton.length > 0) {
+    user.locked_skeleton = {
+      count: skeleton.length,
+      cards: skeleton.map(c => ({
+        name: c.name,
+        role: (c.roles ?? ['filler'])[0],
+        edhrec_inclusion_pct: Math.round((c.edhrecInclusion ?? 0) * 100),
+      })),
+      note: 'These cards are LOCKED into the final deck. Build your strategy and core engine around them.',
+    }
+  }
+
   if (primaryArchetype) {
     user.primary_strategy = `PRIMARY STRATEGY (LOCKED BY USER): ${primaryArchetype.label}. Your chosenStrategy must commit to this archetype. coreEngine must reflect it.`
   }
@@ -681,6 +736,7 @@ export function buildPass2Prompt({
   legalCardPool,
   bracket,
   deckRules = {},
+  strategyContext = {},
   pass1Output,
 }) {
   const bracketLabel   = BRACKET_LABELS[bracket] ?? 'Unknown'
@@ -688,15 +744,23 @@ export function buildPass2Prompt({
   const targets        = deckRules.targetCounts ?? {}
   const landTarget     = deckRules.landTarget ?? 37
   const nonLandSlots   = deckRules.nonLandSlots ?? null
+  const llmSlots       = deckRules.llmSlots ?? nonLandSlots
   const manaBaseStats  = deckRules.manaBaseStats ?? null
+  const skeletonStats  = deckRules.skeletonStats ?? null
+  const skeleton       = strategyContext.skeleton ?? []
+  const skeletonStrong = strategyContext.skeletonStrong ?? []
 
   const manaBaseClause = nonLandSlots
-    ? `\n\nMANA BASE LOCKED: A constraint solver has already built the mana base (${landTarget} lands). You MUST NOT include any land in your output. Pick only the ${nonLandSlots} non-land cards. The legal_card_pool below contains only spells.`
+    ? `\n\nMANA BASE LOCKED: A constraint solver has already built the mana base (${landTarget} lands). You MUST NOT include any land in your output. The legal_card_pool below contains only spells.`
+    : ''
+
+  const skeletonClause = (skeletonStats?.size > 0)
+    ? `\n\nSKELETON LOCKED (${skeletonStats.size} cards): A deck skeleton has been pre-built from EDHREC inclusion data — cards in 40%+ of real decks for this commander. They are LOCKED into the final deck. You MUST NOT include any of these in your output (they're added automatically). Your job is to pick the remaining ${llmSlots} cards. The skeleton already covers: ${formatRoleCounts(skeletonStats.roleCounts)}. Adjust your role targets — you only need to fill the gaps.`
     : ''
 
   const system = `You are an expert Magic: The Gathering Commander deck builder.
 
-This is PASS 2 of a two-pass deck-build process. Pass 1 already determined the strategy and selected the core engine. Your job is to BUILD ${nonLandSlots ? `THE ${nonLandSlots} NON-LAND CARDS` : 'THE FULL 99-CARD DECK'} around those locked-in choices.${manaBaseClause}
+This is PASS 2 of a two-pass deck-build process. Pass 1 already determined the strategy and selected the core engine. Your job is to BUILD ${llmSlots ? `THE ${llmSlots} REMAINING CARDS` : 'THE FULL 99-CARD DECK'} around those locked-in choices.${manaBaseClause}${skeletonClause}
 
 ---
 
@@ -903,6 +967,29 @@ If below 70 → keep cutting / replacing until it passes. Report the post-cut de
       sources_per_color: manaBaseStats.sourcesPerColor,
       tier_breakdown: manaBaseStats.byTier,
       note: 'These mana sources are guaranteed. Use them when reasoning about color requirements for spells.',
+    }
+  }
+
+  if (skeleton.length > 0) {
+    user.locked_skeleton = {
+      count: skeleton.length,
+      cards: skeleton.map(c => ({
+        name: c.name,
+        role: (c.roles ?? ['filler'])[0],
+        edhrec_inclusion_pct: Math.round((c.edhrecInclusion ?? 0) * 100),
+      })),
+      note: 'These cards are LOCKED into the final deck. DO NOT include them in your output — they are added automatically.',
+    }
+  }
+  if (skeletonStrong.length > 0) {
+    user.skeleton_strong_recommendations = {
+      count: skeletonStrong.length,
+      note: 'Cards with 20-40% inclusion in real decks. Pick from these first when filling role gaps.',
+      cards: skeletonStrong.slice(0, 30).map(c => ({
+        name: c.name,
+        role: (c.roles ?? ['filler'])[0],
+        edhrec_inclusion_pct: Math.round((c.edhrecInclusion ?? 0) * 100),
+      })),
     }
   }
 
