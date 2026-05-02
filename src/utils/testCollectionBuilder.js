@@ -16,6 +16,26 @@
 
 import { fetchOracleCards } from './scryfallBulk'
 
+// localStorage flag indicating the user has the test collection active.
+// On page reload, DataContext checks this flag and rebuilds the test
+// collection from the cached Scryfall data so it survives navigation.
+const TEST_MODE_FLAG_KEY = 'deckify-test-collection-active'
+
+export function setTestCollectionActive(preset = '7500-mixed') {
+  try { localStorage.setItem(TEST_MODE_FLAG_KEY, JSON.stringify({ preset, loadedAt: Date.now() })) } catch { /* noop */ }
+}
+
+export function clearTestCollectionFlag() {
+  try { localStorage.removeItem(TEST_MODE_FLAG_KEY) } catch { /* noop */ }
+}
+
+export function getTestCollectionFlag() {
+  try {
+    const raw = localStorage.getItem(TEST_MODE_FLAG_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
 // What share of the random sample comes from each rarity bucket. Roughly
 // matches a typical collection's rarity distribution — commons and
 // uncommons are everywhere; mythics are rare.

@@ -11,6 +11,7 @@ import { useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import * as dataStore from '../lib/dataStore'
 import { useAuth } from './AuthContext'
+import { getTestCollectionFlag, buildTestCollection } from '../utils/testCollectionBuilder'
 
 export function DataProvider({ children }) {
   const { user, loading: authLoading } = useAuth()
@@ -61,6 +62,26 @@ export function DataProvider({ children }) {
           decks:      (decksRes.data      ?? []).map(rowToDeck),
           ready:      true,
         })
+
+        // If the user had the test collection active before reload, rebuild
+        // it now from the cached Scryfall bulk data and replace the
+        // collection. Fast (~3s) because Scryfall data is in IndexedDB.
+        // Without this, hard reloads kill the test collection.
+        const testFlag = getTestCollectionFlag()
+        if (testFlag?.preset) {
+          try {
+            console.log('[DataContext] Test collection mode active — rebuilding from cache…')
+            const cards = await buildTestCollection({ preset: testFlag.preset })
+            if (!cancelled) {
+              dataStore.setState(s => ({ ...s, collection: cards }))
+              console.log(`[DataContext] Test collection restored: ${cards.length} cards`)
+            }
+          } catch (err) {
+            console.warn('[DataContext] Failed to rebuild test collection:', err?.message ?? err)
+            // Leave the user with their real Supabase collection — better than
+            // an empty collection. They can manually re-load the test collection.
+          }
+        }
       } catch (err) {
         if (cancelled) return
         console.error('DataProvider: failed to load user data', err)

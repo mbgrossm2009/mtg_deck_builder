@@ -2,8 +2,9 @@ import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
 import { getCollection, removeFromCollection, addImportedCardsToCollection, saveCollection, replaceCollectionLocal, trimScryfallCard, saveSelectedCommander, getSelectedCommander, clearCollection, removeFailedCards } from '../utils/localStorage'
 import { getCardImageSmall, getCardsByNames } from '../utils/scryfallApi'
 import { parseCsvText, parseAuto, normalizeImportedCards, cleanCardName } from '../utils/cardImportParser'
-import { buildTestCollection } from '../utils/testCollectionBuilder'
+import { buildTestCollection, setTestCollectionActive, clearTestCollectionFlag, getTestCollectionFlag } from '../utils/testCollectionBuilder'
 import { clearScryfallBulkCache } from '../utils/scryfallBulk'
+import { Link } from 'react-router-dom'
 
 const PAGE_SIZE = 60
 
@@ -94,11 +95,12 @@ const CollectionCard = memo(function CollectionCard({ card, onRemove, onSetComma
 // REPLACES the user's collection. Wrapped in a confirm dialog because
 // destroying a real collection by accident would be bad. Cached in
 // IndexedDB for a week so subsequent loads are instant.
-function TestCollectionSection({ currentCollectionSize, onLoadComplete }) {
+function TestCollectionSection({ currentCollectionSize, onLoadComplete, onExitTestMode }) {
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy]             = useState(false)
   const [progress, setProgress]     = useState(null)
   const [error, setError]           = useState(null)
+  const testFlag = getTestCollectionFlag()
 
   const stageLabels = {
     cached:      'Loaded cached card data',
@@ -123,11 +125,12 @@ function TestCollectionSection({ currentCollectionSize, onLoadComplete }) {
       })
       setProgress({ stage: 'mapping', count: cards.length })
       // Replace the entire collection IN MEMORY ONLY. We deliberately don't
-      // persist 7500 cards to Supabase — it's slow (15MB upload, batched),
-      // partially-failing batches can leave a corrupted state, and the test
-      // collection is meant to be ephemeral. Reload = re-click the button
-      // (10 seconds with cache, ~3 with cache hits all the way through).
+      // persist 7500 cards to Supabase — slow upload + risk of partial-batch
+      // failures. Instead, set a localStorage flag so DataContext rebuilds
+      // the test collection on page load (Scryfall data is cached in
+      // IndexedDB, ~3 seconds to rebuild). This way reload doesn't kill it.
       replaceCollectionLocal(cards)
+      setTestCollectionActive('7500-mixed')
       setBusy(false)
       setConfirming(false)
       setProgress(null)
@@ -173,6 +176,28 @@ function TestCollectionSection({ currentCollectionSize, onLoadComplete }) {
         </div>
         <div style={testStyles.progressBar}>
           <div style={{ ...testStyles.progressFill, width: progressPercent(progress) + '%' }} />
+        </div>
+      </div>
+    )
+  }
+
+  // Test mode is currently ACTIVE — show banner with exit + eval-harness link.
+  if (testFlag) {
+    return (
+      <div style={{ ...testStyles.panel, borderColor: 'var(--accent)' }}>
+        <div style={testStyles.activeHeader}>✓ Test collection active ({currentCollectionSize} cards)</div>
+        <div style={testStyles.activeBody}>
+          You're in test mode. Your real Supabase-backed collection is hidden — it's safely
+          stored on the server and will return when you exit. Use this for cross-commander
+          testing without touching your real collection.
+        </div>
+        <div style={testStyles.activeRow}>
+          <Link to="/eval" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+            Open Eval Harness →
+          </Link>
+          <button className="btn btn-ghost" onClick={onExitTestMode}>
+            Exit test mode &amp; restore my collection
+          </button>
         </div>
       </div>
     )
@@ -304,6 +329,23 @@ const testStyles = {
     borderRadius: 'var(--radius-md)',
     fontSize: 'var(--text-sm)',
     marginBottom: 'var(--space-3)',
+  },
+  activeHeader: {
+    fontSize: 'var(--text-base)',
+    fontWeight: 700,
+    color: 'var(--accent)',
+    marginBottom: 'var(--space-2)',
+  },
+  activeBody: {
+    fontSize: 'var(--text-sm)',
+    color: 'var(--text-muted)',
+    lineHeight: 1.6,
+    marginBottom: 'var(--space-4)',
+  },
+  activeRow: {
+    display: 'flex',
+    gap: 'var(--space-3)',
+    flexWrap: 'wrap',
   },
 }
 
@@ -827,6 +869,12 @@ export default function Collection() {
           const msg = `Loaded ${count}-card test collection`
           setTestCollectionToast(msg)
           setTimeout(() => setTestCollectionToast(curr => (curr === msg ? null : curr)), 4000)
+        }}
+        onExitTestMode={() => {
+          if (!confirm('Exit test mode and reload your real collection from your account?')) return
+          clearTestCollectionFlag()
+          // Hard reload — DataContext will re-hydrate from Supabase fresh
+          window.location.reload()
         }}
       />
 
