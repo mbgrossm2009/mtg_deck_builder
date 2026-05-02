@@ -9,6 +9,7 @@ import { scoreCard } from './deckScorer'
 import { solveManaBase } from './manaBaseSolver'
 import { detectCombos, registerCombos, getAllCombos } from './comboRules'
 import { detectArchetypes, anchorNamesFor, themesToArchetypes, mergeArchetypes, cardMatchesArchetype } from './archetypeRules'
+import { extractCommanderMechanicTags, commanderToCardTagBoosts } from './commanderMechanics'
 import { validateDeck, countRoles } from './deckValidator'
 
 export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
@@ -99,6 +100,11 @@ export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
   // Last write wins, so the diagnostics reflect the final scoring state.
   const breakdowns = new Map()
 
+  // Commander mechanic tags — boost cards tagged for what the commander
+  // cares about (sacrifice → sac_outlet, tokens → token_producer, etc.).
+  const commanderMechanicTags = extractCommanderMechanicTags(commander)
+  const commanderTagBoosts    = commanderToCardTagBoosts(commanderMechanicTags)
+
   const scoringContext = {
     archetypes,
     primaryArchetypeId: archetypes.some(a => a.id === primaryArchetypeId) ? primaryArchetypeId : null,
@@ -106,6 +112,7 @@ export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
     pickedNames: usedNames,
     edhrecRank,
     edhrecRankTotal: Math.max(edhrec.topCards.length, 1),
+    commanderTagBoosts,
     breakdowns,
   }
 

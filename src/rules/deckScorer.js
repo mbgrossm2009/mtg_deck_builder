@@ -2,6 +2,7 @@ import { getOracleText } from '../utils/cardHelpers'
 import { scoreArchetypeFit, cardMatchesArchetype, isCompetingArchetypeAnchor } from './archetypeRules'
 import { targetAvgCmc } from './bracketRules'
 import { landTierScoreDelta } from './landQuality'
+import { mechanicSynergyBonus } from './commanderMechanics'
 
 // Cards that are explicitly weak/joke/limited-only and almost never belong in
 // a Commander deck. We hard-penalize these so they sink to the bottom of any
@@ -156,6 +157,16 @@ export function scoreCard(card, role, commander, bracket, context = {}) {
     const sharedWords = countSharedMeaningfulWords(getOracleText(commander), getOracleText(card))
     const delta = Math.min(sharedWords * 2, 10)
     if (delta > 0) { score += delta; log(`Keyword overlap (${sharedWords})`, delta) }
+  }
+
+  // Commander mechanic synergy — when the commander "cares about" a mechanic
+  // (e.g., sacrifice, tokens, attacks), boost cards tagged with the
+  // corresponding card-level mechanic (sac_outlet, token_producer, etc.).
+  // This is more granular than archetype fit — captures specific ability
+  // enablers the broad archetype matcher might miss.
+  if (context.commanderTagBoosts?.size > 0) {
+    const mechBonus = mechanicSynergyBonus(card, context.commanderTagBoosts)
+    if (mechBonus > 0) { score += mechBonus; log('Commander mechanic synergy', mechBonus) }
   }
 
   // EDHREC bonus — primary signal but archetype-aware when a primary is locked.

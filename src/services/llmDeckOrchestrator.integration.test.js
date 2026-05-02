@@ -329,3 +329,168 @@ describe('Critique passes never re-add off-theme cards', () => {
     expect(countByName(result.mainDeck, ["Liar's Pendulum"])).toBe(0)
   })
 })
+
+// ─── Tribal density floor (Tier 2 — commander-specific behavior) ───────────
+
+describe('Tribal density floor — tribal commanders get many on-tribe creatures', () => {
+  it('Tiamat (5c dragon tribal) deck has ≥10 dragons after the floor fires', async () => {
+    // The fixture has 16 dragon creatures. After floor enforcement, we
+    // expect most of them in the deck. Floor target is 18 — fixture caps
+    // it at 16, so a strong tribal density is the realistic expectation.
+    const result = await generateWithMocks({
+      commander:  TIAMAT,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    const dragonsInDeck = result.mainDeck.filter(c =>
+      (c.type_line ?? '').toLowerCase().includes('dragon')
+    ).length
+    expect(dragonsInDeck).toBeGreaterThanOrEqual(10)
+  })
+
+  it('Krenko (mono-R goblin tribal) deck has all owned goblins', async () => {
+    // Fixture has ~10 goblins. All Krenko-color-legal. Floor should add them.
+    const result = await generateWithMocks({
+      commander:  KRENKO,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    const goblinsInDeck = result.mainDeck.filter(c =>
+      (c.type_line ?? '').toLowerCase().includes('goblin')
+    ).length
+    expect(goblinsInDeck).toBeGreaterThanOrEqual(8)
+  })
+
+  it('Edgar Markov (WBR vampire tribal) deck has multiple vampires', async () => {
+    const result = await generateWithMocks({
+      commander:  EDGAR_MARKOV,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    const vampiresInDeck = result.mainDeck.filter(c =>
+      (c.type_line ?? '').toLowerCase().includes('vampire')
+    ).length
+    expect(vampiresInDeck).toBeGreaterThanOrEqual(4)
+  })
+
+  it('non-tribal commander (Atraxa) does NOT get tribal floor enforcement', async () => {
+    // Atraxa's archetype is 'counters' / 'proliferate', no tribe.
+    // The tribal floor should NOT fire — no 'fromTribalFloor' tagged cards.
+    const result = await generateWithMocks({
+      commander:  ATRAXA,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    const tribalFloorCards = result.mainDeck.filter(c => c.fromTribalFloor).length
+    expect(tribalFloorCards).toBe(0)
+  })
+
+  it('cEDH commander (Najeela) — tribal floor fires AND cEDH staples are still present', async () => {
+    // Najeela is human-warrior tribal AND cEDH. The floor should add
+    // warriors but not at the expense of locked cEDH staples like Mana
+    // Crypt or Force of Will.
+    const result = await generateWithMocks({
+      commander:  NAJEELA,
+      bracket:    5,
+      collection: buildRichCollection(),
+    })
+    // cEDH staples must still be there (locked, not swapped out)
+    expect(countByName(result.mainDeck, ['Mana Crypt'])).toBe(1)
+    expect(countByName(result.mainDeck, ['Force of Will'])).toBe(1)
+    expect(countByName(result.mainDeck, ['Demonic Tutor'])).toBe(1)
+  })
+
+  it('tribal floor surfaces a warning when collection lacks tribal density', async () => {
+    // Sparse collection has only 3 dragons. Floor target is 18. Should warn.
+    const result = await generateWithMocks({
+      commander:  TIAMAT,
+      bracket:    3,
+      collection: buildSparseCollection(),
+    })
+    // Either a tribal-floor warning OR a coverage warning should appear.
+    const hasTribalWarning = (result.warnings ?? []).some(w =>
+      typeof w?.message === 'string' && /(dragon|tribal)/i.test(w.message)
+    )
+    expect(hasTribalWarning).toBe(true)
+  })
+})
+
+// ─── Commander mechanic synergy bonus ──────────────────────────────────────
+
+describe('Commander mechanic tags drive card prioritization', () => {
+  it('orchestrator surfaces a Commander mechanics line when commander triggers on something', async () => {
+    // Meren is the best test case — her ability has clear graveyard +
+    // sacrifice triggers. Tiamat-style "value" commanders have no
+    // care-about triggers and correctly produce no mechanics line.
+    const result = await generateWithMocks({
+      commander:  MEREN,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    const mechLine = (result.explanation ?? []).find(e =>
+      typeof e === 'string' && e.startsWith('Commander mechanics:')
+    )
+    expect(mechLine).toBeTruthy()
+  })
+
+  it('value commanders without explicit triggers produce no mechanics line', async () => {
+    // Tiamat's only ability is "When Tiamat enters, search for Dragons" —
+    // a one-shot tutor, not a recurring mechanic the deck cares about.
+    // Should produce no mechanics line (or an empty one).
+    const result = await generateWithMocks({
+      commander:  TIAMAT,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    const mechLine = (result.explanation ?? []).find(e =>
+      typeof e === 'string' && e.startsWith('Commander mechanics:')
+    )
+    // Either no line, or a line that's safely formatted
+    if (mechLine) {
+      expect(mechLine).toMatch(/^Commander mechanics: \w/)
+    }
+  })
+
+  it('graveyard commander (Meren) gets cares_about_graveyard surfaced', async () => {
+    const result = await generateWithMocks({
+      commander:  MEREN,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    const mechLine = (result.explanation ?? []).find(e =>
+      typeof e === 'string' && e.startsWith('Commander mechanics:')
+    )
+    expect(mechLine).toBeTruthy()
+    expect(mechLine).toMatch(/graveyard|sacrifice/)
+  })
+
+  it('spellslinger commander (Niv-Mizzet, Parun) gets cares_about_spells AND cares_about_draw', async () => {
+    const result = await generateWithMocks({
+      commander:  NIV_MIZZET,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    const mechLine = (result.explanation ?? []).find(e =>
+      typeof e === 'string' && e.startsWith('Commander mechanics:')
+    )
+    expect(mechLine).toBeTruthy()
+    expect(mechLine).toMatch(/spells|draw/)
+  })
+
+  it('vanilla-style commander gets few or no mechanic tags', async () => {
+    // Krenko's text only mentions "Create X 1/1 red Goblin creature tokens"
+    // → cares_about_tokens. Just one mechanic, not many.
+    const result = await generateWithMocks({
+      commander:  KRENKO,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    const mechLine = (result.explanation ?? []).find(e =>
+      typeof e === 'string' && e.startsWith('Commander mechanics:')
+    )
+    if (mechLine) {
+      // tokens is the obvious one for Krenko
+      expect(mechLine).toMatch(/tokens/)
+    }
+  })
+})

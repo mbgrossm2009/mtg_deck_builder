@@ -23,6 +23,7 @@ import { isBracketAllowed, targetLandCount, targetRoleCounts, computeActualBrack
 import { validateDeck, countRoles } from '../rules/deckValidator'
 import { detectCombos, getAllCombos } from '../rules/comboRules'
 import { detectArchetypes } from '../rules/archetypeRules'
+import { extractCommanderMechanicTags, commanderToCardTagBoosts } from '../rules/commanderMechanics'
 import { isLand, isBasicLand, getBasicLandsForCommander, avgCmc } from '../utils/cardHelpers'
 import { generateDeck } from '../rules/deckGenerator'
 import { scoreCard } from '../rules/deckScorer'
@@ -77,8 +78,17 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   const { legal, excluded: illegalExcluded } = filterLegalCards(rawCollection, commander)
   explanation.push(`Pre-filtered collection: ${legal.length} legal cards (excluded ${illegalExcluded.length}).`)
 
-  // 2. Detect archetypes (regex-based — no network) so we can pass strategy hints.
+  // 2. Detect archetypes (broad strategic shape) AND commander mechanic tags
+  // (granular ability synergies). Both signals stack in scoring — archetypes
+  // capture "this is a tribal/aristocrats/spellslinger deck"; mechanic tags
+  // capture "this commander cares about sacrifice/tokens/etc." which boosts
+  // cards tagged with the corresponding card-level mechanics.
   const archetypes = detectArchetypes(commander)
+  const commanderMechanicTags = extractCommanderMechanicTags(commander)
+  const commanderTagBoosts = commanderToCardTagBoosts(commanderMechanicTags)
+  if (commanderMechanicTags.length > 0) {
+    explanation.push(`Commander mechanics: ${commanderMechanicTags.map(t => t.replace('cares_about_', '')).join(', ')}.`)
+  }
 
   // 3. Annotate roles/tags.
   const annotated = legal.map(card => {
@@ -215,6 +225,8 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     primaryArchetypeId: archetypes.some(a => a.id === primaryArchetypeId) ? primaryArchetypeId : null,
     skeleton: skeleton.staples,
     skeletonStrong: skeleton.strong,
+    commanderMechanicTags,
+    commanderTagBoosts,
   }
 
   // 5b. Cap the LLM-candidate pool (non-lands MINUS skeleton). Heuristic
@@ -404,6 +416,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
         if (c.fromManaSolver) continue
         if (c.fromSkeleton) continue
         if (c.fromBracketStaples) continue   // bracket staples are locked; never swap them
+        if (c.fromTribalFloor) continue      // tribal-floor adds are also locked
         if (isWincon(c)) continue
         swapIdx = i
         break
@@ -434,6 +447,64 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
         severity: 'warning',
         message: `Your collection has no clear win conditions for this commander — deck may struggle to close games. Consider adding a Craterhoof Behemoth, Triumph of the Hordes, or similar finisher.`,
       })
+    }
+  }
+
+  // 10c. Tribal density floor — for tribal commanders, ensure the deck has
+  // a meaningful count of on-tribe creatures. Without this, the heuristic
+  // critique can correctly optimize for cEDH staples (Vampiric Tutor scores
+  // higher than a vanilla dragon) and leave a "tribal" deck with only 2-3
+  // tribe members. Force-swap low-priority picks for owned tribal creatures
+  // until we hit the floor or exhaust the user's pool.
+  const tribalArchetype = strategyContext.archetypes?.find(a => a.tribe)
+  if (tribalArchetype) {
+    const TRIBAL_FLOOR = 18
+    const tribe = tribalArchetype.tribe
+    const isOnTribe = (c) => (c.type_line ?? '').toLowerCase().includes(tribe)
+    const inDeckTribal = deck.filter(isOnTribe).length
+
+    if (inDeckTribal < TRIBAL_FLOOR) {
+      const needed = TRIBAL_FLOOR - inDeckTribal
+      const inDeckNames = new Set(deck.map(c => c.name.toLowerCase()))
+      // On-tribe candidates from the legal pool not yet in deck.
+      const tribalCandidates = legalNonLands.filter(c =>
+        isOnTribe(c) && !inDeckNames.has(c.name.toLowerCase())
+      )
+
+      let added = 0
+      for (const tribal of tribalCandidates) {
+        if (added >= needed) break
+        // Find a swappable slot: not locked, not on-tribe (don't swap
+        // tribal-for-tribal), starting from end of deck (lowest-priority).
+        let swapIdx = -1
+        for (let i = deck.length - 1; i >= 0; i--) {
+          const c = deck[i]
+          if (c.fromManaSolver || c.fromSkeleton || c.fromBracketStaples) continue
+          if (isOnTribe(c)) continue
+          swapIdx = i
+          break
+        }
+        if (swapIdx === -1) break    // no more swappable slots — stop
+
+        const removed = deck[swapIdx]
+        usedNames.delete(removed.name.toLowerCase())
+        deck[swapIdx] = { ...tribal, quantity: 1, fromTribalFloor: true }
+        usedNames.add(tribal.name.toLowerCase())
+        added++
+      }
+
+      if (added > 0) {
+        explanation.push(`Tribal density floor: forced ${added} ${tribe} creature${added === 1 ? '' : 's'} into the deck (was ${inDeckTribal}/${TRIBAL_FLOOR}, now ${inDeckTribal + added}).`)
+        warnings.push({
+          severity: 'info',
+          message: `Added ${added} on-tribe ${tribe} creature${added === 1 ? '' : 's'} so the deck reflects its tribal commander.`,
+        })
+      } else if (tribalCandidates.length === 0 && inDeckTribal < TRIBAL_FLOOR) {
+        warnings.push({
+          severity: 'warning',
+          message: `Only ${inDeckTribal} ${tribe} creatures in deck (target ${TRIBAL_FLOOR}+). Your collection lacks more ${tribe}s — consider acquiring some for a stronger tribal feel.`,
+        })
+      }
     }
   }
 
@@ -519,8 +590,8 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       const deckForCritique = deck.map(c => ({
         name: c.name,
         role: (c.roles ?? ['filler'])[0],
-        locked: !!c.fromManaSolver || !!c.fromSkeleton || !!c.fromBracketStaples,
-        source: c.fromManaSolver ? 'manaSolver' : c.fromSkeleton ? 'skeleton' : c.fromBracketStaples ? 'bracketStaples' : c.fromFallback ? 'heuristic' : c.fromWinconBackstop ? 'winconBackstop' : c.fromCritique ? 'critique' : c.fromHeuristicCritique ? 'heuristicCritique' : 'llm',
+        locked: !!c.fromManaSolver || !!c.fromSkeleton || !!c.fromBracketStaples || !!c.fromTribalFloor,
+        source: c.fromManaSolver ? 'manaSolver' : c.fromSkeleton ? 'skeleton' : c.fromBracketStaples ? 'bracketStaples' : c.fromTribalFloor ? 'tribalFloor' : c.fromFallback ? 'heuristic' : c.fromWinconBackstop ? 'winconBackstop' : c.fromCritique ? 'critique' : c.fromHeuristicCritique ? 'heuristicCritique' : 'llm',
       }))
       const inDeckNames = new Set(deck.map(c => c.name.toLowerCase()))
       const availablePool = legalNonLands.filter(c =>
@@ -742,6 +813,7 @@ function runHeuristicCritique({ deck, legalNonLands, commander, bracket, strateg
     pickedNames: new Set(deck.map(c => c.name.toLowerCase())),
     edhrecRank,
     edhrecRankTotal: Math.max(edhrecData?.topCards?.length ?? 1, 1),
+    commanderTagBoosts: strategyContext.commanderTagBoosts,
   }
   const scoreFor = (card) => {
     let s = scoreCard(card, (card.roles ?? ['filler'])[0], commander, bracket, scoringContext)
@@ -764,7 +836,7 @@ function runHeuristicCritique({ deck, legalNonLands, commander, bracket, strateg
   // strongest first.
   const swappableDeck = deck
     .map((c, idx) => ({ idx, card: c, score: scoreFor(c) }))
-    .filter(({ card }) => !card.fromManaSolver && !card.fromSkeleton && !card.fromBracketStaples)
+    .filter(({ card }) => !card.fromManaSolver && !card.fromSkeleton && !card.fromBracketStaples && !card.fromTribalFloor)
     .sort((a, b) => a.score - b.score)
 
   const scoredPool = pool
@@ -830,8 +902,8 @@ function applyCritiqueSwaps(deck, swaps, availablePool, usedNames) {
       continue
     }
     const outCard = deck[outIdx]
-    if (outCard.fromManaSolver || outCard.fromSkeleton || outCard.fromBracketStaples) {
-      rejected.push({ out: outName, in: inName, reason: 'out-card is locked (mana base, skeleton, or bracket staple)' })
+    if (outCard.fromManaSolver || outCard.fromSkeleton || outCard.fromBracketStaples || outCard.fromTribalFloor) {
+      rejected.push({ out: outName, in: inName, reason: 'out-card is locked (mana base, skeleton, bracket staple, or tribal floor)' })
       continue
     }
 
@@ -871,6 +943,7 @@ function capPoolForLLM(legalCardPool, commander, bracket, strategyContext) {
   const scoringContext = {
     archetypes: strategyContext.archetypes,
     primaryArchetypeId: strategyContext.primaryArchetypeId,
+    commanderTagBoosts: strategyContext.commanderTagBoosts,
   }
   const primary = strategyContext.primaryArchetypeId
     ? strategyContext.archetypes?.find(a => a.id === strategyContext.primaryArchetypeId)
