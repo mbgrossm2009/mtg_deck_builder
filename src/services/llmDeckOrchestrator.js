@@ -274,9 +274,10 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
 
     // Apply bracket downgrade to the heuristic deck. Same logic as the
     // post-critique step in the main path — combo pieces, excess tutors,
-    // excess fast mana get swapped out at low brackets.
+    // excess fast mana get swapped out. Runs at B1-B4 because at B4 the
+    // 2+ combos bump pushes actual to B5 (over target).
     let fallbackDowngradeSwaps = []
-    if (bracket <= 3) {
+    if (bracket <= 4) {
       const heuristicUsedNames = new Set([commander.name.toLowerCase()])
       for (const card of heuristic.mainDeck) {
         if (!card.isBasicLand) heuristicUsedNames.add(card.name.toLowerCase())
@@ -304,6 +305,17 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       }
     }
 
+    // Filter stale "Deck is actually bracket X" warnings from the heuristic
+    // generator — they reflect pre-downgrade state. Keep only if our
+    // downgrade actually failed to bring the bracket back to target.
+    const filteredHeuristicWarnings = (heuristic.warnings ?? []).filter(w => {
+      const msg = typeof w === 'object' ? w.message : w
+      if (typeof msg === 'string' && /Deck is actually bracket/.test(msg)) {
+        return updatedActual > bracket
+      }
+      return true
+    })
+
     return {
       ...heuristic,
       mainDeck: heuristic.mainDeck,   // mutated in place by downgrade
@@ -311,7 +323,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       combos: updatedCombos,
       generationMode: 'heuristic-fallback',
       explanation: [...explanation, ...(heuristic.explanation ?? [])],
-      warnings: [...warnings, ...(heuristic.warnings ?? [])],
+      warnings: [...warnings, ...filteredHeuristicWarnings],
       llmStrategy: null,
     }
   }
@@ -713,10 +725,12 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   // excess fast mana). Runs AFTER critique passes so nothing later can
   // re-introduce bracket-bumping cards.
   //
-  // Only fires when bracket <= 3 — at B4/B5 we want optimization to push
-  // the actual bracket up. Mana-base + bracket-staples are protected;
-  // skeleton CAN be swapped (bracket fidelity > skeleton fidelity).
-  if (bracket <= 3) {
+  // Fires at B1-B4. At B4 the 2+ combo bump pushes actual to B5 (over
+  // target), so we need to break combos until count ≤ 1. At B5 we don't
+  // run downgrade — optimization pushing actual bracket up is the goal.
+  // Mana-base + bracket-staples are protected; skeleton CAN be swapped
+  // (bracket fidelity > skeleton fidelity).
+  if (bracket <= 4) {
     const downgradeSwaps = downgradeBracketIfOverShot({
       deck, targetBracket: bracket, legalNonLands, usedNames,
     })

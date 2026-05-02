@@ -345,6 +345,16 @@ describe('Bracket-downgrade backstop — actual bracket matches target at B1-B3'
     expect(actual).toBe(1)
   })
 
+  it('B4 target → actual bracket ≤ B4 (allows 1 combo, breaks 2+)', async () => {
+    const result = await generateWithMocks({
+      commander:  ATRAXA,
+      bracket:    4,
+      collection: buildRichCollection(),
+    })
+    const actual = result.bracketAnalysis?.actualBracket ?? 1
+    expect(actual).toBeLessThanOrEqual(4)
+  })
+
   it('B5 target → no downgrade applied (actual can be B5)', async () => {
     const result = await generateWithMocks({
       commander:  NAJEELA,
