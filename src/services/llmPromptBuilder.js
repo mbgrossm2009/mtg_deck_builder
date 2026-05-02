@@ -1262,6 +1262,92 @@ Strip Mine, Wasteland, Ghost Quarter, Maze of Ith, Boseiju Who Endures,
 Otawara Soaring City, Eiganjo Seat of the Empire, Takenuma Abandoned Mire,
 Sokenzan Crucible of Defiance, Bojuka Bog, Reliquary Tower
 
+═══════════════════════════════════════════════════════════════════════════
+TRIBAL PAYOFFS — when the commander grants creature types or is a tribal
+lord, creatures of that tribe are ON-THEME, NOT FILLER. A 4-5 mana
+vampire payoff in a vampire deck is a CORE inclusion, not "off-pace."
+Tribal decks NEED these payoffs — they ARE the win plan. The LLM has
+a tendency to call high-CMC tribal payoffs "filler" because cEDH lists
+don't include them. EDH bracket 3-4 decks DO include them, and that's
+correct.
+═══════════════════════════════════════════════════════════════════════════
+
+VAMPIRES (for Edgar Markov, Anowon, Olivia, Strefan, etc.):
+Bloodthirsty Conqueror, Twilight Prophet, Necropolis Regent, Vampire Nocturnus,
+Captivating Vampire, Bloodline Keeper, Bloodlord of Vaasgoth, Vish Kal Blood Arbiter,
+Sangromancer, Stromkirk Captain, Drana Liberator of Malakir, Defiant Bloodlord,
+Anowon Ruin Thief, Olivia Crimson Bride, Patron of the Vein, Bloodghast,
+Champion of Dusk, Sanctum Seeker, Indulgent Aristocrat, Bloodhusk Ritualist,
+Yahenni Undying Partisan, Mavren Fein Dusk Apostle, Edgar's Civil War,
+Skeletal Vampire, Bloodtracker, Fell Stinger
+
+DRAGONS (for Tiamat, The Ur-Dragon, Karrthus, Bladewing, Korlessa, etc.):
+Atarka World Render, Balefire Dragon, Bladewing the Risen, Goldspan Dragon,
+Hellkite Tyrant, Klauth Unrivaled Ancient, Lathliss Dragon Queen, Old Gnawbone,
+Terror of the Peaks, Utvara Hellkite, Dragon Tempest, Dragon's Hoard,
+Dragonlord's Servant, Dragonspeaker Shaman, Crucible of Fire, Scion of Draco,
+Niv-Mizzet Parun, Niv-Mizzet Reborn, Karrthus Tyrant of Jund, Wasitora Nekoru Queen,
+Hellkite Charger, Savage Ventmaw, Skithiryx Blight Dragon, Bogardan Hellkite,
+Scourge of Valkas, Sarkhan Soul Aflame, Sarkhan Fireblood, Crux of Fate,
+Urza's Incubator, Knollspine Dragon, Furnace Dragon, Thrakkus the Butcher
+
+GOBLINS (for Krenko, Wort Boggart Auntie, Muxus, Grenzo, Zada, etc.):
+Goblin Chieftain, Goblin King, Goblin Warchief, Goblin Lackey, Goblin Recruiter,
+Goblin Matron, Goblin Piledriver, Skirk Prospector, Mogg War Marshal,
+Krenko Mob Boss, Krenko Tin Street Kingpin, Muxus Goblin Grandee,
+Goblin Sharpshooter, Pashalik Mons, Voracious Dragon, Goblin Bombardment,
+Impact Tremors, Purphoros God of the Forge, Goblin Welder, Squee Goblin Nabob,
+Conspicuous Snoop, Marton Stromgald, Nim Deathmantle, Goblin Engineer,
+Hordeling Outburst, Empty the Warrens, Dragon Fodder
+
+ELVES (for Marwyn, Ezuri, Lathril, Eladamri, Yeva, etc.):
+Priest of Titania, Heritage Druid, Wirewood Symbiote, Ezuri Renegade Leader,
+Marwyn the Nurturer, Elvish Archdruid, Elvish Champion, Imperious Perfect,
+Joraga Warcaller, Drove of Elves, Elvish Mystic, Llanowar Elves, Fyndhorn Elves,
+Boreal Druid, Avenger of Zendikar, Beast Whisperer, Realmwalker, Lathril Blade of the Elves,
+Wellwisher, Elvish Promenade, Eladamri Lord of Leaves, Quirion Ranger,
+Glimpse of Nature, Skemfar Elderhall, Skemfar Avenger, Lys Alana Huntmaster
+
+SLIVERS (for Sliver Overlord, The First Sliver, Sliver Hivelord, etc.):
+Sliver Hive, Sliver Hivelord, Sliver Overlord, Sliver Legion, Crystalline Sliver,
+Heart Sliver, Galerider Sliver, Predatory Sliver, Manaweft Sliver, Gemhide Sliver,
+Hibernation Sliver, Sliver Queen, The First Sliver, Sliver Gravemother,
+Diffusion Sliver, Striking Sliver, Necrotic Sliver, Realmwalker, Cavern of Souls,
+Synapse Sliver, Spiteful Sliver, Bonescythe Sliver, Cloudshredder Sliver,
+Lavabelly Sliver, Brood Sliver, Crystalline Resonance, Coat of Arms
+
+ZOMBIES (for Wilhelt, Sidisi, Gisa, Scarab God, Varina, etc.):
+Cryptbreaker, Diregraf Captain, Death Baron, Lord of the Undead, Lord of the Accursed,
+Gravecrawler, Bloodghast, Reassembling Skeleton, Dread Summons, Endless Ranks of the Dead,
+Open the Graves, Death Baron, Cemetery Reaper, Wilhelt the Rotcleaver,
+Liliana Dreadhorde General, Liliana Death's Majesty, Wonder, Patriarch's Bidding
+
+SERPENTS / SEA CREATURES (for Koma, Sygg, Kopala, etc.):
+Lorthos the Tidemaker, Stormtide Leviathan, Quest for Ula's Temple, Coralhelm Commander,
+Inkwell Leviathan, Tromokratis, Pearl-Ear Imperial Magistrate, Empress Galina,
+Slinn Voda, Patron of the Moon, Stormsurge Kraken
+
+EQUIPMENT / VOLTRON PAYOFFS (for Uril, Sram, Halvar, Akiri, etc.):
+Sword of Feast and Famine, Sword of Fire and Ice, Sword of Light and Shadow,
+Sword of Truth and Justice, Sword of Body and Mind, Sword of War and Peace,
+Sword of Hearth and Home, Sword of Sinew and Steel, Sword of Forge and Frontier,
+Sword of Vengeance, Argentum Armor, Embercleave, Hammer of Nazahn, Stoneforge Mystic,
+Stonehewer Giant, Puresteel Paladin, Sigarda's Aid, Bruenor Battlehammer
+
+ARTIFACT / ARTIFACT-MATTERS (for Urza, Breya, Daretti, etc.):
+Inspiring Statuary, Sai Master Thopterist, Saheeli Sublime Artificer,
+Reckless Fireweaver, Foundry Inspector, Etherium Sculptor,
+Goblin Welder, Daretti Scrap Savant, Tezzeret the Schemer
+
+═══════════════════════════════════════════════════════════════════════════
+COMMANDER SYNERGY RULE — examine the commander's type_line and
+oracle_text BEFORE judging cards. Tribal commanders (creature type
+matters), token commanders, spellslinger commanders, etc. — cards that
+support the commander's stated theme are CORRECTLY INCLUDED, even if
+they're 4-5 CMC creatures. cEDH speed expectations don't apply to B3
+and B4 decks. Most B3-B4 decks WIN by attacking with creatures.
+═══════════════════════════════════════════════════════════════════════════
+
 OUTPUT FORMAT (JSON only — no markdown):
 
 {
