@@ -200,26 +200,56 @@ export async function evaluateDeck({ commander, bracket, deck, onProgress }) {
 // POSTs the prompt to /api/llm and returns the parsed JSON content. The
 // serverless function attaches OPENAI_API_KEY (server-side) and forwards
 // to OpenAI; the browser never sees the key.
+//
+// Retries once on 504 (Gateway Timeout) and 502 (Bad Gateway) — these are
+// the most common transient errors when OpenAI is under load and the
+// Vercel function hits its 60s maxDuration. A single retry typically
+// succeeds because the next call gets a less-loaded OpenAI worker.
 async function callBackend(prompt) {
-  let res
-  try {
-    res = await fetch('/api/llm', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ system: prompt.system, user: prompt.user }),
-    })
-  } catch (err) {
-    throw new Error(`Could not reach /api/llm: ${err.message}`, { cause: err })
-  }
+  let lastErr
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch('/api/llm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ system: prompt.system, user: prompt.user }),
+      })
 
-  if (!res.ok) {
-    let body = null
-    try { body = await res.json() } catch { /* non-JSON error body */ }
-    throw new Error(body?.error ?? `LLM backend returned ${res.status}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (!data?.content) throw new Error('LLM backend returned no content.')
+        return data.content
+      }
+
+      // Parse error body for context
+      let body = null
+      try { body = await res.json() } catch { /* non-JSON */ }
+      lastErr = new Error(body?.error ?? `LLM backend returned ${res.status}`)
+
+      // Only retry on 502/504 (transient gateway/timeout). Don't retry on
+      // 4xx (bad request — the request itself is wrong, retry won't help)
+      // or 500 (server error — usually means OpenAI gave back garbage and
+      // the proxy can't recover).
+      if (res.status === 502 || res.status === 504) {
+        if (attempt === 0) {
+          console.warn(`[LLM] ${res.status} on attempt 1, retrying once…`)
+          // brief backoff so the upstream has a moment to breathe
+          await new Promise(r => setTimeout(r, 1500))
+          continue
+        }
+      }
+      throw lastErr
+    } catch (err) {
+      lastErr = err
+      // Network errors (fetch threw) — retry once
+      if (attempt === 0 && err.message?.includes('fetch')) {
+        await new Promise(r => setTimeout(r, 1500))
+        continue
+      }
+      throw lastErr
+    }
   }
-  const data = await res.json()
-  if (!data?.content) throw new Error('LLM backend returned no content.')
-  return data.content
+  throw lastErr
 }
 
 function mockLLMResponse({ commander, legalCardPool, bracket, deckRules, promptTokens }) {

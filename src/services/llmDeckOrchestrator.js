@@ -264,12 +264,51 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     explanation.push(`LLM call failed: ${err.message}. Using heuristic fallback.`)
   }
 
-  // 7. If the LLM is unavailable entirely, return the heuristic generator's output.
+  // 7. If the LLM is unavailable entirely, return the heuristic generator's
+  // output — but FIRST run the bracket-downgrade backstop on it. Otherwise
+  // an LLM 504 means the user gets a deck that bypasses every safety check
+  // and frequently overshoots the target bracket (B3 → actual B5, etc.).
   if (llmFailed || !llmResponse) {
     const heuristic = await generateDeck(bracket, primaryArchetypeId)
     if (heuristic.error) return heuristic
+
+    // Apply bracket downgrade to the heuristic deck. Same logic as the
+    // post-critique step in the main path — combo pieces, excess tutors,
+    // excess fast mana get swapped out at low brackets.
+    let fallbackDowngradeSwaps = []
+    if (bracket <= 3) {
+      const heuristicUsedNames = new Set([commander.name.toLowerCase()])
+      for (const card of heuristic.mainDeck) {
+        if (!card.isBasicLand) heuristicUsedNames.add(card.name.toLowerCase())
+      }
+      fallbackDowngradeSwaps = downgradeBracketIfOverShot({
+        deck: heuristic.mainDeck,
+        targetBracket: bracket,
+        legalNonLands,
+        usedNames: heuristicUsedNames,
+      })
+    }
+
+    // Re-compute bracket analysis after the downgrade since the heuristic
+    // generator's bracketAnalysis is now stale.
+    const updatedCombos = detectCombos(heuristic.mainDeck.map(c => c.name))
+    const { actualBracket: updatedActual, flaggedCards: updatedFlagged } =
+      computeActualBracket(heuristic.mainDeck, updatedCombos)
+
+    if (fallbackDowngradeSwaps.length > 0) {
+      explanation.push(
+        `Heuristic-fallback bracket-fit: applied ${fallbackDowngradeSwaps.length} swap${fallbackDowngradeSwaps.length === 1 ? '' : 's'} to bring actual bracket back to target B${bracket}.`
+      )
+      for (const s of fallbackDowngradeSwaps) {
+        explanation.push(`  Downgrade: -${s.out} → +${s.in} (${s.reason})`)
+      }
+    }
+
     return {
       ...heuristic,
+      mainDeck: heuristic.mainDeck,   // mutated in place by downgrade
+      bracketAnalysis: { targetBracket: bracket, actualBracket: updatedActual, flaggedCards: updatedFlagged },
+      combos: updatedCombos,
       generationMode: 'heuristic-fallback',
       explanation: [...explanation, ...(heuristic.explanation ?? [])],
       warnings: [...warnings, ...(heuristic.warnings ?? [])],
