@@ -307,6 +307,69 @@ describe('Sparse collection surfaces coverage warnings', () => {
   })
 })
 
+// ─── Bracket downgrade — actual bracket should match target ──────────────
+
+describe('Bracket-downgrade backstop — actual bracket matches target at B1-B3', () => {
+  // The critical bug this fixes: B3-targeted decks were computing as B5
+  // because EDHREC skeleton + heuristic critique slipped in combo pieces,
+  // tutors, and fast mana. The downgrade pass swaps offenders out
+  // post-assembly until actual bracket matches target.
+
+  it('B3 target → actual bracket ≤ B3 (with rich collection)', async () => {
+    const result = await generateWithMocks({
+      commander:  ATRAXA,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    const actual = result.bracketAnalysis?.actualBracket ?? 1
+    expect(actual).toBeLessThanOrEqual(3)
+  })
+
+  it('B2 target → actual bracket ≤ B2', async () => {
+    const result = await generateWithMocks({
+      commander:  KRENKO,
+      bracket:    2,
+      collection: buildRichCollection(),
+    })
+    const actual = result.bracketAnalysis?.actualBracket ?? 1
+    expect(actual).toBeLessThanOrEqual(2)
+  })
+
+  it('B1 target → actual bracket = B1', async () => {
+    const result = await generateWithMocks({
+      commander:  EDGAR_MARKOV,
+      bracket:    1,
+      collection: buildRichCollection(),
+    })
+    const actual = result.bracketAnalysis?.actualBracket ?? 1
+    expect(actual).toBe(1)
+  })
+
+  it('B5 target → no downgrade applied (actual can be B5)', async () => {
+    const result = await generateWithMocks({
+      commander:  NAJEELA,
+      bracket:    5,
+      collection: buildRichCollection(),
+    })
+    // No bracket-downgrade tagged cards should exist
+    const downgradeCards = result.mainDeck.filter(c => c.fromBracketDowngrade).length
+    expect(downgradeCards).toBe(0)
+  })
+
+  it('B3 deck post-downgrade has no infinite-combo wincons', async () => {
+    const result = await generateWithMocks({
+      commander:  ATRAXA,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    // Specifically: Thassa's Oracle and Demonic Consultation should not
+    // both be present. They form a known infinite combo.
+    const hasOracle = result.mainDeck.some(c => c.name === "Thassa's Oracle")
+    const hasConsult = result.mainDeck.some(c => c.name === 'Demonic Consultation')
+    expect(hasOracle && hasConsult).toBe(false)
+  })
+})
+
 // ─── Heuristic critique never adds off-theme cards ─────────────────────────
 
 describe('Critique passes never re-add off-theme cards', () => {

@@ -44,12 +44,12 @@ export function isBracketAllowed(card, bracket) {
 }
 
 // Bracket 2 allows a small set of "safe" rocks that are nearly ubiquitous
-function isSafeRock(name) {
+export function isSafeRock(name) {
   return ['Sol Ring', 'Arcane Signet', 'Fellwar Stone', 'Mind Stone', 'Thought Vessel'].includes(name)
 }
 
 // Bracket 2 allows tutors that search specifically for lands (ramp, not combo enablers)
-function isSoftTutor(name) {
+export function isSoftTutor(name) {
   return ['Cultivate', 'Kodama\'s Reach', 'Farseek', 'Nature\'s Lore', 'Rampant Growth',
           'Three Visits', 'Skyshroud Claim', 'Tempt with Discovery'].includes(name)
 }
@@ -77,7 +77,11 @@ export function computeActualBracket(mainDeck, combos) {
   for (const card of mainDeck) {
     const { tags = [], roles = [] } = card
 
-    if (tags.includes('game_changer')) {
+    // Safe rocks (Sol Ring, Arcane Signet, etc.) are tagged both fast_mana
+    // AND game_changer, but they're exempt at B2+ via isBracketAllowed.
+    // computeActualBracket needs the SAME exemption — otherwise Sol Ring
+    // in a B2 deck bumps actual bracket to B3, contradicting the filter.
+    if (tags.includes('game_changer') && !isSafeRock(card.name)) {
       if (bracket < 3) bracket = 3
       flagged.push(card.name)
     }

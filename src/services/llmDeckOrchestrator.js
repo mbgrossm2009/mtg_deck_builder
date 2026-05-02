@@ -19,7 +19,7 @@
 import { getSelectedCommander, getCollection } from '../utils/localStorage'
 import { filterLegalCards } from '../rules/commanderRules'
 import { assignRoles } from '../rules/cardRoles'
-import { isBracketAllowed, targetLandCount, targetRoleCounts, computeActualBracket, BRACKET_LABELS } from '../rules/bracketRules'
+import { isBracketAllowed, targetLandCount, targetRoleCounts, computeActualBracket, BRACKET_LABELS, isSafeRock, isSoftTutor } from '../rules/bracketRules'
 import { validateDeck, countRoles } from '../rules/deckValidator'
 import { detectCombos, getAllCombos } from '../rules/comboRules'
 import { detectArchetypes } from '../rules/archetypeRules'
@@ -508,6 +508,13 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     }
   }
 
+  // The bracket-downgrade step (formerly 10d) was moved to AFTER the
+  // critique passes — see step 11c below. Critique passes can re-introduce
+  // combo pieces (the heuristic critique optimizes for score, the LLM
+  // critique optimizes for the model's judgment, neither cares about
+  // bracket fit). Running downgrade after them ensures nothing else can
+  // re-bump the bracket before the final return.
+
   // 11. Hard backstop — if we still don't have 99, pad with basics so the
   // deck is at least well-formed for the validator. This shouldn't trigger
   // in practice unless the collection is tiny.
@@ -661,6 +668,31 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     }
   }
 
+  // 11c. Bracket-downgrade backstop — final step before post-processing.
+  // If the assembled deck's actual computed bracket exceeds the user's
+  // target, swap out the offending cards (combo pieces, excess tutors,
+  // excess fast mana). Runs AFTER critique passes so nothing later can
+  // re-introduce bracket-bumping cards.
+  //
+  // Only fires when bracket <= 3 — at B4/B5 we want optimization to push
+  // the actual bracket up. Mana-base + bracket-staples are protected;
+  // skeleton CAN be swapped (bracket fidelity > skeleton fidelity).
+  if (bracket <= 3) {
+    const downgradeSwaps = downgradeBracketIfOverShot({
+      deck, targetBracket: bracket, legalNonLands, usedNames,
+    })
+    if (downgradeSwaps.length > 0) {
+      explanation.push(`Bracket-fit pass: applied ${downgradeSwaps.length} swap${downgradeSwaps.length === 1 ? '' : 's'} to bring actual bracket back to target B${bracket}.`)
+      for (const s of downgradeSwaps) {
+        explanation.push(`  Downgrade: -${s.out} → +${s.in} (${s.reason})`)
+      }
+      warnings.push({
+        severity: 'info',
+        message: `Bracket-fit pass swapped ${downgradeSwaps.length} card${downgradeSwaps.length === 1 ? '' : 's'} so the deck plays at the bracket you targeted.`,
+      })
+    }
+  }
+
   // 12. Post-processing — same as the heuristic generator does.
   const combos = detectCombos(deck.map(c => c.name))
   const { actualBracket, flaggedCards } = computeActualBracket(deck, combos)
@@ -764,6 +796,194 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
 //   - Locked cards (mana base + skeleton) are never swapped out
 //   - Cap at 8 swaps per generation to prevent over-aggressive rewrites
 //   - Min score delta of 12 — swap only when the upgrade is meaningful
+// Bracket-downgrade backstop. Walks the deck post-assembly. If the actual
+// computed bracket exceeds the target (e.g., user asked for B3 but the
+// deck plays at B5 due to combos), repeatedly swap out offending cards
+// for non-offending alternatives until actual bracket matches target —
+// or we run out of swap candidates.
+//
+// Order of priorities (highest impact first):
+//   1. Combo components — break combos by removing the card that appears
+//      in the most combos
+//   2. Excess tutors (≥4 non-soft tutors at B3 → bracket bumps to B4)
+//   3. Excess non-safe-rock fast mana (≥3 at B3 → bracket bumps to B4)
+//
+// Locked cards: mana-base solver picks and bracket-staples are protected
+// (bracket-staples are already bracket-aware so they shouldn't be the
+// problem). Skeleton picks CAN be swapped — if the skeleton gave us a
+// combo piece at B3, bracket fit beats EDHREC fidelity.
+function downgradeBracketIfOverShot({ deck, targetBracket, legalNonLands, usedNames }) {
+  const swaps = []
+  const MAX_ATTEMPTS = 25
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const deckNames = deck.map(c => c.name)
+    const combos = detectCombos(deckNames)
+    const { actualBracket } = computeActualBracket(deck, combos)
+    if (actualBracket <= targetBracket) break
+
+    const swap = pickDowngradeSwap({ deck, combos, targetBracket, legalNonLands })
+    if (!swap) break    // can't fix it from this collection
+
+    const idx = deck.findIndex(c => c.name === swap.out)
+    if (idx === -1) break
+    const removed = deck[idx]
+    usedNames.delete(removed.name.toLowerCase())
+    deck[idx] = { ...swap.in, quantity: 1, fromBracketDowngrade: true }
+    usedNames.add(swap.in.name.toLowerCase())
+    swaps.push({ out: removed.name, in: swap.in.name, reason: swap.reason })
+  }
+
+  return swaps
+}
+
+// Build a set of card names that are RISKY to add to the deck — any card
+// that's part of a known combo where another piece of that combo is already
+// in the deck. Adding any of these cards completes the combo and bumps
+// the bracket. Used as a replacement filter so swaps don't accidentally
+// trade one combo for another.
+function getRiskyComboCards(deck) {
+  const risky = new Set()
+  const deckSet = new Set(deck.map(c => c.name.toLowerCase()))
+  for (const combo of getAllCombos()) {
+    const pieces = (combo.cards ?? []).map(c => c.toLowerCase())
+    if (pieces.some(p => deckSet.has(p))) {
+      // At least one piece of this combo is in the deck — every other
+      // piece is risky to add (would complete the combo).
+      for (const p of pieces) risky.add(p)
+    }
+  }
+  return risky
+}
+
+function pickDowngradeSwap({ deck, combos, targetBracket, legalNonLands }) {
+  // Build the "risky" combo-piece set ONCE per call. Any card in the
+  // global combo list whose other-half is already in the deck is risky:
+  // adding it completes a combo. The replacement filter blocks risky
+  // cards so we don't trade one combo for another.
+  const riskyCombosCards = getRiskyComboCards(deck)
+
+  // Common "no-go" filter for ALL replacements: must not be a tutor (above
+  // soft), fast mana (above safe rock), or game changer at the target
+  // bracket. Without this we can swap a combo piece for a tutor and still
+  // bump the bracket on the next iteration.
+  const isReplacementSafeAtBracket = (c) => {
+    const tags = c.tags ?? []
+    if (riskyCombosCards.has(c.name.toLowerCase())) return false
+    if (targetBracket <= 3) {
+      if (tags.includes('fast_mana') && !isSafeRock(c.name)) return false
+      if (tags.includes('tutor')     && !isSoftTutor(c.name)) return false
+    }
+    if (targetBracket <= 2) {
+      if (tags.includes('game_changer')) return false
+    }
+    return true
+  }
+
+  // PRIORITY 1: break a combo if any are detected
+  if (combos.length > 0) {
+    const cardComboCount = new Map()
+    for (const combo of combos) {
+      for (const cardName of combo.cards) {
+        const key = cardName.toLowerCase()
+        cardComboCount.set(key, (cardComboCount.get(key) ?? 0) + 1)
+      }
+    }
+    const swap = pickSwap(deck, legalNonLands, {
+      isOffender:    (c) => cardComboCount.has(c.name.toLowerCase()),
+      isReplacement: isReplacementSafeAtBracket,
+      offenderRank:  (c) => cardComboCount.get(c.name.toLowerCase()) ?? 0,
+      reasonText:    (c) => `combo piece (in ${cardComboCount.get(c.name.toLowerCase()) ?? 1} known combo${(cardComboCount.get(c.name.toLowerCase()) ?? 1) === 1 ? '' : 's'})`,
+    })
+    if (swap) return swap
+  }
+
+  // PRIORITY 2: too many non-soft tutors (4+ bumps to B4)
+  if (targetBracket < 4) {
+    const tutorCount = deck.filter(c => (c.tags ?? []).includes('tutor') && !isSoftTutor(c.name)).length
+    if (tutorCount >= 4) {
+      const swap = pickSwap(deck, legalNonLands, {
+        isOffender:    (c) => (c.tags ?? []).includes('tutor') && !isSoftTutor(c.name),
+        isReplacement: (c) => isReplacementSafeAtBracket(c) && !(c.tags ?? []).includes('tutor'),
+        offenderRank:  () => 1,
+        reasonText:    () => 'excess tutor (B3 cap is 3 non-soft tutors)',
+      })
+      if (swap) return swap
+    }
+  }
+
+  // PRIORITY 3: too much non-safe-rock fast mana (3+ bumps to B4)
+  if (targetBracket < 4) {
+    const fastCount = deck.filter(c => (c.tags ?? []).includes('fast_mana') && !isSafeRock(c.name)).length
+    if (fastCount >= 3) {
+      const swap = pickSwap(deck, legalNonLands, {
+        isOffender:    (c) => (c.tags ?? []).includes('fast_mana') && !isSafeRock(c.name),
+        isReplacement: (c) => isReplacementSafeAtBracket(c) && !(c.tags ?? []).includes('fast_mana'),
+        offenderRank:  () => 1,
+        reasonText:    () => 'excess fast mana (B3 cap is 2 non-safe-rock pieces)',
+      })
+      if (swap) return swap
+    }
+  }
+
+  // PRIORITY 4: at B1-B2 specifically, game_changer cards bump bracket to 3
+  if (targetBracket <= 2) {
+    const gcCount = deck.filter(c => (c.tags ?? []).includes('game_changer')).length
+    if (gcCount > 0) {
+      const swap = pickSwap(deck, legalNonLands, {
+        isOffender:    (c) => (c.tags ?? []).includes('game_changer'),
+        isReplacement: (c) => isReplacementSafeAtBracket(c) && !(c.tags ?? []).includes('game_changer'),
+        offenderRank:  () => 1,
+        reasonText:    () => 'game changer (excluded at B1-B2)',
+      })
+      if (swap) return swap
+    }
+  }
+
+  // PRIORITY 5: at B1, ANY tutor (even soft) and ANY fast mana (even safe)
+  // bumps bracket. Strict cleanup.
+  if (targetBracket === 1) {
+    const swap = pickSwap(deck, legalNonLands, {
+      isOffender:    (c) => (c.tags ?? []).includes('tutor') || (c.tags ?? []).includes('fast_mana'),
+      isReplacement: (c) => isReplacementSafeAtBracket(c) && !(c.tags ?? []).includes('tutor') && !(c.tags ?? []).includes('fast_mana'),
+      offenderRank:  () => 1,
+      reasonText:    () => 'tutor or fast mana (excluded at B1)',
+    })
+    if (swap) return swap
+  }
+
+  return null
+}
+
+// Shared swap-selector for the bracket-downgrade pass. Picks the highest-
+// ranked offender in the deck (by `offenderRank`) that's swappable, finds a
+// matching-role replacement from the pool that isn't itself an offender.
+function pickSwap(deck, legalNonLands, { isOffender, isReplacement, offenderRank, reasonText }) {
+  // Find swap-out: in deck, is offender, NOT mana-solver/bracket-staple/tribal-floor
+  const candidates = deck.filter(c =>
+    isOffender(c) &&
+    !c.fromManaSolver && !c.fromBracketStaples && !c.fromTribalFloor
+  )
+  if (candidates.length === 0) return null
+
+  // Sort by offender rank desc (most impactful to swap first)
+  candidates.sort((a, b) => offenderRank(b) - offenderRank(a))
+  const out = candidates[0]
+
+  // Find swap-in: not in deck, not an offender, prefer same role for slot fidelity
+  const inDeckNames = new Set(deck.map(c => c.name.toLowerCase()))
+  const replacements = legalNonLands.filter(c =>
+    !inDeckNames.has(c.name.toLowerCase()) && isReplacement(c)
+  )
+  if (replacements.length === 0) return null
+
+  const outRole = (out.roles ?? ['filler'])[0]
+  const sameRole = replacements.filter(c => (c.roles ?? ['filler'])[0] === outRole)
+  const inCard = sameRole[0] ?? replacements[0]
+
+  return { out: out.name, in: inCard, reason: reasonText(out) }
+}
+
 function runHeuristicCritique({ deck, legalNonLands, commander, bracket, strategyContext, edhrecData }) {
   // Score-delta threshold for triggering a swap. Lower at high brackets where
   // every point of optimization matters; higher at low brackets where we
