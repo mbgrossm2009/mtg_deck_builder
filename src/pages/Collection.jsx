@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
 import { getCollection, removeFromCollection, addImportedCardsToCollection, saveCollection, trimScryfallCard, saveSelectedCommander, getSelectedCommander, clearCollection, removeFailedCards } from '../utils/localStorage'
 import { getCardImageSmall, getCardsByNames } from '../utils/scryfallApi'
 import { parseCsvText, parseAuto, normalizeImportedCards, cleanCardName } from '../utils/cardImportParser'
+import { buildTestCollection } from '../utils/testCollectionBuilder'
 
 const PAGE_SIZE = 60
 
@@ -86,6 +87,199 @@ const CollectionCard = memo(function CollectionCard({ card, onRemove, onSetComma
     </div>
   )
 })
+
+// Dev / testing convenience — pulls Scryfall's bulk oracle data, builds a
+// 7500-card mixed sample (top 5000 EDHREC + 2500 stratified random), and
+// REPLACES the user's collection. Wrapped in a confirm dialog because
+// destroying a real collection by accident would be bad. Cached in
+// IndexedDB for a week so subsequent loads are instant.
+function TestCollectionSection({ currentCollectionSize, onLoadComplete }) {
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy]             = useState(false)
+  const [progress, setProgress]     = useState(null)
+  const [error, setError]           = useState(null)
+
+  const stageLabels = {
+    cached:      'Loaded cached card data',
+    manifest:    'Fetching Scryfall manifest…',
+    downloading: 'Downloading card data (~20 MB)…',
+    parsing:     'Parsing card data…',
+    caching:     'Caching for next time…',
+    filtering:   'Filtering to EDH-legal cards…',
+    sampling:    'Building 7500-mixed sample…',
+    mapping:     'Preparing collection…',
+    done:        'Done',
+  }
+
+  async function handleLoad() {
+    setBusy(true)
+    setError(null)
+    setProgress({ stage: 'manifest' })
+    try {
+      const cards = await buildTestCollection({
+        preset: '7500-mixed',
+        onProgress: (state) => setProgress(state),
+      })
+      setProgress({ stage: 'mapping', count: cards.length })
+      // Replace the entire collection
+      saveCollection(cards)
+      setBusy(false)
+      setConfirming(false)
+      setProgress(null)
+      onLoadComplete?.(cards.length)
+    } catch (err) {
+      console.error('[test collection] load failed:', err)
+      setError(err?.message ?? String(err))
+      setBusy(false)
+    }
+  }
+
+  if (confirming && !busy) {
+    return (
+      <div style={testStyles.panel}>
+        <div style={testStyles.confirmHeader}>⚠ Replace collection?</div>
+        <div style={testStyles.confirmBody}>
+          This will <strong>delete your current {currentCollectionSize}-card collection</strong> and
+          replace it with a 7500-card test collection (top 5000 EDH staples by EDHREC rank +
+          2500 random cards stratified across rarities, plus 150 basic lands).
+          <br /><br />
+          Use this for testing the deck generator across many commanders without manually
+          building a collection. <strong>Make sure your real collection is exported elsewhere
+          if you want to keep it.</strong>
+        </div>
+        <div style={testStyles.confirmRow}>
+          <button className="btn btn-danger" onClick={handleLoad}>Yes, replace my collection</button>
+          <button className="btn btn-ghost" onClick={() => setConfirming(false)}>Cancel</button>
+        </div>
+      </div>
+    )
+  }
+
+  if (busy) {
+    return (
+      <div style={testStyles.panel}>
+        <div style={testStyles.busyHeader}>Loading test collection…</div>
+        <div style={testStyles.busyBody}>
+          {stageLabels[progress?.stage] ?? progress?.stage ?? 'Working…'}
+          {progress?.size && (
+            <span style={testStyles.busySize}> ({(progress.size / 1024 / 1024).toFixed(1)} MB)</span>
+          )}
+        </div>
+        <div style={testStyles.progressBar}>
+          <div style={{ ...testStyles.progressFill, width: progressPercent(progress) + '%' }} />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={testStyles.panel}>
+      <div style={testStyles.panelHeader}>
+        <span style={testStyles.panelTitle}>Quick test collection</span>
+        <span style={testStyles.panelHint}>
+          Replace your collection with 7500 EDH cards for fast multi-commander testing
+        </span>
+      </div>
+      {error && <div style={testStyles.errorBox}>Error: {error}</div>}
+      <button className="btn btn-primary" onClick={() => setConfirming(true)}>
+        Load test collection (7500 mixed)
+      </button>
+    </div>
+  )
+}
+
+function progressPercent(p) {
+  // Rough mapping of pipeline stages to a 0-100 progress bar
+  switch (p?.stage) {
+    case 'manifest':    return 5
+    case 'downloading': return 15
+    case 'parsing':     return 65
+    case 'caching':     return 80
+    case 'filtering':   return 85
+    case 'sampling':    return 90
+    case 'mapping':     return 95
+    case 'done':        return 100
+    case 'cached':      return 50
+    default:            return 0
+  }
+}
+
+const testStyles = {
+  panel: {
+    background: 'var(--surface-1)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-lg)',
+    padding: 'var(--space-4)',
+    marginBottom: 'var(--space-4)',
+  },
+  panelHeader: {
+    display: 'flex',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 'var(--space-3)',
+    marginBottom: 'var(--space-3)',
+    flexWrap: 'wrap',
+  },
+  panelTitle: {
+    fontSize: 'var(--text-base)',
+    fontWeight: 700,
+    color: 'var(--text)',
+  },
+  panelHint: {
+    fontSize: 'var(--text-sm)',
+    color: 'var(--text-muted)',
+  },
+  confirmHeader: {
+    fontSize: 'var(--text-base)',
+    fontWeight: 700,
+    color: 'var(--warning)',
+    marginBottom: 'var(--space-2)',
+  },
+  confirmBody: {
+    fontSize: 'var(--text-sm)',
+    color: 'var(--text-muted)',
+    lineHeight: 1.6,
+    marginBottom: 'var(--space-4)',
+  },
+  confirmRow: {
+    display: 'flex',
+    gap: 'var(--space-3)',
+  },
+  busyHeader: {
+    fontSize: 'var(--text-base)',
+    fontWeight: 700,
+    color: 'var(--text)',
+    marginBottom: 'var(--space-2)',
+  },
+  busyBody: {
+    fontSize: 'var(--text-sm)',
+    color: 'var(--text-muted)',
+    marginBottom: 'var(--space-3)',
+  },
+  busySize: {
+    color: 'var(--text-subtle)',
+  },
+  progressBar: {
+    height: 8,
+    background: 'var(--surface-2)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    background: 'var(--accent)',
+    transition: 'width 200ms ease',
+  },
+  errorBox: {
+    background: 'rgba(244, 63, 94, 0.10)',
+    border: '1px solid rgba(244, 63, 94, 0.30)',
+    color: 'var(--danger)',
+    padding: 'var(--space-2) var(--space-3)',
+    borderRadius: 'var(--radius-md)',
+    fontSize: 'var(--text-sm)',
+    marginBottom: 'var(--space-3)',
+  },
+}
 
 function ImportSection({ onImportComplete }) {
   const fileInputRef = useRef(null)
@@ -345,6 +539,7 @@ export default function Collection() {
   const [sortByUploaded, setSortByUploaded] = useState(false)
   const [commanderId, setCommanderId]     = useState(() => getSelectedCommander()?.id ?? null)
   const [commanderToast, setCommanderToast] = useState(null)
+  const [testCollectionToast, setTestCollectionToast] = useState(null)
   const [confirmingClear, setConfirmingClear] = useState(false)
   // Generation counter: incrementing cancels any in-flight validation loop.
   // Prevents React Strict Mode's double-mount from running two concurrent loops
@@ -597,6 +792,21 @@ export default function Collection() {
       {commanderToast && (
         <div style={styles.commanderToast}>
           ★ {commanderToast} set as commander
+        </div>
+      )}
+
+      <TestCollectionSection
+        currentCollectionSize={collection.length}
+        onLoadComplete={(count) => {
+          const msg = `Loaded ${count}-card test collection`
+          setTestCollectionToast(msg)
+          setTimeout(() => setTestCollectionToast(curr => (curr === msg ? null : curr)), 4000)
+        }}
+      />
+
+      {testCollectionToast && (
+        <div style={styles.commanderToast}>
+          ✓ {testCollectionToast}
         </div>
       )}
 
