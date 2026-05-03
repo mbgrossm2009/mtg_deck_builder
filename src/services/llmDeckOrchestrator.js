@@ -1288,10 +1288,14 @@ function pickDowngradeSwap({ deck, combos, targetBracket, legalNonLands }) {
 // ranked offender in the deck (by `offenderRank`) that's swappable, finds a
 // matching-role replacement from the pool that isn't itself an offender.
 function pickSwap(deck, legalNonLands, { isOffender, isReplacement, offenderRank, reasonText }) {
-  // Find swap-out: in deck, is offender, NOT mana-solver/bracket-staple/tribal-floor
+  // Find swap-out: in deck, is offender, NOT a locked source. All floor
+  // additions (tutor, removal, wincon, tribal) are protected — they were
+  // added precisely to hit minimum counts and shouldn't be undone by the
+  // bracket downgrade. Mana base + bracket staples are also protected.
   const candidates = deck.filter(c =>
     isOffender(c) &&
-    !c.fromManaSolver && !c.fromBracketStaples && !c.fromTribalFloor
+    !c.fromManaSolver && !c.fromBracketStaples && !c.fromTribalFloor &&
+    !c.fromTutorFloor && !c.fromRemovalFloor && !c.fromWinconBackstop
   )
   if (candidates.length === 0) return null
 
@@ -1385,7 +1389,11 @@ function runHeuristicCritique({ deck, legalNonLands, commander, bracket, strateg
   // strongest first.
   const swappableDeck = deck
     .map((c, idx) => ({ idx, card: c, score: scoreFor(c) }))
-    .filter(({ card }) => !card.fromManaSolver && !card.fromSkeleton && !card.fromBracketStaples && !card.fromTribalFloor)
+    .filter(({ card }) =>
+      !card.fromManaSolver && !card.fromSkeleton && !card.fromBracketStaples &&
+      !card.fromTribalFloor && !card.fromTutorFloor && !card.fromRemovalFloor &&
+      !card.fromWinconBackstop
+    )
     .sort((a, b) => a.score - b.score)
 
   const scoredPool = pool
@@ -1451,8 +1459,10 @@ function applyCritiqueSwaps(deck, swaps, availablePool, usedNames) {
       continue
     }
     const outCard = deck[outIdx]
-    if (outCard.fromManaSolver || outCard.fromSkeleton || outCard.fromBracketStaples || outCard.fromTribalFloor) {
-      rejected.push({ out: outName, in: inName, reason: 'out-card is locked (mana base, skeleton, bracket staple, or tribal floor)' })
+    if (outCard.fromManaSolver || outCard.fromSkeleton || outCard.fromBracketStaples ||
+        outCard.fromTribalFloor || outCard.fromTutorFloor || outCard.fromRemovalFloor ||
+        outCard.fromWinconBackstop) {
+      rejected.push({ out: outName, in: inName, reason: 'out-card is locked (mana base, skeleton, bracket staple, tribal/tutor/removal/wincon floor)' })
       continue
     }
 
