@@ -88,14 +88,12 @@ const FILLER_THRESHOLD_BY_BRACKET = {
 export function validateDeckAtBracket(mainDeck, commander, bracket) {
   const { errors, warnings } = validateDeck(mainDeck, commander)
 
-  // Strip the flat-threshold filler warning from the base output — we'll
-  // emit our own bracket-scaled one instead.
-  // Also strip the flat 33-land warning at B5, where 28 lands is the
-  // calibrated cEDH baseline (see targetLandCount in bracketRules.js).
-  // Keep all other warnings.
+  // Strip the flat-threshold filler warning AND the flat-threshold land
+  // warning from the base output — we emit our own bracket-and-context
+  // aware versions below. Keep all other warnings.
   const filtered = warnings.filter(w => {
     if (/filler cards/.test(w)) return false
-    if (bracket === 5 && /Only \d+ lands/.test(w)) return false
+    if (/Only \d+ lands/.test(w)) return false
     return true
   })
 
@@ -108,12 +106,36 @@ export function validateDeckAtBracket(mainDeck, commander, bracket) {
     )
   }
 
-  // Bracket-aware land-count warning. cEDH (B5) target is 28, so warn only
-  // when meaningfully below that; the rest of the brackets keep the flat 33.
-  const LAND_FLOOR_BY_BRACKET = { 1: 33, 2: 33, 3: 33, 4: 32, 5: 25 }
-  const landFloor = LAND_FLOOR_BY_BRACKET[bracket] ?? 33
-  if (counts.land < landFloor) {
-    filtered.push(`Only ${counts.land} lands at B${bracket} (target ≥ ${landFloor}). Deck may have mana problems.`)
+  // Context-aware land warning. The flat "deck < 33 lands" rule is wrong
+  // at B5 (cEDH lists run 24-28 lands routinely) and even at B4 it depends
+  // on whether the deck has fast mana + low curve to compensate.
+  //
+  // Rules:
+  //   - B5 with 26-28 lands is FINE if the deck has fast_mana >= 8 AND
+  //     ramp >= 12 AND avg nonland CMC <= 2.6 (cEDH-shaped).
+  //   - B5 with 28 lands but high curve (>3.0) gets warned.
+  //   - B4 keeps the 32-land floor unless the same fast-mana exception
+  //     applies.
+  //   - B1-B3 keep the strict 33-land floor (no fast-mana shortcut).
+  const fastManaCount = mainDeck.filter(c => (c.tags ?? []).includes('fast_mana')).length
+  const rampCount     = counts.ramp
+  const nonLands      = mainDeck.filter(c => !(c.type_line ?? '').toLowerCase().includes('land'))
+  const avgCmc        = nonLands.length === 0 ? 0
+                      : nonLands.reduce((a, c) => a + (c.cmc ?? 0), 0) / nonLands.length
+
+  const STRICT_FLOOR = { 1: 33, 2: 33, 3: 33, 4: 32, 5: 26 }
+  const strictFloor = STRICT_FLOOR[bracket] ?? 33
+  const hasFastManaShape = fastManaCount >= 8 && rampCount >= 12 && avgCmc <= 2.6
+
+  if (counts.land < strictFloor) {
+    filtered.push(`Only ${counts.land} lands at B${bracket} (target ≥ ${strictFloor}). Deck may have mana problems.`)
+  } else if (bracket >= 4 && counts.land < 32 && !hasFastManaShape) {
+    // 26-31 lands at B4/B5 only OK with the fast-mana shape — otherwise warn.
+    filtered.push(
+      `${counts.land} lands at B${bracket} without compensating fast mana ` +
+      `(have ${fastManaCount}, need 8+) or low curve (avg CMC ${avgCmc.toFixed(1)}, need ≤ 2.6). ` +
+      `Deck may have mana problems.`
+    )
   }
 
   return { errors, warnings: filtered }

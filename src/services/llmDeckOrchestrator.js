@@ -20,7 +20,7 @@ import { getSelectedCommander, getCollection } from '../utils/localStorage'
 import { filterLegalCards } from '../rules/commanderRules'
 import { assignRoles } from '../rules/cardRoles'
 import { isBracketAllowed, targetLandCount, targetRoleCounts, computeActualBracket, BRACKET_LABELS, isSafeRock, isSoftTutor } from '../rules/bracketRules'
-import { validateDeck, countRoles } from '../rules/deckValidator'
+import { validateDeckAtBracket, countRoles } from '../rules/deckValidator'
 import { detectCombos, getAllCombos } from '../rules/comboRules'
 import { detectArchetypes, anchorNamesFor } from '../rules/archetypeRules'
 import { extractCommanderMechanicTags, commanderToCardTagBoosts } from '../rules/commanderMechanics'
@@ -947,7 +947,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   // 12. Post-processing — same as the heuristic generator does.
   const combos = detectCombos(deck.map(c => c.name))
   const { actualBracket, flaggedCards } = computeActualBracket(deck, combos)
-  const { errors, warnings: validationWarnings } = validateDeck(deck, commander)
+  const { errors, warnings: validationWarnings } = validateDeckAtBracket(deck, commander, bracket)
 
   if (actualBracket > bracket) {
     warnings.push({
@@ -1332,6 +1332,74 @@ export function detectMultiCardWincons(deck, strategyContext, commander = null) 
     patterns.push(`combat-damage-draw: commander draws on combat damage + ${evasiveCreatures} evasive creatures`)
   } else if (deckCombatDrawPayoffs >= 2 && evasiveCreatures >= 5) {
     patterns.push(`combat-damage-draw: ${deckCombatDrawPayoffs} draw payoffs + ${evasiveCreatures} evasive creatures`)
+  }
+
+  // Life-drain engine: a deck with multiple lifegain sources AND a "deal
+  // damage / lose life" payoff that scales with lifegain triggers.
+  // Examples: Sorin / Daxos / Karlov life-gain decks.
+  //   Lifegain sources: cards with "you gain N life" or lifegain triggers
+  //   Drain payoffs:    cards that turn lifegain into opponent life loss
+  // The aristocrats path covers death-trigger drain (Blood Artist class);
+  // this path covers payoff-on-lifegain (Sanguine Bond class) and
+  // recurring-drain creatures (Marauding Blight-Priest class).
+  const LIFEGAIN_DRAIN_PAYOFFS = new Set([
+    'sanguine bond', 'vito, thorn of the dusk rose',
+    'marauding blight-priest', 'cliffhaven vampire',
+    'elas il-kor, sadistic pilgrim', 'starscape cleric',
+    'epicure of blood', 'defiant bloodlord',
+    'archfiend of despair', 'wound reflection',
+    'celestial unicorn',
+  ])
+  // Repeatable lifegain sources (creatures or enchantments) — exclude
+  // one-shot lifegain instants which don't sustain an engine.
+  const LIFEGAIN_SOURCES = new Set([
+    'soul warden', 'soul\'s attendant', 'suture priest', 'auriok champion',
+    'serra ascendant', 'ajani\'s pridemate', 'voice of the blessed',
+    'trelasarra moon dancer', 'heliod sun-crowned', 'karlov of the ghost council',
+    'oketra\'s monument', 'venser\'s journal', 'bishop of wings',
+    'daxos, blessed by the sun', 'archangel of thune', 'angel of vitality',
+    'authority of the consuls', 'mangara of corondor',
+  ])
+  const repeatableLifegain = deck.filter(c => {
+    if (LIFEGAIN_SOURCES.has(name(c))) return true
+    // Permanents (creature/enchantment) with a lifegain trigger that can fire
+    // repeatedly. Exclude one-shots (instants, sorceries) and "you gain N
+    // life" without a recurring trigger.
+    const tl = (c.type_line ?? '').toLowerCase()
+    if (!tl.includes('creature') && !tl.includes('enchantment') && !tl.includes('artifact')) return false
+    if (/whenever[^.]*you gain life/.test(text(c))) return true
+    if (/at the beginning of[^.]*you gain \d+ life/.test(text(c))) return true
+    if ((c.tags ?? []).includes('lifegain') && /whenever|at the beginning|each time/.test(text(c))) return true
+    return false
+  }).length
+  const drainPayoffs = deck.filter(c => LIFEGAIN_DRAIN_PAYOFFS.has(name(c)))
+  if (repeatableLifegain >= 3 && drainPayoffs.length >= 1) {
+    patterns.push(`life-drain engine: ${repeatableLifegain} lifegain sources + ${drainPayoffs[0].name}`)
+  }
+
+  // Lifegain alternate-win: a high life total + an alt-win condition.
+  // Felidar Sovereign / Test of Endurance check at upkeep; Aetherflux
+  // Reservoir actively spends 50 life to deal 50 damage. All three need
+  // sustained lifegain to be live, not just one-shot gain.
+  const LIFEGAIN_ALT_WINS = new Set([
+    'felidar sovereign', 'test of endurance',
+    'aetherflux reservoir', 'approach of the second sun',
+    'ad nauseam', 'celestial convergence',
+  ])
+  const altWinPayoffs = deck.filter(c => LIFEGAIN_ALT_WINS.has(name(c)))
+  // Ad Nauseam doesn't need lifegain density; the others do.
+  const lifeGatedAltWins = altWinPayoffs.filter(c => name(c) !== 'ad nauseam' && name(c) !== 'approach of the second sun')
+  if (lifeGatedAltWins.length >= 1 && repeatableLifegain >= 2) {
+    patterns.push(`lifegain alt-win: ${repeatableLifegain} lifegain sources + ${lifeGatedAltWins[0].name}`)
+  }
+
+  // Alternate-win density: 3+ named alt-wincons regardless of lifegain
+  // engine. Decks like Daxos that just stack Felidar Sovereign + Test of
+  // Endurance + Aetherflux + Approach DO have a coherent plan ("draw,
+  // play, win") even without a multi-card engine — that should not be
+  // reported as "no plan."
+  if (altWinPayoffs.length >= 3) {
+    patterns.push(`alt-win density: ${altWinPayoffs.length} alt-wincons (${altWinPayoffs.slice(0, 3).map(c => c.name).join(', ')})`)
   }
 
   return patterns

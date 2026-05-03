@@ -1199,6 +1199,42 @@ gives you specific cards to cite — use those names directly.
 WRONG: ignoring a 'fail' verdict and writing "this deck looks well-tuned."
 RIGHT: "the bracket_fit lens flags X cards bumping this deck to bracket
         Y; the deck does not meet the requested bracket."
+
+LENS-HONESTY HARD RULES — violating any of these makes the eval invalid:
+
+  - If \`win_plan.verdict\` is 'fail' OR detected_wincon_patterns is empty
+    AND singleCardWincons === 0, you CANNOT praise "clear win plan",
+    "multiple win conditions", or "robust win plan" anywhere in summary,
+    topStrength, or strengths. Say "no detected win plan" instead.
+  - If \`win_plan.verdict\` is 'fail', that fact MUST appear in weaknesses.
+  - If \`mana_base.verdict\` is 'fail' or 'warn' for low lands, you CANNOT
+    call the mana base "solid" or "well-tuned" — describe the actual issue.
+  - If \`bracket_fit.verdict\` is 'fail', the bracket mismatch MUST appear
+    in weaknesses AND bracketFitNotes.
+  - If \`commander_execution\` score is below threshold, you CANNOT say
+    "strong synergy" or "high commander relevance" — quote the actual %.
+  - If the eval result is later score-clamped (you'll see _clampedFrom
+    in retrospect), the clamp REASON must already be implicit in your
+    weaknesses. Translation: write weaknesses that justify a low score
+    when the lens data warrants one — don't write "8/10, lots of strengths"
+    when win_plan failed.
+
+CARDS-LEGAL-AT-BRACKET RULE — a card that is legal at the target bracket
+is NOT a weakness "for being powerful." If the deck is at B4 and includes
+Chrome Mox, Mox Diamond, Demonic Tutor, Force of Will, or Vampiric Tutor,
+those are bracket-appropriate B4 staples — list them as STRENGTHS or
+ignore. Only flag a card as "above bracket" if bracket_fit.verdict
+actually fails or actualBracket > targetBracket. The lens does this math
+for you; trust it.
+
+WRONG (do NOT do this):
+  Target B4, no bracket_fit failure, evaluator writes:
+    "Chrome Mox and Mox Diamond push this above bracket"
+  ❌ — they don't, B4 allows them.
+RIGHT:
+  "Chrome Mox + Mox Diamond + Sol Ring give this deck a strong B4
+   fast-mana package."
+  ✓ — describes the legal cards as the strength they are.
 ═══════════════════════════════════════════════════════════════════════════
 
 EVALUATION RUBRIC:

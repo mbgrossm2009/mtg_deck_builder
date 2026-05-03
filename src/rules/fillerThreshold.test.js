@@ -107,3 +107,65 @@ describe('validateDeckAtBracket — bracket-scaled filler thresholds', () => {
     expect(warnings.some(w => /filler cards/.test(w))).toBe(false)
   })
 })
+
+// Context-aware land warning. The flat 33-land floor is wrong at B5 (cEDH
+// runs 24-28 lands by design) and even at B4 it depends on whether the
+// deck has fast mana + low curve to compensate.
+describe('validateDeckAtBracket — context-aware land warning', () => {
+  // Build a deck with explicit lands/non-lands/fast-mana/curve controls.
+  function deckWithMana({ lands, fastMana = 0, ramp = 8, avgCmc = 3.0 }) {
+    const cards = []
+    for (let n = 0; n < lands; n++) {
+      cards.push({ name: `L-${n}`, roles: ['land'], color_identity: ['B'], type_line: 'Basic Land', isBasicLand: true, cmc: 0 })
+    }
+    for (let n = 0; n < ramp; n++) {
+      cards.push({ name: `R-${n}`, roles: ['ramp'], color_identity: ['B'], type_line: 'Artifact', cmc: 2 })
+    }
+    for (let n = 0; n < fastMana; n++) {
+      cards.push({ name: `F-${n}`, roles: ['ramp'], tags: ['fast_mana'], color_identity: ['B'], type_line: 'Artifact', cmc: 0 })
+    }
+    // Pad to 99 with non-land synergy cards at the requested avg CMC.
+    const filler = 99 - cards.length
+    for (let n = 0; n < filler; n++) {
+      cards.push({ name: `S-${n}`, roles: ['synergy'], color_identity: ['B'], type_line: 'Creature', cmc: avgCmc })
+    }
+    return cards
+  }
+
+  it('B5 28 lands + 10 fast mana + 12 ramp + low curve → no land warning', () => {
+    const deck = deckWithMana({ lands: 28, fastMana: 10, ramp: 4, avgCmc: 2.0 })
+    // Note ramp=4 + fastMana=10 = 14 ramp pieces (fast mana counts as ramp here).
+    const { warnings } = validateDeckAtBracket(deck, cmdr, 5)
+    expect(warnings.some(w => /lands/i.test(w))).toBe(false)
+  })
+
+  it('B5 28 lands + high curve (3.5) → warning about missing fast-mana shape', () => {
+    const deck = deckWithMana({ lands: 28, fastMana: 0, ramp: 8, avgCmc: 3.5 })
+    const { warnings } = validateDeckAtBracket(deck, cmdr, 5)
+    expect(warnings.some(w => /lands/i.test(w))).toBe(true)
+  })
+
+  it('B5 25 lands → strict-floor warning (below 26)', () => {
+    const deck = deckWithMana({ lands: 25, fastMana: 12, ramp: 4, avgCmc: 2.0 })
+    const { warnings } = validateDeckAtBracket(deck, cmdr, 5)
+    expect(warnings.some(w => /lands/i.test(w))).toBe(true)
+  })
+
+  it('B4 32 lands → no warning', () => {
+    const deck = deckWithMana({ lands: 32, fastMana: 4, ramp: 8, avgCmc: 3.0 })
+    const { warnings } = validateDeckAtBracket(deck, cmdr, 4)
+    expect(warnings.some(w => /lands/i.test(w))).toBe(false)
+  })
+
+  it('B4 28 lands without fast-mana shape → warning', () => {
+    const deck = deckWithMana({ lands: 28, fastMana: 2, ramp: 6, avgCmc: 3.0 })
+    const { warnings } = validateDeckAtBracket(deck, cmdr, 4)
+    expect(warnings.some(w => /lands/i.test(w))).toBe(true)
+  })
+
+  it('B3 32 lands → strict-floor warning (B3 floor is 33)', () => {
+    const deck = deckWithMana({ lands: 32, fastMana: 4, ramp: 4, avgCmc: 2.0 })
+    const { warnings } = validateDeckAtBracket(deck, cmdr, 3)
+    expect(warnings.some(w => /lands/i.test(w))).toBe(true)
+  })
+})

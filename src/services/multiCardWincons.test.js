@@ -146,3 +146,110 @@ describe('detectMultiCardWincons — pattern descriptions are informative', () =
     expect(cdDraw).toMatch(/7 evasive/)
   })
 })
+
+// ─── Life-drain engine ───────────────────────────────────────────────────
+describe('detectMultiCardWincons — life-drain engine', () => {
+  const lifegainCreature = (name) => card({
+    name, type: 'Creature — Cleric',
+    text: 'Whenever a creature enters the battlefield under your control, you gain 1 life.',
+  })
+
+  it('Sorin-style: 3+ lifegain sources + Sanguine Bond → life-drain engine', () => {
+    const sorin = cmdr('Whenever you gain life, target opponent loses that much life.')
+    const deck = [
+      lifegainCreature('Soul Warden'),
+      lifegainCreature('Soul\'s Attendant'),
+      lifegainCreature('Suture Priest'),
+      card({ name: 'Sanguine Bond', type: 'Enchantment', text: 'Whenever you gain life, target opponent loses that much life.' }),
+    ]
+    const patterns = detectMultiCardWincons(deck, {}, sorin)
+    expect(patterns.some(p => p.startsWith('life-drain engine'))).toBe(true)
+  })
+
+  it('Daxos-style: lifegain density + Cliffhaven Vampire payoff → engine detected', () => {
+    const daxos = cmdr('At the beginning of your end step, you gain X life.')
+    const deck = [
+      lifegainCreature('Soul Warden'),
+      lifegainCreature('Auriok Champion'),
+      lifegainCreature('Bishop of Wings'),
+      card({ name: 'Cliffhaven Vampire', type: 'Creature — Vampire',
+             text: 'Whenever you gain life, each opponent loses 1 life.' }),
+    ]
+    const patterns = detectMultiCardWincons(deck, {}, daxos)
+    expect(patterns.some(p => p.startsWith('life-drain engine'))).toBe(true)
+  })
+
+  it('NEGATIVE: lifegain sources WITHOUT a drain payoff → no engine', () => {
+    const generic = cmdr('Generic text.')
+    const deck = [
+      lifegainCreature('Soul Warden'),
+      lifegainCreature('Soul\'s Attendant'),
+      lifegainCreature('Suture Priest'),
+    ]
+    const patterns = detectMultiCardWincons(deck, {}, generic)
+    expect(patterns.some(p => p.startsWith('life-drain engine'))).toBe(false)
+  })
+
+  it('NEGATIVE: drain payoff alone without lifegain density → no engine', () => {
+    const generic = cmdr('Generic text.')
+    const deck = [
+      card({ name: 'Sanguine Bond', type: 'Enchantment', text: 'Whenever you gain life, target opponent loses that much life.' }),
+      // Only one lifegain source — below density threshold of 3.
+      lifegainCreature('Soul Warden'),
+    ]
+    const patterns = detectMultiCardWincons(deck, {}, generic)
+    expect(patterns.some(p => p.startsWith('life-drain engine'))).toBe(false)
+  })
+})
+
+// ─── Lifegain alt-win ────────────────────────────────────────────────────
+describe('detectMultiCardWincons — lifegain alt-win', () => {
+  const lifegainCreature = (name) => card({
+    name, type: 'Creature — Cleric',
+    text: 'Whenever a creature enters the battlefield under your control, you gain 1 life.',
+  })
+
+  it('Daxos-style: lifegain + Felidar Sovereign → lifegain alt-win', () => {
+    const daxos = cmdr('Lifegain commander text.')
+    const deck = [
+      lifegainCreature('Soul Warden'),
+      lifegainCreature('Soul\'s Attendant'),
+      card({ name: 'Felidar Sovereign', type: 'Creature', text: 'At the beginning of your upkeep, if you have at least 40 life, you win the game.' }),
+    ]
+    const patterns = detectMultiCardWincons(deck, {}, daxos)
+    expect(patterns.some(p => p.startsWith('lifegain alt-win'))).toBe(true)
+  })
+
+  it('NEGATIVE: Felidar without lifegain density → no lifegain alt-win pattern', () => {
+    const generic = cmdr('Generic text.')
+    const deck = [
+      card({ name: 'Felidar Sovereign', type: 'Creature', text: 'You win.' }),
+    ]
+    const patterns = detectMultiCardWincons(deck, {}, generic)
+    expect(patterns.some(p => p.startsWith('lifegain alt-win'))).toBe(false)
+  })
+})
+
+// ─── Alt-win density ─────────────────────────────────────────────────────
+describe('detectMultiCardWincons — alt-win density', () => {
+  it('3+ stacked alt-wincons report a coherent plan ("draw, play, win")', () => {
+    const daxos = cmdr('Generic text.')
+    const deck = [
+      card({ name: 'Felidar Sovereign',          type: 'Creature',     text: 'You win.' }),
+      card({ name: 'Test of Endurance',          type: 'Enchantment',  text: 'You win.' }),
+      card({ name: 'Aetherflux Reservoir',       type: 'Artifact',     text: 'Pay 50 life: target deals 50 damage.' }),
+    ]
+    const patterns = detectMultiCardWincons(deck, {}, daxos)
+    expect(patterns.some(p => p.startsWith('alt-win density'))).toBe(true)
+  })
+
+  it('NEGATIVE: 2 alt-wincons → not enough density for the pattern', () => {
+    const generic = cmdr('Generic text.')
+    const deck = [
+      card({ name: 'Felidar Sovereign', type: 'Creature', text: 'You win.' }),
+      card({ name: 'Test of Endurance', type: 'Enchantment', text: 'You win.' }),
+    ]
+    const patterns = detectMultiCardWincons(deck, {}, generic)
+    expect(patterns.some(p => p.startsWith('alt-win density'))).toBe(false)
+  })
+})
