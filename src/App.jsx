@@ -11,6 +11,7 @@ import Commander from './pages/Commander'
 import DeckBuilder from './pages/DeckBuilder'
 import MyDecks from './pages/MyDecks'
 import EvalHarness from './pages/EvalHarness'
+import DeckDoctor from './pages/DeckDoctor'
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
           <Route path="/deck-builder" element={<RequireAuth><DeckBuilder /></RequireAuth>} />
           <Route path="/my-decks"     element={<RequireAuth><MyDecks /></RequireAuth>} />
           <Route path="/eval"         element={<RequireAuth><EvalHarness /></RequireAuth>} />
+          <Route path="/deck-doctor"  element={<RequireAuth><DeckDoctor /></RequireAuth>} />
         </Routes>
       </main>
       <Toaster />

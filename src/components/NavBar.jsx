@@ -9,6 +9,7 @@ const appLinks = [
   { label: 'Collection',   to: '/collection' },
   { label: 'Commander',    to: '/commander' },
   { label: 'Deck Builder', to: '/deck-builder' },
+  { label: 'Deck Doctor',  to: '/deck-doctor' },
   { label: 'My Decks',     to: '/my-decks' },
 ]
 
