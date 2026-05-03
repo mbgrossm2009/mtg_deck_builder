@@ -27,6 +27,12 @@ import {
   buildEvaluationPrompt,
   estimatePromptTokens,
 } from './llmPromptBuilder'
+import { clampEvalScore } from './evalScoreClamp'
+import { getExecutionThresholdForBracket } from '../rules/commanderExecution'
+
+// Bracket-scaled filler caps (kept in sync with deckValidator.js).
+// Used by the eval score clamp to know when filler is "runaway."
+const FILLER_CAP_BY_BRACKET = { 1: 12, 2: 9, 3: 6, 4: 3, 5: 1 }
 
 // Toggle the mock on/off without editing call sites. The hybrid orchestrator
 // reads this and falls back to the heuristic generator if the LLM is "down".
@@ -190,7 +196,20 @@ export async function evaluateDeck({ commander, bracket, deck, criticalCardCount
   const prompt = buildEvaluationPrompt({ commander, bracket, deck, criticalCardCounts, detectedWincons, executionScore })
   try {
     const out = await callBackend(prompt)
-    return { ...out, _meta: { promptTokens: estimatePromptTokens(prompt) } }
+    const withMeta = { ...out, _meta: { promptTokens: estimatePromptTokens(prompt) } }
+    // Post-process: clamp the LLM's score down if the deck has severe
+    // quality issues the model failed to weigh appropriately. The clamp
+    // returns the same object when no clamp is needed (no false positives).
+    const trueFiller = deck.filter(c => (c.roles ?? [])[0] === 'filler').length
+    return clampEvalScore(withMeta, {
+      bracket,
+      fillerCount: trueFiller,
+      fillerCap:   FILLER_CAP_BY_BRACKET[bracket],
+      wincons:     criticalCardCounts?.wincons ?? 0,
+      detectedWincons,
+      executionScore:     executionScore?.score,
+      executionThreshold: getExecutionThresholdForBracket(bracket),
+    })
   } catch (err) {
     console.warn('[evaluate] pass failed:', err?.message ?? err)
     return null
