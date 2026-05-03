@@ -1219,22 +1219,42 @@ LENS-HONESTY HARD RULES — violating any of these makes the eval invalid:
     when the lens data warrants one — don't write "8/10, lots of strengths"
     when win_plan failed.
 
-CARDS-LEGAL-AT-BRACKET RULE — a card that is legal at the target bracket
-is NOT a weakness "for being powerful." If the deck is at B4 and includes
-Chrome Mox, Mox Diamond, Demonic Tutor, Force of Will, or Vampiric Tutor,
-those are bracket-appropriate B4 staples — list them as STRENGTHS or
-ignore. Only flag a card as "above bracket" if bracket_fit.verdict
-actually fails or actualBracket > targetBracket. The lens does this math
-for you; trust it.
+CARDS-LEGAL-AT-BRACKET RULE (HARD CONSTRAINT — violations make the eval invalid):
+
+If \`bracket_fit.verdict === 'pass'\`, the deck is bracket-legal. PERIOD.
+You are FORBIDDEN from claiming any card pushes the deck above bracket
+when the lens verdict is 'pass'. The bracket-fit math has already been
+done — Tier-C caps, game-changer counts, fast-mana density, tutor counts
+have all been validated. Repeating "Chrome Mox / Mox Diamond / Demonic
+Tutor pushes this above bracket" when bracket_fit passed is a
+hallucination — those cards are EXPLICITLY ALLOWED at B4 (and B5).
+
+What you CAN say when bracket_fit passes:
+  - density observations: "8 Tier-C cards is on the upper edge for B4"
+  - strategy mismatch: "Mana Vault doesn't fit a slow lifegain plan"
+  - missing tools: "no protection package for Felidar Sovereign"
+
+What you CANNOT say when bracket_fit passes:
+  - "Card X pushes this above bracket"
+  - "This deck is over its target bracket"
+  - "Slightly over-tuned for B4/B5"
+  - "These powerful cards make it feel more like B5"
+
+What to say ONLY when bracket_fit.verdict === 'fail' OR
+actualBracket > targetBracket:
+  - "bracket_fit lens flags X cards bumping this to bracket Y"
+  - "Tier-C count of N exceeds the B4 cap of 4"
+  (Cite the lens evidence specifically, by name.)
 
 WRONG (do NOT do this):
-  Target B4, no bracket_fit failure, evaluator writes:
-    "Chrome Mox and Mox Diamond push this above bracket"
-  ❌ — they don't, B4 allows them.
+  Target B4, bracket_fit verdict is 'pass', actualBracket=4, evaluator writes:
+    "Chrome Mox and Mox Diamond push this above bracket"  ❌
 RIGHT:
-  "Chrome Mox + Mox Diamond + Sol Ring give this deck a strong B4
-   fast-mana package."
-  ✓ — describes the legal cards as the strength they are.
+  Same input, evaluator writes:
+    "Strong B4 fast-mana package: Chrome Mox + Mox Diamond + Sol Ring"  ✓
+  OR (if there's a real concern):
+    "Mana Vault fits poorly with the lifegain strategy — fast-mana on a
+     deck that wants to play to turn 8+"  ✓
 ═══════════════════════════════════════════════════════════════════════════
 
 EVALUATION RUBRIC:

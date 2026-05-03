@@ -524,13 +524,38 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       const beforeFill = deck.length
       const UNIVERSAL_FILL_ROLES = new Set(['land', 'ramp', 'draw', 'removal', 'wipe', 'protection', 'tutor', 'win_condition'])
       const detectedArchs = strategyContext.archetypes ?? []
+
+      // Track current deck role-counts so the fallback doesn't dump more
+      // ramp / draw / etc. into a deck that already hit its target.
+      // Without this, the LLM can deliver "ramp = 0 needed" but the
+      // fallback then adds 5 ramp cards from the heuristic deck because
+      // ramp is in UNIVERSAL_FILL_ROLES — the eval-data root cause of
+      // Sorin shipping with 19 ramp at every bracket.
+      const currentCounts = countRoles(deck)
+      const targetForRole = (role) => fullTargets[role] ?? 0
+      const isOverTarget = (role) => {
+        if (role === 'land' || role === 'filler') return false  // these don't have meaningful caps in fullTargets
+        return (currentCounts[role] ?? 0) >= targetForRole(role)
+      }
       const isOnThemeOrUniversal = (card) => {
-        const isUniversal = (card.roles ?? []).some(r => UNIVERSAL_FILL_ROLES.has(r))
-        if (isUniversal) return true
-        if (detectedArchs.length === 0) return true   // no archetypes → don't filter
+        const roles = card.roles ?? []
+        // Universal-role card whose role still has slack → take it.
+        const universalSlack = roles.some(r => UNIVERSAL_FILL_ROLES.has(r) && !isOverTarget(r))
+        if (universalSlack) return true
+        // Universal-role card whose role is already at cap → reject in pass 1
+        // (pass 2 below will take it as last resort).
+        const universalCapped = roles.some(r => UNIVERSAL_FILL_ROLES.has(r) && isOverTarget(r))
+        if (universalCapped) return false
+        // Non-universal: archetype-on-theme check (unchanged).
+        if (detectedArchs.length === 0) return true
         return detectedArchs.some(a => cardMatchesArchetype(card, a))
       }
-      // Pass 1: on-theme + universal only.
+      const bumpCounts = (card) => {
+        for (const r of (card.roles ?? [])) {
+          if (r in currentCounts) currentCounts[r] = (currentCounts[r] ?? 0) + 1
+        }
+      }
+      // Pass 1: on-theme + universal-with-slack only.
       for (const card of heuristicSource.mainDeck) {
         if (deck.length >= 99) break
         if (isLand(card)) continue
@@ -539,8 +564,10 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
         if (usedNames.has(key)) continue
         deck.push({ ...card, quantity: 1, fromFallback: true })
         usedNames.add(key)
+        bumpCounts(card)
       }
-      // Pass 2: off-theme cards as last resort if we still need bodies.
+      // Pass 2: off-theme + over-cap cards as last resort if we still need
+      // bodies. Even a B5 deck with 19 ramp beats a 95-card deck.
       if (deck.length < 99) {
         for (const card of heuristicSource.mainDeck) {
           if (deck.length >= 99) break
@@ -553,7 +580,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       }
       const filled = deck.length - beforeFill
       if (filled > 0) {
-        explanation.push(`Filled ${filled} remaining slot${filled === 1 ? '' : 's'} from the heuristic generator (on-theme + universal preferred).`)
+        explanation.push(`Filled ${filled} remaining slot${filled === 1 ? '' : 's'} from the heuristic generator (cap-aware: on-theme + universal-with-slack first).`)
         warnings.push({
           severity: 'info',
           message: 'AI suggestion was adjusted to follow Commander rules and meet deck-structure targets.',
@@ -562,28 +589,36 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     }
   }
 
-  // 10b. Wincon backstop — every deck needs N win conditions where N is
-  // bracket-scaled. Casual brackets (B1-B2) want at least one obvious win;
-  // optimized B4 needs density (3 named wincons) so the deck can close
-  // through interaction; cEDH (B5) intentionally runs few NAMED wincons
-  // because tutors find them on demand. If skeleton + LLM picks + heuristic
-  // fill all under-delivered, force-add the best available wincons from the
-  // legal pool, kicking out the lowest-priority non-skeleton/non-mana-base
-  // picks to make room.
+  // 10b. Wincon backstop — every deck needs N NAMED single-card win
+  // conditions where N is bracket-scaled. Multi-card patterns satisfy the
+  // WinPlanLens (so the deck has a recognizable plan), but they don't
+  // count toward this floor — the floor is about deck redundancy, not
+  // about "can this deck win in theory."
   //
-  // Counts BOTH single-card wincons AND multi-card patterns (aristocrats:
-  // sac outlet + drain payoff; etb-drain: token producer + Impact Tremors;
-  // combat tribal: lord stack + tribal density). Without pattern detection
-  // a Krenko + Goblin Bombardment + Impact Tremors deck reads as "0 wincons"
-  // even though it can close the game easily.
+  // Why patterns don't count: eval data showed Daxos B5 with 1 named
+  // wincon (Felidar Sovereign) + lifegain alt-win pattern that USED
+  // Felidar Sovereign as its payoff. effectiveWinconCount became 2
+  // (1 + 1) but the deck genuinely had 1 wincon. Counting patterns
+  // double-counts cards that appear in both lists.
+  //
+  // The lens still surfaces patterns separately (so WinPlanLens.verdict
+  // can be 'pass' on a strong-pattern deck), but the BACKSTOP only fires
+  // on named-wincon density.
+  //
+  // Bracket scale:
+  //   B1: 1 (casual; one obvious win is enough)
+  //   B2: 2 (precon density)
+  //   B3: 2 (focused upgraded deck)
+  //   B4: 3 (optimized — needs redundancy through interaction)
+  //   B5: 2 (cEDH — tutors fill out the rest, but 2 named is the floor)
   const MIN_WINCONS_BY_BRACKET = { 1: 1, 2: 2, 3: 2, 4: 3, 5: 2 }
   const MIN_WINCONS = MIN_WINCONS_BY_BRACKET[bracket] ?? 2
   const isWincon = (c) => (c.roles ?? []).includes('win_condition') ||
                           (c.tags ?? []).includes('explosive_finisher')
   const winconCount = deck.filter(isWincon).length
   const multiCardWincons = detectMultiCardWincons(deck, strategyContext, commander)
-  const effectiveWinconCount = winconCount + multiCardWincons.length
-  if (effectiveWinconCount < MIN_WINCONS) {
+  // Floor is named wincons only; patterns are surfaced but not counted.
+  if (winconCount < MIN_WINCONS) {
     const winconCandidates = legalNonLands
       .filter(c => isWincon(c) && !usedNames.has(c.name.toLowerCase()))
       // Prefer cards in the strong-recommendations list, then by EDHREC rank
@@ -596,7 +631,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
 
     let addedWincons = 0
     for (const wc of winconCandidates) {
-      if (effectiveWinconCount + addedWincons >= MIN_WINCONS) break
+      if (winconCount + addedWincons >= MIN_WINCONS) break
       // Find a swappable slot: not skeleton, not mana base, and not already a wincon.
       // Pick from the END of the deck (lowest-priority heuristic fill first).
       let swapIdx = -1
