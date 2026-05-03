@@ -32,6 +32,18 @@ const B5_INCAPABLE_COMMANDERS = new Set([
   "sliver overlord",
   "sliver hivelord",
   "the first sliver",
+  // Mono-color life-gain / value commanders. Daxos B5 evals consistently
+  // shipped with 1 wincon and 7 interaction (well below cEDH floor of 10)
+  // because mono-W simply lacks the tutor / counter / combo density to
+  // sustain B5. Building at B4 honestly is better than producing a
+  // pretend-B5 deck and getting eval-clamped.
+  "daxos, blessed by the sun",
+  "amalia benavides aguirre",   // BW life-gain; same shape as Daxos
+  "sorin of house markov",       // BW life-gain; same shape as Daxos
+  // Other BW life-gain commanders without a cEDH plan.
+  // (Heliod, Sun-Crowned NOT included — he has the Walking Ballista combo,
+  // which is a real cEDH wincon.)
+  "karlov of the ghost council",
 ])
 
 const B5_CAPABLE_COMMANDERS = new Set([

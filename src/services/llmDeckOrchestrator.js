@@ -19,7 +19,7 @@
 import { getSelectedCommander, getCollection } from '../utils/localStorage'
 import { filterLegalCards } from '../rules/commanderRules'
 import { assignRoles } from '../rules/cardRoles'
-import { isBracketAllowed, targetLandCount, targetRoleCounts, computeActualBracket, BRACKET_LABELS, isSafeRock, isSoftTutor, isTierCCedhCore, TIER_C_B4_CAP } from '../rules/bracketRules'
+import { isBracketAllowed, targetLandCount, targetRoleCounts, computeActualBracket, BRACKET_LABELS, isSafeRock, isSoftTutor, isTierCCedhCore, TIER_C_B4_CAP, maxRampCount } from '../rules/bracketRules'
 import { validateDeckAtBracket, countRoles } from '../rules/deckValidator'
 import { detectCombos, getAllCombos } from '../rules/comboRules'
 import { detectArchetypes, anchorNamesFor } from '../rules/archetypeRules'
@@ -63,6 +63,7 @@ export const LOCK_FLAGS = [
   'fromTutorFloor',
   'fromRemovalFloor',
   'fromWinconBackstop',
+  'fromRampCeiling',
 ]
 
 export function isLockedByFloor(card) {
@@ -663,11 +664,29 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
         severity: 'info',
         message: `Added ${addedWincons} win condition${addedWincons === 1 ? '' : 's'} so the deck has a clear way to close games.`,
       })
-    } else if (winconCandidates.length === 0) {
-      warnings.push({
-        severity: 'warning',
-        message: `Your collection has no clear win conditions for this commander — deck may struggle to close games. Consider adding a Craterhoof Behemoth, Triumph of the Hordes, or similar finisher.`,
-      })
+    }
+    // Combined floor-miss warning. Two failure modes need surfacing:
+    //   (a) winconCandidates.length === 0 → user collection has no usable
+    //       single-card wincons for this commander/colors
+    //   (b) winconCandidates.length > 0 but every swap attempt failed
+    //       (no swappable slot at the moment the backstop ran) — silent
+    //       previously, which masked Daxos-B4 shipping with 1 wincon
+    // In both cases, the deck ends below the bracket floor and the user
+    // should know.
+    const finalWinconCount = winconCount + addedWincons
+    if (finalWinconCount < MIN_WINCONS) {
+      const missing = MIN_WINCONS - finalWinconCount
+      if (winconCandidates.length === 0) {
+        warnings.push({
+          severity: 'warning',
+          message: `Only ${finalWinconCount} named wincon${finalWinconCount === 1 ? '' : 's'} in deck (B${bracket} floor ${MIN_WINCONS}). Your collection lacks more wincons in ${commander.color_identity?.join('') || 'this color identity'} — consider adding Craterhoof Behemoth, Aetherflux Reservoir, Felidar Sovereign, Test of Endurance, or similar finishers.`,
+        })
+      } else {
+        warnings.push({
+          severity: 'warning',
+          message: `Only ${finalWinconCount} named wincon${finalWinconCount === 1 ? '' : 's'} in deck (B${bracket} floor ${MIN_WINCONS}). Backstop tried to add ${missing} more but couldn't find swappable slots — too many other cards are locked.`,
+        })
+      }
     }
   }
 
@@ -819,6 +838,89 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
           message: `Only ${inDeckTribal} ${tribe} creatures in deck (target ${TRIBAL_FLOOR}+). Your collection lacks more ${tribe}s — consider acquiring some for a stronger tribal feel.`,
         })
       }
+    }
+  }
+
+  // 10d. Ramp ceiling pass — swap excess ramp for needed roles. The LLM
+  // and skeleton/staples can collectively over-deliver ramp (Sorin BW B4/B5
+  // shipped with 19 ramp consistently because the collection has Sol Ring +
+  // Talismans + Signets + Mana Crypt + Mox Diamond + Chrome Mox + heuristic
+  // ramp picks all stacking up).
+  //
+  // Strategy: find excess ramp cards (lowest-priority ones first), swap each
+  // for a high-value alternative in priority order:
+  //   1. interaction (if below floor for this bracket)
+  //   2. draw (if below target)
+  //   3. wincon (if below MIN_WINCONS — usually already satisfied by 10b)
+  //   4. synergy (anything with on-theme tags)
+  //
+  // Mirrors pickDowngradeSwap structure but caps ramp instead of fixing
+  // bracket. Locked-against-downgrade flags protect mana solver, bracket
+  // staples, and tribal floor — but Talismans/Signets ARE bracket staples,
+  // so we only swap NON-staple ramp. (Staples are bracket-aware; if you
+  // own them at this bracket, you should run them.)
+  const rampCap = maxRampCount(bracket, commander)
+  const isRamp = (c) => (c.roles ?? []).includes('ramp')
+  const rampInDeckCount = deck.filter(isRamp).length
+  if (rampInDeckCount > rampCap) {
+    const excess = rampInDeckCount - rampCap
+    // Build priority-ordered candidate list of cards to swap IN.
+    // Re-compute current counts after all the floor passes.
+    const curCounts = countRoles(deck)
+    const removalFloorVal = REMOVAL_FLOOR_BY_BRACKET[bracket] ?? 6
+    const drawTarget = (fullTargets.draw ?? 9)
+    const synergyTarget = (fullTargets.synergy ?? 20)
+    const winconFloorVal = MIN_WINCONS
+
+    // Build a single priority-sorted candidate pool. Each candidate is
+    // tagged with its priority class for diagnostics.
+    const wantInteraction = curCounts.removal + curCounts.wipe < removalFloorVal
+    const wantDraw        = curCounts.draw < drawTarget
+    const wantWincons     = curCounts.win_condition < winconFloorVal
+    const wantSynergy     = curCounts.synergy < synergyTarget
+
+    const isInteraction = (c) => ((c.roles ?? []).includes('removal') || (c.roles ?? []).includes('wipe')) && !isRamp(c)
+    const isDraw        = (c) => (c.roles ?? []).includes('draw') && !isRamp(c)
+    const isWinconC     = (c) => ((c.roles ?? []).includes('win_condition') || (c.tags ?? []).includes('explosive_finisher')) && !isRamp(c)
+    const isSynergyOnly = (c) => (c.roles ?? []).includes('synergy') && !isRamp(c) && !isInteraction(c) && !isDraw(c) && !isWinconC(c)
+
+    const buildPriorityPool = () => {
+      const pool = []
+      const inDeck = new Set(deck.map(c => c.name.toLowerCase()))
+      const eligible = legalNonLands.filter(c => !inDeck.has(c.name.toLowerCase()))
+      const sortByEdhrec = (arr) => arr.sort((a, b) => (a.edhrecRank ?? 9999) - (b.edhrecRank ?? 9999))
+      if (wantInteraction) pool.push(...sortByEdhrec(eligible.filter(isInteraction)).map(c => ({ card: c, why: 'interaction below floor' })))
+      if (wantWincons)     pool.push(...sortByEdhrec(eligible.filter(isWinconC)).map(c => ({ card: c, why: 'wincon below floor' })))
+      if (wantDraw)        pool.push(...sortByEdhrec(eligible.filter(isDraw)).map(c => ({ card: c, why: 'draw below target' })))
+      if (wantSynergy)     pool.push(...sortByEdhrec(eligible.filter(isSynergyOnly)).map(c => ({ card: c, why: 'synergy below target' })))
+      return pool
+    }
+
+    const candidatePool = buildPriorityPool()
+    let swappedRamp = 0
+    for (const { card: incoming, why } of candidatePool) {
+      if (swappedRamp >= excess) break
+      // Find the lowest-priority swappable RAMP card (from the deck end).
+      let swapIdx = -1
+      for (let i = deck.length - 1; i >= 0; i--) {
+        const c = deck[i]
+        if (isLockedByFloor(c)) continue   // mana base / bracket staples / floors all locked
+        if (!isRamp(c)) continue
+        swapIdx = i
+        break
+      }
+      if (swapIdx === -1) break
+      const removed = deck[swapIdx]
+      usedNames.delete(removed.name.toLowerCase())
+      deck[swapIdx] = { ...incoming, quantity: 1, fromRampCeiling: true }
+      usedNames.add(incoming.name.toLowerCase())
+      swappedRamp++
+      explanation.push(`  Ramp ceiling: -${removed.name} → +${incoming.name} (${why})`)
+    }
+    if (swappedRamp > 0) {
+      explanation.push(`Ramp ceiling pass: swapped ${swappedRamp} excess ramp piece${swappedRamp === 1 ? '' : 's'} for higher-priority roles (was ${rampInDeckCount}/${rampCap}, now ${rampInDeckCount - swappedRamp}/${rampCap}).`)
+    } else if (excess > 0) {
+      explanation.push(`Ramp ceiling pass: ${rampInDeckCount} ramp / cap ${rampCap}, but ${candidatePool.length === 0 ? 'no priority candidates available in collection' : 'no swappable ramp slots — all ramp is locked by skeleton/staples'}.`)
     }
   }
 

@@ -30,6 +30,69 @@ import {
 import { clampEvalScore } from './evalScoreClamp'
 import { getExecutionThresholdForBracket } from '../rules/commanderExecution'
 
+// Phrases the LLM uses to claim a deck overshoots its target bracket.
+// Used by stripFalseAboveBracketClaims to remove offending lines from
+// strengths/weaknesses/bracketFitNotes when the bracket_fit lens says
+// the deck IS bracket-legal. The lens math is authoritative; the LLM's
+// pattern-match against "looks powerful" is not.
+// Note on regex syntax: `push(?:es)?` means "push" or "pushes". Earlier
+// drafts used `pushes?` which actually means "pushe" or "pushes" — the
+// `?` only applies to the immediately preceding `s`, leaving the `e`
+// mandatory. The bug ate every "push above bracket" phrase silently.
+const ABOVE_BRACKET_PHRASES = [
+  /push(?:es)? (?:the |this )?deck above (?:the |its )?(?:target |intended )?bracket/i,
+  /push(?:es)? (?:this |it )?above (?:the |its )?(?:target |intended )?bracket/i,
+  /push(?:es)? (?:it |this )?(?:slightly )?above bracket/i,
+  /(?:bump(?:s)?|elevate(?:s)?) (?:the |this )?deck (?:significantly )?above (?:the |its )?(?:target |intended )?bracket/i,
+  /(?:slightly )?(?:over[- ]?tuned|over[- ]?powered)(?:\b| for(?: the)?| at(?: the)?| compared)/i,
+  /(?:feels |seems |appears |is )(?:slightly |a bit |a little )?(?:more like |above |over )(?:bracket )?b?[345]\b/i,
+  /(?:may |could )(?:lead to|cause|create)[^.]*(?:bracket|power[- ]level) mismatch/i,
+  /power level (?:significantly )?above (?:the |its )?(?:target |intended )?bracket/i,
+  /technically (?:within|in) (?:the )?bracket but/i,
+  /skirt(?:s)? the upper (?:edge|limit) of the bracket/i,
+]
+
+/**
+ * stripFalseAboveBracketClaims — remove sentences that claim "above bracket"
+ * when bracket_fit lens verdict is 'pass'. Operates on weaknesses (array of
+ * strings) and bracketFitNotes (single string). strengths and topStrength
+ * usually don't have this issue; left alone.
+ *
+ * Returns a NEW eval object; original input is not mutated.
+ */
+export function stripFalseAboveBracketClaims(evalResult, bracketLens) {
+  if (!evalResult) return evalResult
+  // Only strip when the lens explicitly passed. If verdict is fail/warn/info,
+  // the LLM's "above bracket" complaint is potentially valid.
+  if (!bracketLens || bracketLens.verdict !== 'pass') return evalResult
+
+  const isFalseClaim = (text) => {
+    if (!text) return false
+    return ABOVE_BRACKET_PHRASES.some(p => p.test(text))
+  }
+  const stripFromString = (text) => {
+    if (!text) return text
+    // Split into sentences, drop offending ones, rejoin.
+    const sentences = text.split(/(?<=[.!?])\s+/)
+    const kept = sentences.filter(s => !isFalseClaim(s))
+    return kept.length === sentences.length ? text : kept.join(' ').trim()
+  }
+
+  const newWeaknesses = (evalResult.weaknesses ?? []).filter(w => !isFalseClaim(w))
+  const newBracketFit = stripFromString(evalResult.bracketFitNotes ?? '')
+  const removedCount =
+    (evalResult.weaknesses?.length ?? 0) - newWeaknesses.length +
+    (evalResult.bracketFitNotes !== newBracketFit ? 1 : 0)
+
+  if (removedCount === 0) return evalResult
+  return {
+    ...evalResult,
+    weaknesses: newWeaknesses,
+    bracketFitNotes: newBracketFit || 'Deck is bracket-legal per the bracket_fit lens.',
+    _stripped: { aboveBracketClaims: removedCount },
+  }
+}
+
 // Bracket-scaled filler caps (kept in sync with deckValidator.js).
 // Used by the eval score clamp to know when filler is "runaway."
 //
@@ -216,8 +279,9 @@ export async function evaluateDeck({ commander, bracket, deck, lensResults, onPr
     // accepting them as explicit args. Single source of truth.
     const winLens  = lensResults?.find(r => r.name === 'win_plan')
     const execLens = lensResults?.find(r => r.name === 'commander_execution')
+    const bracketLens = lensResults?.find(r => r.name === 'bracket_fit')
     const trueFiller = deck.filter(c => (c.roles ?? [])[0] === 'filler').length
-    return clampEvalScore(withMeta, {
+    const clamped = clampEvalScore(withMeta, {
       bracket,
       fillerCount:       trueFiller,
       fillerCap:         FILLER_CAP_BY_BRACKET[bracket],
@@ -226,6 +290,12 @@ export async function evaluateDeck({ commander, bracket, deck, lensResults, onPr
       executionScore:    execLens?.score,
       executionThreshold: getExecutionThresholdForBracket(bracket),
     })
+    // Belt-and-suspenders: strip false "above bracket" claims when
+    // bracket_fit verdict is 'pass'. The eval prompt forbids these phrases
+    // (CARDS-LEGAL-AT-BRACKET RULE) but the LLM keeps emitting them
+    // anyway. Removing them here means the user-facing evaluation matches
+    // the lens math.
+    return stripFalseAboveBracketClaims(clamped, bracketLens)
   } catch (err) {
     const msg = err?.message ?? String(err)
     console.warn('[evaluate] pass failed:', msg)
