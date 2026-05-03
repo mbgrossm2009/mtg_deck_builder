@@ -1087,7 +1087,7 @@ function filterStaleCountWarnings(warnings, counts, detectedWincons) {
 //                    Purphoros, Terror of the Peaks, Hellrider)
 //   - combat_tribal: 2+ tribal lords + 18+ on-tribe creatures = "swing
 //                    wide for the win" plan
-function detectMultiCardWincons(deck, strategyContext, commander = null) {
+export function detectMultiCardWincons(deck, strategyContext, commander = null) {
   const patterns = []
   const tags = (c) => c.tags ?? []
   const text = (c) => (c.oracle_text ?? '').toLowerCase()
@@ -1200,6 +1200,48 @@ function detectMultiCardWincons(deck, strategyContext, commander = null) {
     (c.type_line ?? '').toLowerCase().includes('creature')
   ).length >= 5) {
     patterns.push(`extra-combat loop: ${deckExtraCombatCount} extra-combat enablers + creature density`)
+  }
+
+  // Combat-damage → draw wincon (Edric, Tymna, Toski, Grazilaxx).
+  // The plan: play many evasive creatures, attack, each combat-damage
+  // trigger draws cards, refill, repeat. The commander or deck supplies
+  // the draw payoff; evasive creature density makes it lethal.
+  //
+  // Detection:
+  //   - Commander text triggers a draw on combat damage to a player, OR
+  //   - Deck has 2+ "combat damage to a player → draw" payoffs (Bident
+  //     of Thassa, Coastal Piracy, Reconnaissance Mission, Edric)
+  //   PLUS evasive creature density (≥5 creatures with flying / menace /
+  //   shadow / horsemanship / can't-be-blocked / fear / protection).
+  const COMBAT_DRAW_PAYOFFS = new Set([
+    'edric, spymaster of trest', 'tymna the weaver', 'bident of thassa',
+    'coastal piracy', 'reconnaissance mission', 'curiosity',
+    'curious obsession', 'tandem lookout', 'witty roastmaster',
+    'thassa, deep-dwelling',
+  ])
+  // Match "combat damage to ... player/opponent" with any qualifier in
+  // between ("a player", "one of your opponents", "target opponent",
+  // "any of your opponents", etc.), followed by a draw effect later in
+  // the sentence (cap at sentence boundary via [^.]).
+  const combatDrawCommanderRe = /\bcombat damage to [^.]*\b(?:players?|opponents?)\b[^.]*draw/i
+  const commanderHasCombatDraw = combatDrawCommanderRe.test(commanderText)
+  const deckCombatDrawPayoffs = deck.filter(c =>
+    COMBAT_DRAW_PAYOFFS.has(name(c)) || combatDrawCommanderRe.test(text(c))
+  ).length
+
+  // Evasive creature: creature with flying, menace, shadow, horsemanship,
+  // fear, intimidate, can't be blocked, protection, or skulk-style text.
+  const evasionRe = /\b(?:flying|menace|shadow|horsemanship|fear|intimidate|skulk|protection from|trample)\b|can't be blocked/i
+  const evasiveCreatures = deck.filter(c => {
+    const tl = (c.type_line ?? '').toLowerCase()
+    if (!tl.includes('creature')) return false
+    return evasionRe.test(text(c))
+  }).length
+
+  if (commanderHasCombatDraw && evasiveCreatures >= 5) {
+    patterns.push(`combat-damage-draw: commander draws on combat damage + ${evasiveCreatures} evasive creatures`)
+  } else if (deckCombatDrawPayoffs >= 2 && evasiveCreatures >= 5) {
+    patterns.push(`combat-damage-draw: ${deckCombatDrawPayoffs} draw payoffs + ${evasiveCreatures} evasive creatures`)
   }
 
   return patterns
