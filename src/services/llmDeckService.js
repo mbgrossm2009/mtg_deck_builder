@@ -211,8 +211,20 @@ export async function evaluateDeck({ commander, bracket, deck, criticalCardCount
       executionThreshold: getExecutionThresholdForBracket(bracket),
     })
   } catch (err) {
-    console.warn('[evaluate] pass failed:', err?.message ?? err)
-    return null
+    const msg = err?.message ?? String(err)
+    console.warn('[evaluate] pass failed:', msg)
+    // Return a structured failure object instead of null so the eval
+    // harness JSON captures the specific error (rate limit, 504, etc.).
+    // The eval-store's null-check still treats this as "failed" — the
+    // shape just carries more info now.
+    return {
+      score: null,
+      summary: `Eval call failed: ${msg}`,
+      strengths: [],
+      weaknesses: [],
+      bracketFitNotes: '',
+      _meta: { mode: 'error', error: msg },
+    }
   }
 }
 
