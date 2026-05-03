@@ -1045,9 +1045,21 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
         source: c.fromManaSolver ? 'manaSolver' : c.fromSkeleton ? 'skeleton' : c.fromBracketStaples ? 'bracketStaples' : c.fromTribalFloor ? 'tribalFloor' : c.fromTutorFloor ? 'tutorFloor' : c.fromRemovalFloor ? 'removalFloor' : c.fromWinconBackstop ? 'winconBackstop' : c.fromFallback ? 'heuristic' : c.fromCritique ? 'critique' : c.fromHeuristicCritique ? 'heuristicCritique' : 'llm',
       }))
       const inDeckNames = new Set(deck.map(c => c.name.toLowerCase()))
-      const availablePool = legalNonLands.filter(c =>
+      const availablePoolFull = legalNonLands.filter(c =>
         !inDeckNames.has(c.name.toLowerCase()) && !swappedOutNames.has(c.name.toLowerCase())
       )
+      // Cap the pool sent to the critique. With a 7500-card test collection,
+      // legalNonLands minus the deck is ~7000 cards. Each compactCard'd card
+      // is ~250 tokens → 1.5M+ token prompt, blowing past gpt-4o-mini's
+      // 200k TPM cap and triggering 429 on every generation. The critique
+      // can't usefully reason over 7000 candidates anyway; the top-scored
+      // 250 is plenty (typical critique returns ≤5 swaps).
+      const availablePool = capPoolForLLM(
+        availablePoolFull,
+        commander,
+        bracket,
+        strategyContext,
+      ).slice(0, 250)
       const chosenStrategy = llmResponse?.chosenStrategy ?? llmResponse?.strategySummary?.primaryStrategy ?? ''
 
       const iterResult = await critiqueDeck({
