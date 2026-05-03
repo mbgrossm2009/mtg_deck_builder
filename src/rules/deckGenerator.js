@@ -37,14 +37,21 @@ export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
 
   // 3. Detect commander archetypes — regex-based first, then merge in EDHREC themes.
   const regexArchetypes = detectArchetypes(commander)
-  const themeArchetypes = themesToArchetypes(edhrec.themes)
-  const archetypes      = mergeArchetypes(regexArchetypes, themeArchetypes)
-  const anchorNames     = anchorNamesFor(archetypes)
-  const commanderTypes  = extractCreatureSubtypes(commander)
+  const themeArchetypes       = themesToArchetypes(edhrec.themes)
+  const archetypes            = mergeArchetypes(regexArchetypes, themeArchetypes)
+  const anchorNames           = anchorNamesFor(archetypes)
+  const commanderTypes        = extractCreatureSubtypes(commander)
+  const commanderMechanicTags = extractCommanderMechanicTags(commander)
+  const commanderTagBoosts    = commanderToCardTagBoosts(commanderMechanicTags)
 
-  // 3. Annotate every card with roles/tags, then apply bracket filter
+  // 3. Annotate every card with roles/tags, then apply bracket filter.
+  // commanderTagBoosts promotes tag-matched cards (Sanguine Bond on Sorin
+  // lifegain commander) to the synergy role even when oracle-text
+  // keyword overlap fails — see assignRoles in cardRoles.js.
   const annotated = legal.map(card => {
-    const { roles, tags } = assignRoles(card, commander, { anchorNames, commanderTypes })
+    const { roles, tags } = assignRoles(card, commander, {
+      anchorNames, commanderTypes, commanderTagBoosts,
+    })
     return { ...card, roles, tags }
   })
 
@@ -100,10 +107,9 @@ export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
   // Last write wins, so the diagnostics reflect the final scoring state.
   const breakdowns = new Map()
 
-  // Commander mechanic tags — boost cards tagged for what the commander
-  // cares about (sacrifice → sac_outlet, tokens → token_producer, etc.).
-  const commanderMechanicTags = extractCommanderMechanicTags(commander)
-  const commanderTagBoosts    = commanderToCardTagBoosts(commanderMechanicTags)
+  // commanderMechanicTags + commanderTagBoosts are computed earlier (before
+  // assignRoles) so the role assignment can use them — see step 3 above.
+  // Reused here for the scoring context.
 
   const scoringContext = {
     archetypes,

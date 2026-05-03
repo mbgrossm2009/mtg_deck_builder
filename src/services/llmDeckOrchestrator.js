@@ -175,11 +175,16 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     explanation.push(`Commander mechanics: ${commanderMechanicTags.map(t => t.replace('cares_about_', '')).join(', ')}.`)
   }
 
-  // 3. Annotate roles/tags.
+  // 3. Annotate roles/tags. Pass commanderTagBoosts so cards whose mechanic
+  // tags match the commander's cares_about_X mapping land in the synergy
+  // role even when oracle-text keyword overlap fails (e.g. Sanguine Bond
+  // on Sorin: tagged lifegain_payoff, no SYNERGY_KEYWORDS overlap, would
+  // otherwise default to filler despite being a core engine piece).
   const annotated = legal.map(card => {
     const { roles, tags } = assignRoles(card, commander, {
       anchorNames: new Set(),
       commanderTypes: extractCreatureSubtypes(commander),
+      commanderTagBoosts,
     })
     return { ...card, roles, tags }
   })
@@ -294,11 +299,31 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   const llmSlots = nonLandSlots - totalLockedNonLands    // what the LLM still needs to pick
 
   // 5. Build deck-rule context for the prompt.
+  //
+  // targetCounts in the prompt should reflect what the LLM still needs to
+  // PICK, not the deck's TOTAL target. Bracket staples + skeleton already
+  // contribute to ramp/draw/removal/etc. — without subtracting their
+  // contribution, the LLM doubles up (e.g. ramp target 14, staples already
+  // provide 14, LLM picks 14 more → deck ships with 28 ramp). Eval data
+  // showed B5 decks at 19 ramp despite the lowered base target of 14;
+  // root cause was the LLM's prompt saying "ramp ~14" while staples
+  // already locked ~14 ramp pieces.
+  const fullTargets = targetRoleCounts(bracket, commander, archetypes)
+  const lockedRoleCounts = skeletonRoleCounts([...skeleton.staples, ...bracketStaples])
+  const remainingTargets = {}
+  for (const [role, target] of Object.entries(fullTargets)) {
+    if (role === 'filler') { remainingTargets[role] = target; continue }
+    const alreadyLocked = lockedRoleCounts[role] ?? 0
+    remainingTargets[role] = Math.max(0, target - alreadyLocked)
+  }
+
   const deckRules = {
     landTarget: lockedLands.length,
     nonLandSlots,
     llmSlots,                                               // how many cards the LLM still picks
-    targetCounts: targetRoleCounts(bracket, commander, archetypes),
+    targetCounts: remainingTargets,                         // remaining-after-locked, see above
+    fullTargets,                                            // original deck-total targets, for diagnostics
+    lockedRoleCounts,                                       // what skeleton + staples already contribute
     manaBaseStats: manaBaseSolution.stats,
     skeletonStats: {
       size: skeleton.staples.length,

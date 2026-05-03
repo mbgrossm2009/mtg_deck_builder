@@ -1504,6 +1504,26 @@ list above unless the SPECIFIC reason they're weak is bracket-relevant
 Sentinel would be a stronger pick"). Even then, prefer to identify
 genuinely weak cards over good cards.
 
+NAME-ONLY-DECK-LIST-CARDS RULE — when you reference a specific card name
+in summary, topStrength, strengths, weaknesses, or bracketFitNotes,
+that name MUST appear verbatim in the \`deck\` array of the user payload
+above. Do NOT name a card from training data or "what a typical
+B4 deck has" — only cards in the deck list this evaluation is judging.
+
+WRONG (do NOT do this):
+  Deck list does not contain Imperial Seal, evaluator writes:
+    "Cards like Imperial Seal push this above bracket"  ❌
+  (The card isn't in the deck. Naming it is a hallucination.)
+RIGHT:
+  Either don't name a specific card, or name one that IS in the deck:
+    "The deck includes 5 Tier-C fast-mana pieces (Mana Crypt, Chrome
+     Mox, Mox Diamond, ...) — 1 over the B4 cap of 4."  ✓
+  (All named cards are in the deck array.)
+
+If you want to make a power-level point, cite a count or category
+("8 Tier-C cards") rather than naming individual cards you can't
+verify are present.
+
 ═══════════════════════════════════════════════════════════════════════════
 PRECOMPUTED COUNTS — when the user payload includes \`counts\` and
 \`detected_wincon_patterns\`, TRUST THEM. The orchestrator already counted

@@ -85,9 +85,16 @@ const WIN_CONDITIONS = new Set([
 ])
 
 // `extras` lets the generator pass through:
-//   anchorNames    — Set<string> of curated archetype anchor names. Match → synergy role.
-//   commanderTypes — array of lowercased creature subtypes from the commander's type_line.
-//                    Used as bonus synergy keywords (e.g. Koma is a Serpent → 'serpent' counts).
+//   anchorNames        — Set<string> of curated archetype anchor names. Match → synergy role.
+//   commanderTypes     — array of lowercased creature subtypes from the commander's type_line.
+//                        Used as bonus synergy keywords (e.g. Koma is a Serpent → 'serpent' counts).
+//   commanderTagBoosts — Set<string> of card-level mechanic tags that the commander
+//                        cares about (computed via commanderToCardTagBoosts). When a
+//                        card carries any of these tags, it gets the synergy role even
+//                        when keyword overlap fails. Critical for lifegain commanders
+//                        (Sorin/Daxos) where Sanguine Bond / Cliffhaven Vampire have
+//                        no SYNERGY_KEYWORDS overlap with the commander's text but
+//                        clearly enable the deck's plan via the lifegain_payoff tag.
 export function assignRoles(card, commander, extras = {}) {
   const text = getOracleText(card)
   const type = (card.type_line ?? '').toLowerCase()
@@ -228,6 +235,23 @@ export function assignRoles(card, commander, extras = {}) {
   for (const rule of MECHANIC_TAG_RULES) {
     if (rule.patterns.some(p => p.test(text))) tags.push(rule.tag)
   }
+
+  // Tag-based synergy promotion. A card whose mechanic tags match the
+  // commander's cares_about_X mapping (commanderTagBoosts) is on-plan
+  // even if its oracle text shares no keywords with the commander's.
+  // Without this, a Sorin (lifelink commander) deck tags Sanguine Bond
+  // as `lifegain_payoff` but assigns it `filler` because the SYNERGY_KEYWORDS
+  // list doesn't include 'life' or 'gain' — pushing genuine on-plan
+  // payoffs into the filler bucket.
+  if (!roles.includes('synergy') && extras.commanderTagBoosts && extras.commanderTagBoosts.size > 0) {
+    for (const t of tags) {
+      if (extras.commanderTagBoosts.has(t)) {
+        roles.push('synergy')
+        break
+      }
+    }
+  }
+
   // Tribal anchor — if the card is a creature whose type line includes one of
   // the commander's creature subtypes, tag it. Tribal decks live or die by
   // having enough on-tribe bodies, so this is high-signal.

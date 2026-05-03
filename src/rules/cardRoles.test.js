@@ -427,6 +427,59 @@ describe('assignRoles — anchor names → synergy', () => {
   })
 })
 
+// ─── Tag-based synergy (commander mechanic-tag boosts) ───────────────────────
+describe('assignRoles — commanderTagBoosts → synergy', () => {
+  it('Sanguine Bond on a lifegain commander gets the synergy role via tag match', () => {
+    // Sanguine Bond text triggers off lifegain and shares no SYNERGY_KEYWORDS
+    // with a typical lifegain commander's text. Without tag-based promotion,
+    // it ends up as filler — the regression that surfaced on Sorin BW.
+    const sanguineBond = card({
+      name: 'Sanguine Bond',
+      type_line: 'Enchantment',
+      oracle_text: 'Whenever you gain life, target opponent loses that much life.',
+    })
+    // A lifegain commander whose text doesn't share SYNERGY_KEYWORDS with the card.
+    const lifegainCmdr = {
+      name: 'Lifegain Cmdr', type_line: 'Legendary Creature', color_identity: ['B', 'W'],
+      oracle_text: 'Whenever you gain life, put a +1/+1 counter on Lifegain Cmdr.',
+    }
+    // Boosts that would be computed by commanderToCardTagBoosts(cares_about_lifegain).
+    const commanderTagBoosts = new Set(['lifegain', 'lifegain_payoff'])
+
+    const { roles } = assignRoles(sanguineBond, lifegainCmdr, { commanderTagBoosts })
+    expect(roles).toContain('synergy')
+    expect(roles[0]).not.toBe('filler')
+  })
+
+  it('does NOT promote a card whose tags do not match the boosts', () => {
+    // A vanilla creature has no mechanic tags → no tag-based promotion.
+    const vanillaBear = card({
+      name: 'Plain Bear', type_line: 'Creature — Bear', oracle_text: '',
+    })
+    const lifegainCmdr = {
+      name: 'Lifegain Cmdr', type_line: 'Legendary Creature', color_identity: ['B', 'W'],
+      oracle_text: 'Whenever you gain life, put a +1/+1 counter on Lifegain Cmdr.',
+    }
+    const commanderTagBoosts = new Set(['lifegain', 'lifegain_payoff'])
+
+    const { roles } = assignRoles(vanillaBear, lifegainCmdr, { commanderTagBoosts })
+    expect(roles).not.toContain('synergy')
+  })
+
+  it('omitted commanderTagBoosts does not crash and falls back to keyword overlap', () => {
+    const sanguineBond = card({
+      name: 'Sanguine Bond', type_line: 'Enchantment',
+      oracle_text: 'Whenever you gain life, target opponent loses that much life.',
+    })
+    const lifegainCmdr = {
+      name: 'X', type_line: 'Legendary Creature', color_identity: ['B'],
+      oracle_text: 'Whenever you gain life, draw a card.',
+    }
+    // No boosts passed — should not throw.
+    expect(() => assignRoles(sanguineBond, lifegainCmdr, {})).not.toThrow()
+  })
+})
+
 // ─── Filler fallback ─────────────────────────────────────────────────────────
 describe('assignRoles — filler fallback', () => {
   it('puts unclassified non-land cards in filler', () => {
