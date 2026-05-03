@@ -151,6 +151,22 @@ describe('stripFalseAboveBracketClaims — empirical phrase coverage', () => {
     'The presence of multiple cards exceeds the target bracket.',
     // run a606abe3 — Daxos B4
     'The deck includes too many high-impact cards that could lead to a more competitive feel than intended for B4.',
+    // run 9e64a50c — Sorin B3
+    'The inclusion of Sensei\'s Divining Top, Tainted Pact, and Bolas\'s Citadel slightly bumps the deck above the ideal bracket.',
+    // run 9e64a50c — Daxos B3
+    'Four cards (Sensei\'s Divining Top, Ranger-Captain of Eos, Idyllic Tutor, Enlightened Tutor) are flagging the deck as slightly over the target bracket.',
+    // run 9e64a50c — Daxos B4
+    'Several cards, such as Mana Vault and Grim Monolith, are flagged as overshooting the bracket, potentially complicating the deck\'s focus.',
+    // run 9e64a50c — Daxos B4 bracketFitNotes
+    'The deck is currently at the upper limit of target bracket 4, primarily due to flagged cards that could lead to a mismatch in power level.',
+    // run 9e64a50c — Amalia B5 bracketFitNotes
+    'The presence of 8 tutors like Demonic Tutor and Vampiric Tutor is above the recommended count for B4, indicating potential over-tuning.',
+    // run 9e64a50c — Amalia B3 bracketFitNotes
+    'Overall, the deck aligns well with the B3 bracket\'s expectations, though a few card inclusions are borderline for competitive play.',
+    // run 9e64a50c — Daxos B5
+    'The presence of numerous high-cost tutors such as Enlightened Tutor and Idyllic Tutor may not fit well with the overall strategy at this bracket level.',
+    // historical "may push above"
+    'The presence of multiple powerful tutors may push it slightly above the target bracket.',
   ]
 
   it.each(empiricalPhrases)('strips: %s', (phrase) => {

@@ -77,6 +77,36 @@ const ABOVE_BRACKET_PHRASES = [
   /more competitive feel than intended/i,
   // "raise(s) concerns? about (overall )?power level"
   /raise(?:s)? concerns? about (?:overall |the )?power[- ]?level/i,
+  // "flagged as overshooting (the bracket)"
+  /flagged as (?:overshooting|exceeding|over[- ]tuning)(?: the| its)? (?:target |intended )?(?:competitive )?bracket/i,
+  // "flagging the deck as slightly over the target bracket"
+  /flag(?:ged|ging)? (?:the |this )?deck (?:as )?(?:slightly |barely )?(?:over|above) (?:the |its )?(?:target |intended |ideal )?bracket/i,
+  // "borderline for competitive play" / "borderline for B4"
+  /borderline for (?:competitive|b?[345])/i,
+  // "above the recommended count for B4"
+  /above the (?:recommended|expected|typical) count for b?[345]/i,
+  // "may push (it )?slightly above (the )?(target|intended) bracket"
+  /(?:may|could|might) push (?:it |this )?(?:slightly )?above (?:the |its )?(?:target |intended )?bracket/i,
+  // "bumps (it )?slightly above (the )?(ideal|target|intended) bracket"
+  /bump(?:s)? (?:it |this )?(?:slightly )?(?:above|over) (?:the |its )?(?:ideal|target|intended) bracket/i,
+  // "slightly bumps the deck above the ideal bracket"
+  /(?:slightly )?bump(?:s)? (?:the |this )?deck (?:slightly )?above (?:the |its )?(?:ideal|target|intended)? ?bracket/i,
+  // "slightly exceeds it" / "slightly exceeds the bracket"
+  /(?:slightly |barely |marginally )exceed(?:s|ed|ing)?(?: it| the bracket| the target| this)?/i,
+  // "above the ideal bracket"
+  /above (?:the |its )?ideal bracket/i,
+  // "needing some adjustments for optimal performance" (paired with bracket-fit complaints)
+  /needing (?:some |minor )?adjustments? for optimal (?:performance|fit)/i,
+  // "indicating potential over-tuning"
+  /indicat(?:es|ing) (?:potential |possible )?over[- ]?tuning/i,
+  // "could lead to mismatch in power level" / "could lead to a mismatch in power level"
+  /(?:could |may |might )lead to (?:a |the )?(?:potential )?mismatch in power[- ]?level/i,
+  // "may not fit well with (the overall )?strategy at this bracket"
+  /may not fit well with (?:the overall |the |this )?(?:strategy|build)? ?at (?:this|the) bracket/i,
+  // "currently at the upper limit of (target )?bracket X"
+  /(?:currently |is )?at the upper (?:limit|edge) of (?:target |intended )?bracket/i,
+  // "the deck's actual bracket aligns... but (the )?(presence|inclusion)..."
+  // We do NOT strip these — they're describing the lens fact correctly.
 ]
 
 /**
