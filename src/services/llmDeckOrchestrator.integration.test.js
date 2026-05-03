@@ -1169,3 +1169,67 @@ describe('Regression: EDHREC skeleton combo piece must be removable by downgrade
     expect(result.bracketAnalysis?.actualBracket).toBeLessThanOrEqual(3)
   })
 })
+
+// ─── Knowledge layer — lensResults + commanderProfile in output ─────────────
+//
+// Phase 4 of the migration: the orchestrator now runs the lens framework
+// against every finished deck and surfaces structured per-dimension
+// results. These tests pin down the contract so the lens layer can't
+// silently disappear from the return payload.
+
+describe('Knowledge layer: orchestrator surfaces lensResults + commanderProfile', () => {
+  it('result includes commanderProfile object', async () => {
+    const result = await generateWithMocks({
+      commander: TIAMAT, bracket: 3, collection: buildRichCollection(),
+    })
+    expect(result.commanderProfile).toBeDefined()
+    expect(result.commanderProfile.name).toBe('Tiamat')
+    expect(result.commanderProfile.tribal.tribe).toBe('dragon')
+  })
+
+  it('result includes lensResults array with all 4 lenses', async () => {
+    const result = await generateWithMocks({
+      commander: TIAMAT, bracket: 3, collection: buildRichCollection(),
+    })
+    expect(Array.isArray(result.lensResults)).toBe(true)
+    const names = result.lensResults.map(r => r.name)
+    expect(names).toContain('commander_execution')
+    expect(names).toContain('win_plan')
+    expect(names).toContain('bracket_fit')
+    expect(names).toContain('mana_base')
+  })
+
+  it('every lens result has the contract shape', async () => {
+    const result = await generateWithMocks({
+      commander: TIAMAT, bracket: 3, collection: buildRichCollection(),
+    })
+    for (const r of result.lensResults) {
+      expect(r).toHaveProperty('verdict')
+      expect(['pass', 'warn', 'fail', 'info']).toContain(r.verdict)
+      expect(typeof r.summary).toBe('string')
+      expect(Array.isArray(r.evidence)).toBe(true)
+      expect(Array.isArray(r.suggestions)).toBe(true)
+    }
+  })
+
+  it('Tiamat at B3 — commander_execution lens reflects dragon density', async () => {
+    const result = await generateWithMocks({
+      commander: TIAMAT, bracket: 3, collection: buildRichCollection(),
+    })
+    const exec = result.lensResults.find(r => r.name === 'commander_execution')
+    expect(exec).toBeDefined()
+    // Score is informational; just verify we got a numeric one between 0-1.
+    expect(typeof exec.score).toBe('number')
+    expect(exec.score).toBeGreaterThanOrEqual(0)
+    expect(exec.score).toBeLessThanOrEqual(1)
+  })
+
+  it('Tiamat at B3 — bracket_fit lens reports actualBracket', async () => {
+    const result = await generateWithMocks({
+      commander: TIAMAT, bracket: 3, collection: buildRichCollection(),
+    })
+    const fit = result.lensResults.find(r => r.name === 'bracket_fit')
+    expect(fit).toBeDefined()
+    expect(fit.evidence.some(e => e.kind === 'actual_bracket')).toBe(true)
+  })
+})

@@ -25,6 +25,12 @@ import { detectCombos, getAllCombos } from '../rules/comboRules'
 import { detectArchetypes, anchorNamesFor } from '../rules/archetypeRules'
 import { extractCommanderMechanicTags, commanderToCardTagBoosts } from '../rules/commanderMechanics'
 import { computeCommanderExecutionScore, getExecutionThresholdForBracket } from '../rules/commanderExecution'
+import { extractCommanderProfile } from '../knowledge/commanderProfile'
+import { evaluateLenses } from '../knowledge/lens'
+import { CommanderExecutionLens } from '../knowledge/lenses/commanderExecutionLens'
+import { WinPlanLens }            from '../knowledge/lenses/winPlanLens'
+import { BracketFitLens }         from '../knowledge/lenses/bracketFitLens'
+import { ManaBaseLens }           from '../knowledge/lenses/manaBaseLens'
 import { isLand, isBasicLand, getBasicLandsForCommander, avgCmc } from '../utils/cardHelpers'
 import { generateDeck } from '../rules/deckGenerator'
 import { scoreCard } from '../rules/deckScorer'
@@ -402,6 +408,12 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       fallbackCounts,
       fallbackWincons,
     )
+    // Knowledge-layer lens output for the fallback path too.
+    const fallbackProfile = extractCommanderProfile(commander)
+    const fallbackLensResults = evaluateLenses(
+      [CommanderExecutionLens, WinPlanLens, BracketFitLens, ManaBaseLens],
+      { deck: heuristic.mainDeck, commanderProfile: fallbackProfile, context: { targetBracket: bracket } }
+    )
     return {
       ...heuristic,
       mainDeck: heuristic.mainDeck,   // mutated in place by downgrade
@@ -413,6 +425,8 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       llmStrategy: null,
       criticalCardCounts: fallbackCounts,
       detectedWincons: fallbackWincons,
+      lensResults: fallbackLensResults,
+      commanderProfile: fallbackProfile,
     }
   }
 
@@ -998,6 +1012,17 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   // multi-card pattern was detected.
   const filteredWarnings = filterStaleCountWarnings(warnings, criticalCardCounts, detectedWincons)
 
+  // Knowledge-layer evaluation. Run all lenses against the finished deck
+  // and surface their structured results in the return payload. Existing
+  // inline computations (criticalCardCounts, detectedWincons, execution)
+  // remain for backward compatibility — the lens output is additive and
+  // gives consumers richer per-card evidence + actionable suggestions.
+  const commanderProfile = extractCommanderProfile(commander)
+  const lensResults = evaluateLenses(
+    [CommanderExecutionLens, WinPlanLens, BracketFitLens, ManaBaseLens],
+    { deck, commanderProfile, context: { targetBracket: bracket } }
+  )
+
   return {
     commander,
     mainDeck: deck,
@@ -1011,6 +1036,8 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     criticalCardCounts,
     detectedWincons,
     executionScore: execution,
+    lensResults,
+    commanderProfile,
 
     // LLM-specific extras the UI can show but doesn't have to.
     generationMode: 'llm-assisted',
