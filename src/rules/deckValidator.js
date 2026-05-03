@@ -54,23 +54,30 @@ export function validateDeck(mainDeck, commander) {
 }
 
 // Bracket-scaled filler thresholds. The flat 12-card threshold in
-// validateDeck is a backstop; this wrapper applies the bracket norm:
-//   B1 ≤ 18  — casual decks tolerate plenty of off-plan cards
-//   B2 ≤ 12  — precon-tier — some filler expected
-//   B3 ≤ 8   — focused upgraded deck
-//   B4 ≤ 5   — optimized — almost no off-plan
-//   B5 ≤ 3   — cEDH — tight, but not zero (Drannith Magistrate, Opposition
-//              Agent etc. count as "filler" by role tag but earn their slot)
+// validateDeck is a backstop; this wrapper applies the bracket norm.
+//
+// Definition: filler = cards whose PRIMARY role is 'filler' (i.e., no
+// other role detected by assignRoles). Not the slot-bucket fallback tag
+// that appears on every non-land card — see countRoles in this file.
+//
+// Thresholds tightened (2026-05-03) from earlier 18/12/8/5/3 set after
+// the filler-counting bug fix exposed how few cards are TRUE filler in
+// real decks. Values now match the original AI-feedback recommendation:
+//   B1 ≤ 12  — casual decks tolerate off-plan cards
+//   B2 ≤ 9   — precon-tier
+//   B3 ≤ 6   — focused upgraded deck
+//   B4 ≤ 3   — optimized — minimal off-plan
+//   B5 ≤ 1   — cEDH — every slot must earn it
 //
 // We don't replace validateDeck because it's used in many places that
 // don't know the bracket. This wrapper produces an extended warning list
 // when the bracket is known.
 const FILLER_THRESHOLD_BY_BRACKET = {
-  1: 18,
-  2: 12,
-  3: 8,
-  4: 5,
-  5: 3,
+  1: 12,
+  2:  9,
+  3:  6,
+  4:  3,
+  5:  1,
 }
 
 export function validateDeckAtBracket(mainDeck, commander, bracket) {

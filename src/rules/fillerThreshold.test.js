@@ -36,12 +36,14 @@ function deckWithFiller(fillerCount, opts = {}) {
 
 describe('validateDeckAtBracket — bracket-scaled filler thresholds', () => {
   // For each bracket, test exactly at threshold (no warn) AND one over (warn).
+  // Thresholds tightened post-counting-bug fix (filler counts in real decks
+  // are 5-15, not 60+, so the previous lenient values were unnecessary).
   it.each([
-    [1, 18, 19],
-    [2, 12, 13],
-    [3,  8,  9],
-    [4,  5,  6],
-    [5,  3,  4],
+    [1, 12, 13],
+    [2,  9, 10],
+    [3,  6,  7],
+    [4,  3,  4],
+    [5,  1,  2],
   ])('B%d: threshold %d — at threshold = no warn, threshold+1 = warn',
     (bracket, atThreshold, overThreshold) => {
       const atDeck   = deckWithFiller(atThreshold)
@@ -65,13 +67,14 @@ describe('validateDeckAtBracket — bracket-scaled filler thresholds', () => {
     expect(fillerWarn).toBeDefined()
     expect(fillerWarn).toMatch(/10 filler/)
     expect(fillerWarn).toMatch(/B4/)
-    expect(fillerWarn).toMatch(/≤ 5/)
+    expect(fillerWarn).toMatch(/≤ 3/)
   })
 
   it('strips the flat-threshold filler warning from the base validator', () => {
-    // validateDeck warns at >12; with 13 filler at B1 (where 18 is the bracket
-    // threshold) the bracket-aware result should have NO filler warning at all.
-    const deck = deckWithFiller(13)
+    // validateDeck warns at >12 (flat). Bracket-aware B1 threshold is also
+    // 12, so 12 filler at B1 → no warning. The flat-threshold warning that
+    // would otherwise fire at >12 must be stripped before our return.
+    const deck = deckWithFiller(12)
     const { warnings } = validateDeckAtBracket(deck, cmdr, 1)
     expect(warnings.some(w => /filler cards/.test(w))).toBe(false)
   })
