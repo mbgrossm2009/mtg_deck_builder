@@ -228,17 +228,48 @@ export async function evaluateDeck({ commander, bracket, deck, criticalCardCount
   }
 }
 
+// Parse OpenAI's "Please try again in Nms" / "Ns" hint from a 429 error
+// body. Returns milliseconds to wait, capped at MAX_429_BACKOFF_MS so a
+// pathological "try again in 5 minutes" doesn't hang an eval run.
+//
+// Examples of strings we expect to see:
+//   "Please try again in 719ms"
+//   "Please try again in 1.5s"
+//   "Please try again in 30s"
+const MAX_429_BACKOFF_MS = 10_000   // cap individual retry sleep at 10s
+const DEFAULT_429_BACKOFF_MS = 2_000
+
+export function parseRetryAfterMs(errorMessage) {
+  if (typeof errorMessage !== 'string') return DEFAULT_429_BACKOFF_MS
+  // Match "in 719ms" or "in 1.5s" or "in 30s"
+  const msMatch = errorMessage.match(/try again in\s+(\d+(?:\.\d+)?)\s*ms/i)
+  if (msMatch) {
+    const ms = Number(msMatch[1])
+    return Math.min(Math.max(ms, 200), MAX_429_BACKOFF_MS)
+  }
+  const sMatch = errorMessage.match(/try again in\s+(\d+(?:\.\d+)?)\s*s/i)
+  if (sMatch) {
+    const ms = Number(sMatch[1]) * 1000
+    return Math.min(Math.max(ms, 200), MAX_429_BACKOFF_MS)
+  }
+  return DEFAULT_429_BACKOFF_MS
+}
+
 // POSTs the prompt to /api/llm and returns the parsed JSON content. The
 // serverless function attaches OPENAI_API_KEY (server-side) and forwards
 // to OpenAI; the browser never sees the key.
 //
-// Retries once on 504 (Gateway Timeout) and 502 (Bad Gateway) — these are
-// the most common transient errors when OpenAI is under load and the
-// Vercel function hits its 60s maxDuration. A single retry typically
-// succeeds because the next call gets a less-loaded OpenAI worker.
+// Retry policy:
+//   - 504/502 (Vercel/OpenAI gateway timeouts) — retry once after 1.5s
+//   - 429 (rate limit) — retry up to 2 times, each time waiting the
+//     duration OpenAI's error body recommends ("try again in 719ms").
+//     Capped at 10s per wait so a stuck eval run can't hang for minutes.
+//   - Network errors (fetch threw) — retry once
+//   - All other 4xx/5xx — bail (request is wrong; retry won't help)
 async function callBackend(prompt) {
   let lastErr
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const MAX_ATTEMPTS = 3   // 1 initial + up to 2 retries (for 429 chains)
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
       const res = await fetch('/api/llm', {
         method: 'POST',
@@ -255,19 +286,24 @@ async function callBackend(prompt) {
       // Parse error body for context
       let body = null
       try { body = await res.json() } catch { /* non-JSON */ }
-      lastErr = new Error(body?.error ?? `LLM backend returned ${res.status}`)
+      const errMsg = body?.error ?? `LLM backend returned ${res.status}`
+      lastErr = new Error(errMsg)
 
-      // Only retry on 502/504 (transient gateway/timeout). Don't retry on
-      // 4xx (bad request — the request itself is wrong, retry won't help)
-      // or 500 (server error — usually means OpenAI gave back garbage and
-      // the proxy can't recover).
-      if (res.status === 502 || res.status === 504) {
-        if (attempt === 0) {
-          console.warn(`[LLM] ${res.status} on attempt 1, retrying once…`)
-          // brief backoff so the upstream has a moment to breathe
-          await new Promise(r => setTimeout(r, 1500))
-          continue
-        }
+      // 429 — token-per-minute rate limit. OpenAI tells us how long to wait.
+      // Always retry within MAX_ATTEMPTS budget.
+      if (res.status === 429 && attempt < MAX_ATTEMPTS - 1) {
+        const waitMs = parseRetryAfterMs(errMsg)
+        console.warn(`[LLM] 429 rate limit on attempt ${attempt + 1}, waiting ${waitMs}ms then retrying…`)
+        await new Promise(r => setTimeout(r, waitMs))
+        continue
+      }
+
+      // 502/504 — Vercel/OpenAI gateway timeout. Retry ONCE only (first
+      // attempt). A second retry rarely helps for genuine timeouts.
+      if ((res.status === 502 || res.status === 504) && attempt === 0) {
+        console.warn(`[LLM] ${res.status} on attempt 1, retrying once…`)
+        await new Promise(r => setTimeout(r, 1500))
+        continue
       }
       throw lastErr
     } catch (err) {
