@@ -22,8 +22,9 @@ import { assignRoles } from '../rules/cardRoles'
 import { isBracketAllowed, targetLandCount, targetRoleCounts, computeActualBracket, BRACKET_LABELS, isSafeRock, isSoftTutor } from '../rules/bracketRules'
 import { validateDeck, countRoles } from '../rules/deckValidator'
 import { detectCombos, getAllCombos } from '../rules/comboRules'
-import { detectArchetypes } from '../rules/archetypeRules'
+import { detectArchetypes, anchorNamesFor } from '../rules/archetypeRules'
 import { extractCommanderMechanicTags, commanderToCardTagBoosts } from '../rules/commanderMechanics'
+import { computeCommanderExecutionScore, getExecutionThresholdForBracket } from '../rules/commanderExecution'
 import { isLand, isBasicLand, getBasicLandsForCommander, avgCmc } from '../utils/cardHelpers'
 import { generateDeck } from '../rules/deckGenerator'
 import { scoreCard } from '../rules/deckScorer'
@@ -931,6 +932,27 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   const criticalCardCounts = countCriticalCards(deck)
   const detectedWincons = detectMultiCardWincons(deck, strategyContext, commander)
 
+  // Commander execution score — what fraction of non-land non-staple
+  // slots actually advance the commander's plan? Surfaced to the eval
+  // payload so the LLM can stop guessing how on-theme a deck is, and
+  // adds a warning when below the bracket-appropriate threshold.
+  const execution = computeCommanderExecutionScore({
+    deck,
+    commander,
+    mechanicTags: commanderMechanicTags,
+    anchorNames: anchorNamesFor(archetypes),
+  })
+  const executionThreshold = getExecutionThresholdForBracket(bracket)
+  if (execution.considered > 0 && execution.score < executionThreshold) {
+    warnings.push({
+      severity: 'warning',
+      message:
+        `Commander execution score ${(execution.score * 100).toFixed(0)}% is below the B${bracket} target ` +
+        `(${(executionThreshold * 100).toFixed(0)}%). Of ${execution.considered} non-land non-staple slots, ` +
+        `only ${execution.relevant} advance ${commander.name}'s plan. Deck may feel like generic goodstuff.`,
+    })
+  }
+
   // Filter stale warnings — the validator complains about "Only 0 removal"
   // because it ran on the LLM's raw response BEFORE the floors added
   // removal. Drop count-based warnings whose claim is no longer true
@@ -950,6 +972,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     explanation,
     criticalCardCounts,
     detectedWincons,
+    executionScore: execution,
 
     // LLM-specific extras the UI can show but doesn't have to.
     generationMode: 'llm-assisted',

@@ -173,7 +173,7 @@ export async function critiqueDeck({
  * Returns null if the LLM is disabled or the call fails — callers should
  * treat null as "evaluation unavailable" not "deck is bad".
  */
-export async function evaluateDeck({ commander, bracket, deck, criticalCardCounts, detectedWincons, onProgress }) {
+export async function evaluateDeck({ commander, bracket, deck, criticalCardCounts, detectedWincons, executionScore, onProgress }) {
   if (currentMode === LLM_MODE.DISABLED) return null
   if (currentMode === LLM_MODE.MOCK) {
     return {
@@ -187,7 +187,7 @@ export async function evaluateDeck({ commander, bracket, deck, criticalCardCount
   }
 
   onProgress?.({ stage: 'evaluate' })
-  const prompt = buildEvaluationPrompt({ commander, bracket, deck, criticalCardCounts, detectedWincons })
+  const prompt = buildEvaluationPrompt({ commander, bracket, deck, criticalCardCounts, detectedWincons, executionScore })
   try {
     const out = await callBackend(prompt)
     return { ...out, _meta: { promptTokens: estimatePromptTokens(prompt) } }

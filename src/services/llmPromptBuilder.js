@@ -1106,7 +1106,7 @@ Return ONLY JSON. No markdown.`
 // and reports strengths/weaknesses. Used by the eval harness to grade
 // many generations across many commanders without trying to mutate them.
 
-export function buildEvaluationPrompt({ commander, bracket, deck, criticalCardCounts, detectedWincons }) {
+export function buildEvaluationPrompt({ commander, bracket, deck, criticalCardCounts, detectedWincons, executionScore }) {
   const bracketLabel   = BRACKET_LABELS[bracket] ?? 'Unknown'
   const bracketMeaning = BRACKET_DESCRIPTIONS[bracket] ?? ''
 
@@ -1422,6 +1422,7 @@ Return ONLY JSON.`
   const user = {
     counts: criticalCardCounts ?? null,
     detected_wincon_patterns: detectedWincons ?? [],
+    commander_execution: executionScore ?? null,
     commander: compactCommander(commander),
     bracket: { number: bracket, label: bracketLabel, meaning: bracketMeaning },
     deck_size: deck.length,
