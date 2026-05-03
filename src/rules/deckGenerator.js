@@ -10,7 +10,7 @@ import { solveManaBase } from './manaBaseSolver'
 import { detectCombos, registerCombos, getAllCombos } from './comboRules'
 import { detectArchetypes, anchorNamesFor, themesToArchetypes, mergeArchetypes, cardMatchesArchetype } from './archetypeRules'
 import { extractCommanderMechanicTags, commanderToCardTagBoosts } from './commanderMechanics'
-import { validateDeck, countRoles } from './deckValidator'
+import { validateDeckAtBracket, countRoles } from './deckValidator'
 
 export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
   const commander = getSelectedCommander()
@@ -248,7 +248,7 @@ export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
   // 8. Post-processing
   const combos = detectCombos(deck.map(c => c.name))
   const { actualBracket, flaggedCards } = computeActualBracket(deck, combos)
-  const { errors, warnings: validationWarnings } = validateDeck(deck, commander)
+  const { errors, warnings: validationWarnings } = validateDeckAtBracket(deck, commander, bracket)
 
   const bracketWarnings = []
   if (actualBracket > bracket) {
