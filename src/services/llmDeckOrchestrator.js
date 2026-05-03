@@ -19,7 +19,7 @@
 import { getSelectedCommander, getCollection } from '../utils/localStorage'
 import { filterLegalCards } from '../rules/commanderRules'
 import { assignRoles } from '../rules/cardRoles'
-import { isBracketAllowed, targetLandCount, targetRoleCounts, computeActualBracket, BRACKET_LABELS, isSafeRock, isSoftTutor } from '../rules/bracketRules'
+import { isBracketAllowed, targetLandCount, targetRoleCounts, computeActualBracket, BRACKET_LABELS, isSafeRock, isSoftTutor, isTierCCedhCore, TIER_C_B4_CAP } from '../rules/bracketRules'
 import { validateDeckAtBracket, countRoles } from '../rules/deckValidator'
 import { detectCombos, getAllCombos } from '../rules/comboRules'
 import { detectArchetypes, anchorNamesFor } from '../rules/archetypeRules'
@@ -1528,6 +1528,22 @@ function pickDowngradeSwap({ deck, combos, targetBracket, legalNonLands }) {
         isReplacement: (c) => isReplacementSafeAtBracket(c) && !(c.tags ?? []).includes('game_changer'),
         offenderRank:  () => 1,
         reasonText:    () => 'excess game changers (B3 cap is 3 per WotC bracket spec)',
+      })
+      if (swap) return swap
+    }
+  }
+
+  // PRIORITY 3c: too many Tier-C cEDH-core cards at B4 (deliberate
+  // deviation from WotC's "B4 = anything goes"; see TIER_C_CEDH_CORE
+  // in bracketRules.js for rationale).
+  if (targetBracket === 4) {
+    const tierCCount = deck.filter(c => isTierCCedhCore(c.name)).length
+    if (tierCCount > TIER_C_B4_CAP) {
+      const swap = pickSwap(deck, legalNonLands, {
+        isOffender:    (c) => isTierCCedhCore(c.name),
+        isReplacement: (c) => isReplacementSafeAtBracket(c) && !isTierCCedhCore(c.name),
+        offenderRank:  () => 1,
+        reasonText:    () => `excess Tier-C cEDH-core cards (B4 cap is ${TIER_C_B4_CAP})`,
       })
       if (swap) return swap
     }

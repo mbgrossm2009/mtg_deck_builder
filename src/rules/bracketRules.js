@@ -96,6 +96,37 @@ function isEliteB3GameChanger(name) {
   ].includes(name)
 }
 
+// cEDH-core "Tier C" cards. WotC's bracket spec says B4 is "anything goes,"
+// but eval data shows B4 and B5 decks become indistinguishable when the
+// builder loads up on these cards. Real B4 lists run a few of these (the
+// fast-mana package fits the B4 power curve) but not the full B5 suite.
+// Empirical cap: B4 tolerates ≤4 Tier C cards; more than that and the
+// deck plays at B5 power level, so we re-bucket the actual bracket.
+//
+// Rationale for keeping this separate from isEliteB3GameChanger:
+//   - isEliteB3GameChanger blocks per-card at B3 (binary).
+//   - TIER_C is a count cap at B4 (>4 promotes to B5).
+// They overlap intentionally: Force of Will / Mana Drain / Vampiric Tutor
+// are both elite-at-B3 AND tier-C-counted-at-B4.
+export const TIER_C_CEDH_CORE = new Set([
+  // Elite fast mana
+  'Mana Crypt', 'Mana Vault', 'Grim Monolith',
+  'Chrome Mox', 'Mox Diamond', 'Mox Opal', 'Mox Amber',
+  'Lotus Petal', 'Jeweled Lotus', 'Dockside Extortionist',
+  // Free counters
+  'Force of Will', 'Force of Negation', 'Pact of Negation', 'Mana Drain',
+  // Tier-1 hard tutors
+  'Vampiric Tutor', 'Imperial Seal',
+  // Free creature protection
+  'Mental Misstep',
+])
+
+export function isTierCCedhCore(name) {
+  return TIER_C_CEDH_CORE.has(name)
+}
+
+export const TIER_C_B4_CAP = 4
+
 // Compute the actual bracket a finished deck belongs to
 export function computeActualBracket(mainDeck, combos) {
   let bracket = 1
@@ -132,6 +163,13 @@ export function computeActualBracket(mainDeck, combos) {
   // that is a B4 signal regardless of which specific cards they are.
   const gameChangerCount = mainDeck.filter(c => (c.tags ?? []).includes('game_changer') && !isSafeRock(c.name)).length
   if (gameChangerCount > 3 && bracket < 4) { bracket = 4 }
+
+  // Tier-C cEDH-core cap. A B4 deck with too many Tier-C cards plays at
+  // B5 power level — push the actual bracket up so bracket_fit reflects
+  // reality. Deliberate deviation from WotC's "B4 = anything goes" rule
+  // (see TIER_C_CEDH_CORE definition for rationale).
+  const tierCCount = mainDeck.filter(c => isTierCCedhCore(c.name)).length
+  if (tierCCount > TIER_C_B4_CAP && bracket < 5) { bracket = 5 }
 
   if (combos.length > 0 && bracket < 4) { bracket = 4 }
   if (combos.length >= 2 && bracket < 5) { bracket = 5 }

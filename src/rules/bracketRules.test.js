@@ -505,6 +505,35 @@ describe('Bracket escalation — computeActualBracket', () => {
     const { actualBracket } = computeActualBracket(deck, [])
     expect(actualBracket).toBeGreaterThanOrEqual(4)
   })
+
+  it('4 or fewer Tier-C cEDH-core cards stays within B4', () => {
+    // Each card is a Tier-C cEDH-core piece. 4 of them is at the cap.
+    // Tag as fast_mana so they bump bracket to 3, but should NOT escalate
+    // further to 5 from the Tier-C cap.
+    const deck = [
+      tagged('Mana Crypt',         ['fast_mana']),
+      tagged('Chrome Mox',         ['fast_mana']),
+      tagged('Mox Diamond',        ['fast_mana']),
+      tagged('Lotus Petal',        ['fast_mana']),
+    ]
+    const { actualBracket } = computeActualBracket(deck, [])
+    // 4 Tier-C cards alone ALSO bump tutors/fast_mana logic (4+ fast mana → B4)
+    // but NOT to B5. Acceptable to stop at B4.
+    expect(actualBracket).toBeLessThanOrEqual(4)
+  })
+
+  it('more than 4 Tier-C cEDH-core cards escalates B4 → B5', () => {
+    const deck = [
+      tagged('Mana Crypt',     ['fast_mana']),
+      tagged('Mana Vault',     ['fast_mana']),
+      tagged('Chrome Mox',     ['fast_mana']),
+      tagged('Mox Diamond',    ['fast_mana']),
+      tagged('Lotus Petal',    ['fast_mana']),
+      tagged('Force of Will',  ['game_changer']),  // 5th Tier-C → over cap
+    ]
+    const { actualBracket } = computeActualBracket(deck, [])
+    expect(actualBracket).toBe(5)
+  })
 })
 
 // ═════════════════════════════════════════════════════════════════════════════

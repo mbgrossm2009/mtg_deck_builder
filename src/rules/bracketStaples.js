@@ -51,43 +51,72 @@ const UNIVERSAL_STAPLES = [
   'Anguished Unmaking', "Assassin's Trophy",
 ]
 
-const B4_PLUS_STAPLES = [
-  // Fast mana — every cEDH deck wants these
-  'Mana Crypt', 'Mana Vault', 'Grim Monolith',
-  'Mox Diamond', 'Chrome Mox', 'Mox Opal', 'Mox Amber', 'Lotus Petal',
-  'Jeweled Lotus', 'Jeweled Amulet', 'Dockside Extortionist', 'Ancient Tomb',
-  'Lion\'s Eye Diamond',
-  // Talismans (10) — every multi-color cEDH deck runs the on-color ones
+// B4 staples — high-power cards that every optimized deck wants without
+// crossing into cEDH-core territory. The previous version bundled 10+
+// Tier-C cards (Chrome Mox, Mox Diamond, Force of Will, Demonic Tutor,
+// Vampiric Tutor, etc.) into every B4 deck, which broke the new B4/B5
+// distinction (Tier-C > 4 promotes actual bracket to B5 — see TIER_C_CEDH_CORE
+// in bracketRules.js). We split them out here so B4 stays distinct from B5.
+const B4_STAPLES = [
+  // Talismans (10) — every multi-color deck runs the on-color ones; not Tier-C
   'Talisman of Conviction', 'Talisman of Creativity', 'Talisman of Curiosity',
   'Talisman of Dominance', 'Talisman of Hierarchy', 'Talisman of Impulse',
   'Talisman of Indulgence', 'Talisman of Progress', 'Talisman of Resilience',
   'Talisman of Unity',
-  // Signets (10) — same role as Talismans, equally universal
+  // Signets (10) — same role as Talismans, not Tier-C
   'Azorius Signet', 'Boros Signet', 'Dimir Signet', 'Golgari Signet',
   'Gruul Signet', 'Izzet Signet', 'Orzhov Signet', 'Rakdos Signet',
   'Selesnya Signet', 'Simic Signet',
-  // Other essential 2-mana fixing
+  // Other essential 2-mana fixing — not Tier-C
   'Coalition Relic', 'Chromatic Lantern',
-  // High-tier tutors
-  'Demonic Tutor', 'Vampiric Tutor', 'Imperial Seal', 'Mystical Tutor',
-  'Enlightened Tutor', 'Worldly Tutor', "Green Sun's Zenith",
+  // Mid-tier tutors — Tier-1 (Demonic/Vampiric/Imperial) are Tier-C and live
+  // in B4_TIER_C_ALLOWLIST below
+  'Mystical Tutor', 'Enlightened Tutor', 'Worldly Tutor', "Green Sun's Zenith",
   'Chord of Calling', 'Birthing Pod', 'Survival of the Fittest',
   'Idyllic Tutor', 'Eladamri\'s Call', 'Finale of Devastation',
   'Natural Order',
-  // Card-advantage engines
+  // Card-advantage engines — Rhystic / Mystic Remora / Necropotence / Smothering
+  // Tithe / Esper Sentinel are elite-B3 (B4+ via isEliteB3GameChanger) but not Tier-C
   'Rhystic Study', 'Mystic Remora', 'Necropotence', 'Sylvan Library',
   'Esper Sentinel', 'Smothering Tithe', 'Sylvan Tutor',
   'Brainstorm', 'Ponder', 'Preordain', 'Consider', 'Dig Through Time',
   'Treasure Cruise', 'Night\'s Whisper', 'Sign in Blood',
-  // Top-tier interaction (free / cheap)
-  'Force of Will', 'Force of Negation', 'Pact of Negation', 'Mana Drain',
-  'Flusterstorm', "Teferi's Protection", 'Mental Misstep',
+  // Mid-tier interaction — Force of Will / Mana Drain are Tier-C, kept out of B4 floor
+  'Fierce Guardianship', 'Deflecting Swat', 'Flawless Maneuver',
+  'Flusterstorm', "Teferi's Protection",
   'Daze', 'Spell Pierce', 'Dispel', 'Swan Song',
   'Snapcaster Mage', 'Cyclonic Rift',
+  // Mid-tier fast mana — not Tier-C (Mind Stone / Thought Vessel are universal,
+  // Talismans/Signets handled above; the heavy Mox suite is Tier-C below)
+  'Grim Monolith', 'Ancient Tomb', 'Jeweled Amulet',
 ]
 
-// B5 adds explicit cEDH wincon enablers. These tend to be off-strategy at
-// B4 (turn the deck into a combo deck) but are core at B5.
+// B4 Tier-C allowlist — the 4 broadly-iconic pieces that fit the B4
+// power curve without crossing into cEDH territory. Force of Will,
+// Vampiric Tutor, Mana Drain are intentionally OMITTED at B4 because
+// they push toward cEDH feel (free counter / hard tutor density);
+// they unlock at B5 via TIER_C_B5_ONLY below.
+//
+// Cap is enforced both here (the staples lock can't add more than this)
+// AND in computeActualBracket (a B4 deck that ends up with too many
+// Tier-C cards from other sources gets re-bucketed to B5).
+const B4_TIER_C_ALLOWLIST = [
+  'Mana Crypt', 'Mox Diamond', 'Chrome Mox', 'Demonic Tutor',
+]
+
+// Tier-C cards unlocked ONLY at B5. Ordered by priority so the most
+// load-bearing pieces (Force of Will, Vampiric Tutor) survive when
+// bracket-staple slots are tight on a heavy-skeleton commander.
+const TIER_C_B5_ONLY = [
+  'Force of Will', 'Vampiric Tutor', 'Mana Drain',
+  'Force of Negation', 'Pact of Negation',
+  'Imperial Seal', 'Mental Misstep',
+  'Mana Vault', 'Mox Opal', 'Mox Amber', 'Lotus Petal', 'Jeweled Lotus',
+  'Dockside Extortionist', 'Lion\'s Eye Diamond',
+]
+
+const B5_TIER_C_REMAINDER = TIER_C_B5_ONLY
+
 const B5_EXTRA_STAPLES = [
   "Thassa's Oracle", 'Demonic Consultation', 'Tainted Pact',
   'Laboratory Maniac', 'Jace, Wielder of Mysteries',
@@ -98,8 +127,16 @@ const B5_EXTRA_STAPLES = [
 ]
 
 export function getBracketStapleNames(bracket) {
-  if (bracket >= 5) return [...UNIVERSAL_STAPLES, ...B4_PLUS_STAPLES, ...B5_EXTRA_STAPLES]
-  if (bracket >= 4) return [...UNIVERSAL_STAPLES, ...B4_PLUS_STAPLES]
+  if (bracket >= 5) {
+    return [...UNIVERSAL_STAPLES, ...B4_STAPLES, ...B4_TIER_C_ALLOWLIST,
+            ...B5_TIER_C_REMAINDER, ...B5_EXTRA_STAPLES]
+  }
+  if (bracket >= 4) {
+    // B4 = universal + non-Tier-C staples + the 4-card Tier-C allowlist.
+    // The Tier-C cap (4) means we won't auto-bump to B5 even with all
+    // four allowlisted Tier-C cards present.
+    return [...UNIVERSAL_STAPLES, ...B4_STAPLES, ...B4_TIER_C_ALLOWLIST]
+  }
   // B1-B3 still get universal staples — Sol Ring goes in every precon. The
   // bracket eligibility filter (applied to legalNonLands BEFORE this module
   // runs) drops anything inappropriate at the target bracket.

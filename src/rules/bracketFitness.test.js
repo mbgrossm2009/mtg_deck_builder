@@ -93,13 +93,14 @@ describe('bracket staples surface more cards at higher brackets', () => {
     expect(names).not.toContain("Thassa's Oracle")
   })
 
-  it('B4 includes universal + cEDH staples (no combo wincons)', () => {
+  it('B4 includes universal + B4 staples + capped Tier-C allowlist (no B5 cEDH-core, no combo wincons)', () => {
     const result = buildBracketStaples({ bracket: 4, legalNonLands: richPool })
     const names = result.map(c => c.name)
     expect(names).toContain('Sol Ring')
-    expect(names).toContain('Mana Crypt')
-    expect(names).toContain('Force of Will')
-    expect(names).not.toContain("Thassa's Oracle")
+    expect(names).toContain('Mana Crypt')             // in B4 Tier-C allowlist
+    expect(names).not.toContain('Force of Will')      // Tier-C remainder, B5-only
+    expect(names).not.toContain('Vampiric Tutor')     // Tier-C remainder, B5-only
+    expect(names).not.toContain("Thassa's Oracle")    // B5 wincon enabler
   })
 
   it('B5 includes everything', () => {

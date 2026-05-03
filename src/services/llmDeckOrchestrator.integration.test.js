@@ -362,6 +362,40 @@ describe('Bracket-downgrade backstop — actual bracket matches target at B1-B3'
     expect(actual).toBeLessThanOrEqual(4)
   })
 
+  it('B4 target → at most TIER_C_B4_CAP cEDH-core cards (Tier-C cap holds)', async () => {
+    const TIER_C_NAMES = [
+      'Mana Crypt', 'Mana Vault', 'Grim Monolith',
+      'Chrome Mox', 'Mox Diamond', 'Mox Opal', 'Mox Amber',
+      'Lotus Petal', 'Jeweled Lotus', 'Dockside Extortionist',
+      'Force of Will', 'Force of Negation', 'Pact of Negation', 'Mana Drain',
+      'Vampiric Tutor', 'Imperial Seal', 'Mental Misstep',
+    ]
+    const result = await generateWithMocks({
+      commander:  ATRAXA,
+      bracket:    4,
+      collection: buildRichCollection(),
+    })
+    const tierCCount = result.mainDeck.filter(c => TIER_C_NAMES.includes(c.name)).length
+    // Cap is 4; downgrade pass enforces it. Allow ≤4.
+    expect(tierCCount).toBeLessThanOrEqual(4)
+  })
+
+  it('B4 target → does NOT auto-include B5-only Tier-C cards (Force of Will, Vampiric Tutor)', async () => {
+    const result = await generateWithMocks({
+      commander:  ATRAXA,
+      bracket:    4,
+      collection: buildRichCollection(),
+    })
+    const names = result.mainDeck.map(c => c.name)
+    // The B4 staple list deliberately excludes these so B4 stays distinct
+    // from B5. Skeleton or LLM picks could still bring them in but staples
+    // shouldn't lock them.
+    const fromStaples = result.mainDeck.filter(c => c.fromBracketStaples).map(c => c.name)
+    expect(fromStaples).not.toContain('Force of Will')
+    expect(fromStaples).not.toContain('Vampiric Tutor')
+    expect(fromStaples).not.toContain('Mana Drain')
+  })
+
   it('B5 target → no downgrade applied (actual can be B5)', async () => {
     const result = await generateWithMocks({
       commander:  NAJEELA,

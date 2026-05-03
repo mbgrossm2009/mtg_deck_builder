@@ -38,13 +38,17 @@ describe('getBracketStapleNames — universal staples', () => {
     expect(names).not.toContain('Force of Will')
   })
 
-  it('B4 adds the B4+ tier on top of universal', () => {
+  it('B4 adds B4 staples + the curated Tier-C allowlist on top of universal', () => {
     const names = getBracketStapleNames(4)
     expect(names).toContain('Sol Ring')               // universal
-    expect(names).toContain('Mana Crypt')             // B4+
-    expect(names).toContain('Force of Will')          // B4+
-    expect(names).toContain('Demonic Tutor')          // B4+
-    expect(names).not.toContain("Thassa's Oracle")    // B5-only
+    expect(names).toContain('Rhystic Study')          // B4 (elite-B3 unlock)
+    expect(names).toContain('Mana Crypt')             // B4 Tier-C allowlist (4 cards max)
+    expect(names).toContain('Demonic Tutor')          // B4 Tier-C allowlist
+    // Tier-C remainder is B5-only — keeps B4 distinct from B5
+    expect(names).not.toContain('Force of Will')      // Tier-C, B5-only
+    expect(names).not.toContain('Vampiric Tutor')     // Tier-C, B5-only
+    expect(names).not.toContain('Mana Drain')         // Tier-C, B5-only
+    expect(names).not.toContain("Thassa's Oracle")    // B5 wincon enabler
   })
 
   it('B5 adds B4+ AND B5 extras on top of universal', () => {
@@ -165,7 +169,10 @@ describe('getStapleCoverage', () => {
     })
     expect(cov.owned).toBe(3)
     expect(cov.ownedNames.sort()).toEqual(['Demonic Tutor', 'Mana Crypt', 'Sol Ring'])
-    expect(cov.missing).toContain('Force of Will')   // user doesn't have it
+    // Force of Will is Tier-C and B5-only, so it shouldn't appear in B4
+    // missing-list (it's not in B4 staples at all). Use Rhystic Study
+    // (B4 staple, not in test collection) as the missing-list check.
+    expect(cov.missing).toContain('Rhystic Study')
   })
 
   it('case-insensitive', () => {
