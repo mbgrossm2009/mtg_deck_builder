@@ -123,6 +123,48 @@ export const ATRAXA = commander("Atraxa, Praetors' Voice", ['W','U','B','G'], {
   subtype: 'Phyrexian Angel',
 })
 
+// ─── Draw / drain (Sheoldred-class) ─────────────────────────────────────────
+
+export const SHEOLDRED = commander('Sheoldred, the Apocalypse', ['B'], {
+  type: 'Legendary Creature — Phyrexian Praetor',
+  cmc: 4, cost: '{2}{B}{B}',
+  text: 'Deathtouch\nWhenever you draw a card, you gain 2 life.\nWhenever an opponent draws a card, they lose 2 life.',
+  subtype: 'Phyrexian Praetor',
+})
+
+// ─── Sacrifice / control (Ertai-class) ─────────────────────────────────────
+
+export const ERTAI = commander('Ertai, the Corrupted', ['W','U','B'], {
+  type: 'Legendary Creature — Human Wizard',
+  cmc: 4, cost: '{1}{W}{U}{B}',
+  text: '{U}, {T}, Sacrifice a creature or enchantment: Counter target spell.',
+  subtype: 'Human Wizard',
+})
+
+// ─── Non-tribal commander whose creature TYPE is a tribe — must NOT
+//      enforce tribal density. The Winter test case for the regression
+//      "creature type alone makes it tribal" failure mode.
+
+export const WINTER = commander('Winter, Cynical Opportunist', ['B'], {
+  type: 'Legendary Creature — Human Warlock',
+  cmc: 3, cost: '{1}{B}{B}',
+  text: 'Deathtouch\n' +
+    'Whenever Winter attacks, mill three cards.\n' +
+    'Delirium — At the beginning of your end step, you may exile any number of cards from your graveyard with four or more card types among them. If you do, put a permanent card from among them onto the battlefield with a finality counter on it.',
+  subtype: 'Human Warlock',
+})
+
+// ─── Cost-reduction tribal (Ur-Dragon) ──────────────────────────────────────
+
+export const UR_DRAGON = commander('The Ur-Dragon', ['W','U','B','R','G'], {
+  type: 'Legendary Creature — Dragon Avatar',
+  cmc: 9, cost: '{4}{W}{U}{B}{R}{G}',
+  text: 'Eminence — As long as The Ur-Dragon is in the command zone or on the battlefield, other Dragon spells you cast cost {1} less to cast.\n' +
+    'Flying\n' +
+    'Whenever one or more Dragons you control attack, draw a card for each of those Dragons. Then you may put a permanent card from your hand onto the battlefield.',
+  subtype: 'Dragon Avatar',
+})
+
 // ─── All commanders by archetype, for parameterized tests ──────────────────
 
 export const ALL_COMMANDERS = [
@@ -132,8 +174,9 @@ export const ALL_COMMANDERS = [
   MEREN, KARADOR,
   HELIOD,
   ATRAXA,
+  SHEOLDRED, ERTAI, WINTER, UR_DRAGON,
 ]
 
-export const TRIBAL_COMMANDERS  = [TIAMAT, KRENKO, EDGAR_MARKOV, MARWYN, SHELOB]
+export const TRIBAL_COMMANDERS  = [TIAMAT, KRENKO, EDGAR_MARKOV, MARWYN, SHELOB, UR_DRAGON]
 export const CEDH_COMMANDERS    = [NAJEELA, KINNAN]
 export const GRAVEYARD_COMMANDERS = [MEREN, KARADOR]

@@ -37,8 +37,10 @@ import { generateDeckWithLLMAssist, isLockedByFloor, LOCK_FLAGS } from './llmDec
 import {
   TIAMAT, KRENKO, EDGAR_MARKOV, MARWYN, SHELOB,
   NAJEELA, KINNAN, NIV_MIZZET, MEREN, KARADOR, HELIOD, ATRAXA,
+  SHEOLDRED, ERTAI, WINTER, UR_DRAGON,
   ALL_COMMANDERS,
 } from '../test/fixtures/commanders'
+import { TOP_100_COMMANDERS } from '../test/fixtures/top100commanders.js'
 import {
   buildRichCollection, buildSparseCollection, countByName,
   ALL_CEDH_STAPLES, ALL_UNIVERSAL_STAPLES, DRAGONS, GOBLINS, VAMPIRES,
@@ -733,4 +735,332 @@ describe('Lock contract — floor-added cards survive critique passes', () => {
       expect(stillPresent).toBe(true)
     }
   })
+})
+
+// ─── Per-commander integration: Tiamat / Sheoldred / Ertai / Winter ─────────
+//
+// These tests verify the FULL deck-generation pipeline produces decks that
+// match what each commander DOES (not just generic deck slots). A passing
+// test here means the full chain — archetype detection → mechanic tags →
+// scoring → role fill → critique → final assembly — preserves commander
+// identity end to end.
+
+describe('Per-commander integration: Tiamat (5-color dragon tribal)', () => {
+  it('builds with significant dragon density', async () => {
+    const result = await generateWithMocks({
+      commander:  TIAMAT,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    const dragons = result.mainDeck.filter(c =>
+      (c.type_line ?? '').toLowerCase().includes('dragon')
+    )
+    // Tribal floor enforces ~18 on-tribe; rich collection should easily clear.
+    expect(dragons.length).toBeGreaterThanOrEqual(10)
+  })
+
+  it('respects 5-color identity', async () => {
+    const result = await generateWithMocks({
+      commander:  TIAMAT,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    // Tiamat is 5-color so all cards are legal — but check no banned color.
+    const allowed = new Set(['W', 'U', 'B', 'R', 'G'])
+    for (const card of result.mainDeck) {
+      for (const color of card.color_identity ?? []) {
+        expect(allowed.has(color)).toBe(true)
+      }
+    }
+  })
+
+  it('detects dragon tribal archetype', async () => {
+    const { detectArchetypes } = await import('../rules/archetypeRules.js')
+    const archetypes = detectArchetypes(TIAMAT)
+    expect(archetypes.some(a => a.id === 'tribal_dragon')).toBe(true)
+  })
+
+  it('extracts tribal_dragons mechanic tag', async () => {
+    const { extractCommanderMechanicTags } = await import('../rules/commanderMechanics.js')
+    const tags = extractCommanderMechanicTags(TIAMAT)
+    expect(tags).toContain('tribal_dragons')
+  })
+})
+
+describe('Per-commander integration: Sheoldred (mono-black draw/drain)', () => {
+  it('mono-black mana base — no off-color cards', async () => {
+    const result = await generateWithMocks({
+      commander:  SHEOLDRED,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    for (const card of result.mainDeck) {
+      for (const color of card.color_identity ?? []) {
+        expect(color).toBe('B')
+      }
+    }
+  })
+
+  it('extracts cares_about_draw + cares_about_lifegain + cares_about_lifeloss tags', async () => {
+    const { extractCommanderMechanicTags } = await import('../rules/commanderMechanics.js')
+    const tags = extractCommanderMechanicTags(SHEOLDRED)
+    expect(tags).toContain('cares_about_draw')
+    expect(tags).toContain('cares_about_lifegain')
+    expect(tags).toContain('cares_about_lifeloss')
+  })
+
+  it('does NOT enforce tribal_human or tribal_phyrexian density', async () => {
+    // Sheoldred is a Phyrexian Praetor but oracle text doesn't reference
+    // any creature type — must NOT enforce tribal density.
+    const { extractCommanderMechanicTags } = await import('../rules/commanderMechanics.js')
+    const tags = extractCommanderMechanicTags(SHEOLDRED)
+    expect(tags.filter(t => t.startsWith('tribal_'))).toEqual([])
+  })
+
+  it('produces a valid 99-card deck', async () => {
+    const result = await generateWithMocks({
+      commander:  SHEOLDRED,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.mainDeck.length).toBe(99)
+  })
+})
+
+describe('Per-commander integration: Ertai (Esper sacrifice/control)', () => {
+  it('detects aristocrats archetype from "Sacrifice a creature" cost', async () => {
+    const { detectArchetypes } = await import('../rules/archetypeRules.js')
+    const archetypes = detectArchetypes(ERTAI)
+    const ids = archetypes.map(a => a.id)
+    // Ertai's text mentions "Sacrifice a creature or enchantment" as cost.
+    expect(ids).toContain('aristocrats')
+  })
+
+  it('extracts cares_about_sacrifice tag', async () => {
+    const { extractCommanderMechanicTags } = await import('../rules/commanderMechanics.js')
+    const tags = extractCommanderMechanicTags(ERTAI)
+    expect(tags).toContain('cares_about_sacrifice')
+  })
+
+  it('respects WUB color identity (no green or red)', async () => {
+    const result = await generateWithMocks({
+      commander:  ERTAI,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    const allowed = new Set(['W', 'U', 'B'])
+    for (const card of result.mainDeck) {
+      for (const color of card.color_identity ?? []) {
+        expect(allowed.has(color)).toBe(true)
+      }
+    }
+  })
+})
+
+describe('Per-commander integration: Winter (creature-type tribal NEGATIVE test)', () => {
+  it('Winter is a Human Warlock but has NO tribal mechanic tags', async () => {
+    const { extractCommanderMechanicTags } = await import('../rules/commanderMechanics.js')
+    const tags = extractCommanderMechanicTags(WINTER)
+    expect(tags.filter(t => t.startsWith('tribal_'))).toEqual([])
+  })
+
+  it('Winter does NOT detect tribal_human / tribal_warlock archetypes', async () => {
+    const { detectArchetypes } = await import('../rules/archetypeRules.js')
+    const archetypes = detectArchetypes(WINTER)
+    const ids = archetypes.map(a => a.id)
+    expect(ids).not.toContain('tribal_human')
+    expect(ids).not.toContain('tribal_warlock')
+  })
+
+  it('Winter deck does NOT have inflated Human/Warlock density', async () => {
+    const result = await generateWithMocks({
+      commander:  WINTER,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    const humans = result.mainDeck.filter(c =>
+      (c.type_line ?? '').toLowerCase().includes('human')
+    )
+    const warlocks = result.mainDeck.filter(c =>
+      (c.type_line ?? '').toLowerCase().includes('warlock')
+    )
+    // No tribal floor should fire; counts come from natural collection
+    // distribution. We can't assert "exactly N" because the rich collection
+    // contains some humans for unrelated reasons (e.g. ramp dorks). But
+    // we CAN assert the count isn't artificially boosted toward 18+.
+    expect(humans.length).toBeLessThan(18)
+    expect(warlocks.length).toBeLessThan(18)
+  })
+})
+
+// ─── Tribal floor — numeric thresholds ──────────────────────────────────────
+
+describe('Tribal density floor — numeric expectations', () => {
+  it('Tiamat at B3 hits meaningful dragon density', async () => {
+    const result = await generateWithMocks({
+      commander:  TIAMAT,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    const dragons = result.mainDeck.filter(c =>
+      (c.type_line ?? '').toLowerCase().includes('dragon')
+    )
+    // The point is that the deck IS dragon tribal — not generic 5-color.
+    // Threshold defensive against fixture pool size (rich collection has
+    // ~10-15 dragons available depending on how it's built).
+    expect(dragons.length).toBeGreaterThanOrEqual(10)
+  })
+
+  it('Krenko at B3 hits meaningful goblin density', async () => {
+    const result = await generateWithMocks({
+      commander:  KRENKO,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    const goblins = result.mainDeck.filter(c =>
+      (c.type_line ?? '').toLowerCase().includes('goblin')
+    )
+    expect(goblins.length).toBeGreaterThanOrEqual(8)
+  })
+
+  it('Sheoldred at B3 (non-tribal) — does NOT inflate Phyrexian creatures', async () => {
+    const result = await generateWithMocks({
+      commander:  SHEOLDRED,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+    const phyrexians = result.mainDeck.filter(c =>
+      (c.type_line ?? '').toLowerCase().includes('phyrexian')
+    )
+    // No tribal floor for Sheoldred — count should come from natural mix.
+    expect(phyrexians.length).toBeLessThan(18)
+  })
+})
+
+// ─── Regression tests — A/B/C/D from real observed failures ─────────────────
+//
+// Each test pins down a specific failure mode the user reported in eval runs.
+// If any of these regress, the fix that resolved the failure has been undone.
+
+describe('Regression: Failure A — non-tribal commander treated as tribal', () => {
+  it('Winter (Human Warlock) commander never detects tribal_human via type-only', async () => {
+    const { detectArchetypes } = await import('../rules/archetypeRules.js')
+    const ids = detectArchetypes(WINTER).map(a => a.id)
+    expect(ids).not.toContain('tribal_human')
+    expect(ids).not.toContain('tribal_warlock')
+  })
+
+  it('Yarok (Nightmare Horror) does NOT detect tribal_nightmare or tribal_horror', async () => {
+    // Yarok's text mentions "permanent enters", not Nightmare or Horror.
+    const yarok = {
+      name: 'Yarok, the Desecrated',
+      type_line: 'Legendary Creature — Nightmare Horror',
+      oracle_text: 'Deathtouch, lifelink. If a permanent entering the battlefield causes a triggered ability of a permanent you control to trigger, that ability triggers an additional time.',
+      color_identity: ['U', 'B', 'G'],
+    }
+    const { detectArchetypes } = await import('../rules/archetypeRules.js')
+    const ids = detectArchetypes(yarok).map(a => a.id)
+    expect(ids).not.toContain('tribal_nightmare')
+    expect(ids).not.toContain('tribal_horror')
+  })
+})
+
+describe('Regression: Failure D — 5-color tribal needs fixing, not too many basics', () => {
+  it('Tiamat B4 deck has fewer than half its lands as basics', async () => {
+    const result = await generateWithMocks({
+      commander:  TIAMAT,
+      bracket:    4,
+      collection: buildRichCollection(),
+    })
+    const lands = result.mainDeck.filter(c =>
+      (c.type_line ?? '').toLowerCase().includes('land')
+    )
+    const basics = lands.filter(c => c.isBasicLand || /^basic land/i.test(c.type_line ?? ''))
+    // 5-color at B4: should have lots of fixing, not pile of basics.
+    // Expect < 50% basic lands (rich collection has triomes, fetches, shocks).
+    expect(basics.length).toBeLessThan(lands.length / 2)
+  })
+})
+
+// ─── Broad invariants across ALL 100 fixture commanders ─────────────────────
+//
+// These are SHALLOW tests run against every commander in the top-100 fixture
+// set. The point: catch bugs that only manifest for specific commanders
+// (weird oracle text crashes the parser, planeswalker commanders break ETB
+// assumptions, mono-color commanders break mana base solver, etc.).
+//
+// Only B3 + only invariants that are cheap to compute. Deeper assertions
+// stay on the curated 16-commander set in commanders.js fixtures.
+
+describe('100-commander invariants — every fixture must produce a valid deck (B3)', () => {
+  // Only test commanders that are LEGAL in Commander format. The fixture
+  // set occasionally has cards that lost commander legality.
+  const legalCommanders = TOP_100_COMMANDERS.filter(c =>
+    (c.legalities?.commander ?? 'unknown') !== 'banned'
+  )
+
+  it.each(legalCommanders.map(c => [c.name, c]))(
+    '%s — produces a deck with no error',
+    async (_name, commander) => {
+      const result = await generateWithMocks({
+        commander,
+        bracket: 3,
+        collection: buildRichCollection(),
+      })
+      expect(result.error).toBeUndefined()
+      expect(result.mainDeck).toBeDefined()
+    },
+    15000  // 15s per commander — generous for slow CI
+  )
+
+  it.each(legalCommanders.map(c => [c.name, c]))(
+    '%s — exactly 99 cards',
+    async (_name, commander) => {
+      const result = await generateWithMocks({
+        commander,
+        bracket: 3,
+        collection: buildRichCollection(),
+      })
+      expect(result.mainDeck.length).toBe(99)
+    },
+    15000
+  )
+
+  it.each(legalCommanders.map(c => [c.name, c]))(
+    '%s — color identity respected',
+    async (_name, commander) => {
+      const result = await generateWithMocks({
+        commander,
+        bracket: 3,
+        collection: buildRichCollection(),
+      })
+      const allowed = new Set(commander.color_identity ?? [])
+      for (const card of result.mainDeck) {
+        for (const color of card.color_identity ?? []) {
+          expect(allowed.has(color), `${card.name} has ${color} not in ${commander.name}'s identity`).toBe(true)
+        }
+      }
+    },
+    15000
+  )
+
+  it.each(legalCommanders.map(c => [c.name, c]))(
+    '%s — extractCommanderMechanicTags executes without throwing',
+    async (_name, commander) => {
+      const { extractCommanderMechanicTags } = await import('../rules/commanderMechanics.js')
+      const tags = extractCommanderMechanicTags(commander)
+      expect(Array.isArray(tags)).toBe(true)
+    }
+  )
+
+  it.each(legalCommanders.map(c => [c.name, c]))(
+    '%s — detectArchetypes executes without throwing',
+    async (_name, commander) => {
+      const { detectArchetypes } = await import('../rules/archetypeRules.js')
+      const result = detectArchetypes(commander)
+      expect(Array.isArray(result)).toBe(true)
+      expect(result.length).toBeLessThanOrEqual(4)  // cap is 4
+    }
+  )
 })
