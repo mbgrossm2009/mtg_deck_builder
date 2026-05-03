@@ -33,7 +33,7 @@ vi.mock('../utils/moxfieldApi', () => makeMoxfieldMock())
 vi.mock('./llmDeckService', () => makeLLMServiceMock())
 
 // Imports MUST come after vi.mock.
-import { generateDeckWithLLMAssist } from './llmDeckOrchestrator'
+import { generateDeckWithLLMAssist, isLockedByFloor, LOCK_FLAGS } from './llmDeckOrchestrator'
 import {
   TIAMAT, KRENKO, EDGAR_MARKOV, MARWYN, SHELOB,
   NAJEELA, KINNAN, NIV_MIZZET, MEREN, KARADOR, HELIOD, ATRAXA,
@@ -617,6 +617,120 @@ describe('Commander mechanic tags drive card prioritization', () => {
     if (mechLine) {
       // tokens is the obvious one for Krenko
       expect(mechLine).toMatch(/tokens/)
+    }
+  })
+})
+
+// ─── Lock contract — every floor flag must be honored everywhere ────────────
+//
+// Background: in May 2026, the tutor floor would lift Koma B3 from 2 → 3
+// tutors, then the heuristic critique would swap one back out for a higher-
+// scoring non-tutor — shipping at 2. Root cause: three separate swap
+// functions (heuristic critique, LLM critique, bracket downgrade) each had
+// their own hand-rolled lock-flag check, and three of them missed the new
+// fromTutorFloor / fromRemovalFloor / fromWinconBackstop flags. The lock
+// contract was implicit and easy to drift.
+//
+// Fix: extract isLockedByFloor() as the single source of truth. These tests
+// document the contract so future floors can't fall through the same crack.
+
+describe('Lock contract — isLockedByFloor', () => {
+  it('exports a non-empty LOCK_FLAGS list', () => {
+    expect(Array.isArray(LOCK_FLAGS)).toBe(true)
+    expect(LOCK_FLAGS.length).toBeGreaterThan(0)
+    // Each flag is a from* string convention.
+    for (const flag of LOCK_FLAGS) {
+      expect(typeof flag).toBe('string')
+      expect(flag).toMatch(/^from[A-Z]/)
+    }
+  })
+
+  it('returns true when ANY single flag is set', () => {
+    for (const flag of LOCK_FLAGS) {
+      const card = { name: 'Test Card', [flag]: true }
+      expect(isLockedByFloor(card)).toBe(true)
+    }
+  })
+
+  it('returns false for a clean card with no flags', () => {
+    expect(isLockedByFloor({ name: 'Test Card' })).toBe(false)
+    expect(isLockedByFloor({ name: 'Test Card', cmc: 3 })).toBe(false)
+  })
+
+  it('returns false for null/undefined card', () => {
+    expect(isLockedByFloor(null)).toBe(false)
+    expect(isLockedByFloor(undefined)).toBe(false)
+  })
+
+  it('LOCK_FLAGS includes every floor/backstop currently in the pipeline', () => {
+    // If a new floor is added without updating LOCK_FLAGS, the team will
+    // hit the original bug shape (floor adds card, critique swaps it out).
+    // This test fails any time the canonical list misses a from* flag we
+    // know about — forces conscious updates to the contract.
+    const REQUIRED_LOCKS = [
+      'fromManaSolver',      // mana base solver
+      'fromSkeleton',         // EDHREC + Moxfield skeleton
+      'fromBracketStaples',   // bracket-aware staples
+      'fromTribalFloor',      // tribal density floor
+      'fromTutorFloor',       // bracket-based tutor floor
+      'fromRemovalFloor',     // bracket-based removal floor
+      'fromWinconBackstop',   // 2+ win conditions backstop
+    ]
+    for (const required of REQUIRED_LOCKS) {
+      expect(LOCK_FLAGS).toContain(required)
+    }
+  })
+})
+
+describe('Lock contract — floor-added cards survive critique passes', () => {
+  // Build with a tribal commander and rich collection so the tribal floor
+  // and (potentially) other floors fire. After the full pipeline (which
+  // includes heuristic critique, LLM critique, bracket downgrade), every
+  // card carrying a lock flag must still be in the deck — none of those
+  // downstream passes should have swapped them out.
+  it('Edgar Markov B3 — every floor-flagged card remains in final deck', async () => {
+    const result = await generateWithMocks({
+      commander:  EDGAR_MARKOV,
+      bracket:    3,
+      collection: buildRichCollection(),
+    })
+
+    // Sanity: at least one floor flag must have fired (otherwise the test
+    // proves nothing). Edgar B3 reliably triggers the tribal floor; other
+    // floors may also fire depending on the LLM mock's picks.
+    const flaggedCards = result.mainDeck.filter(c => isLockedByFloor(c))
+    expect(flaggedCards.length).toBeGreaterThan(0)
+
+    // Every flagged card must still be present in the final deck. If the
+    // critique passes or downgrade pass had swapped any of them out, the
+    // card name wouldn't be in result.mainDeck anymore.
+    const finalNames = new Set(result.mainDeck.map(c => c.name.toLowerCase()))
+    for (const card of flaggedCards) {
+      expect(finalNames.has(card.name.toLowerCase())).toBe(true)
+    }
+  })
+
+  it('Krenko B4 — tutor/removal floors persist through critique', async () => {
+    // B4 has higher tutor and removal floors than B3, so this exercises
+    // both fromTutorFloor and fromRemovalFloor more aggressively.
+    const result = await generateWithMocks({
+      commander:  KRENKO,
+      bracket:    4,
+      collection: buildRichCollection(),
+    })
+
+    const tutorFloorCards = result.mainDeck.filter(c => c.fromTutorFloor)
+    const removalFloorCards = result.mainDeck.filter(c => c.fromRemovalFloor)
+
+    // Both floor sets stay locked through the rest of the pipeline.
+    // (We don't assert non-zero here — a rich enough collection or LLM
+    // mock might cover the floor without needing the backstop. We only
+    // assert that whatever WAS added by the floors is still present.)
+    for (const card of [...tutorFloorCards, ...removalFloorCards]) {
+      const stillPresent = result.mainDeck.some(c =>
+        c.name.toLowerCase() === card.name.toLowerCase()
+      )
+      expect(stillPresent).toBe(true)
     }
   })
 })

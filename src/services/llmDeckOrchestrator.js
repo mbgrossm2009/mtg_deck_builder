@@ -37,6 +37,32 @@ import { fetchEdhrecCommander } from '../utils/edhrecApi'
 import { fetchMoxfieldConsensus } from '../utils/moxfieldApi'
 import { applyCommanderBracketCap } from '../rules/commanderPowerCeiling'
 
+// Canonical lock contract. A card carrying any of these flags must NOT be
+// swapped out by any downstream pass (heuristic critique, LLM critique,
+// bracket downgrade). Each flag is set by a step that exists precisely to
+// hit a hard minimum or invariant; undoing those swaps would defeat the
+// step's purpose. When adding a new floor/backstop, set a new
+// `from*` flag AND add it here — that's the single source of truth.
+//
+// Exported so tests can verify every swap site honors the same contract.
+export const LOCK_FLAGS = [
+  'fromManaSolver',
+  'fromSkeleton',
+  'fromBracketStaples',
+  'fromTribalFloor',
+  'fromTutorFloor',
+  'fromRemovalFloor',
+  'fromWinconBackstop',
+]
+
+export function isLockedByFloor(card) {
+  if (!card) return false
+  for (const flag of LOCK_FLAGS) {
+    if (card[flag]) return true
+  }
+  return false
+}
+
 // Adaptive cap on the pool sent to the LLM. Two layers:
 //   1. Below the threshold (≤ 500 cards): send EVERYTHING — small collections
 //      shouldn't lose any candidates.
@@ -495,10 +521,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       let swapIdx = -1
       for (let i = deck.length - 1; i >= 0; i--) {
         const c = deck[i]
-        if (c.fromManaSolver) continue
-        if (c.fromSkeleton) continue
-        if (c.fromBracketStaples) continue   // bracket staples are locked; never swap them
-        if (c.fromTribalFloor) continue      // tribal-floor adds are also locked
+        if (isLockedByFloor(c)) continue
         if (isWincon(c)) continue
         swapIdx = i
         break
@@ -554,8 +577,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
         let swapIdx = -1
         for (let i = deck.length - 1; i >= 0; i--) {
           const c = deck[i]
-          if (c.fromManaSolver || c.fromSkeleton || c.fromBracketStaples) continue
-          if (c.fromTribalFloor || c.fromWinconBackstop) continue
+          if (isLockedByFloor(c)) continue
           if (isTutor(c)) continue
           swapIdx = i
           break
@@ -598,8 +620,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
         let swapIdx = -1
         for (let i = deck.length - 1; i >= 0; i--) {
           const c = deck[i]
-          if (c.fromManaSolver || c.fromSkeleton || c.fromBracketStaples) continue
-          if (c.fromTribalFloor || c.fromWinconBackstop || c.fromTutorFloor) continue
+          if (isLockedByFloor(c)) continue
           if (isRemoval(c)) continue
           swapIdx = i
           break
@@ -651,8 +672,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
         let swapIdx = -1
         for (let i = deck.length - 1; i >= 0; i--) {
           const c = deck[i]
-          if (c.fromManaSolver || c.fromSkeleton || c.fromBracketStaples) continue
-          if (c.fromTutorFloor || c.fromRemovalFloor || c.fromWinconBackstop) continue
+          if (isLockedByFloor(c)) continue
           if (isOnTribe(c)) continue
           swapIdx = i
           break
@@ -1292,11 +1312,7 @@ function pickSwap(deck, legalNonLands, { isOffender, isReplacement, offenderRank
   // additions (tutor, removal, wincon, tribal) are protected — they were
   // added precisely to hit minimum counts and shouldn't be undone by the
   // bracket downgrade. Mana base + bracket staples are also protected.
-  const candidates = deck.filter(c =>
-    isOffender(c) &&
-    !c.fromManaSolver && !c.fromBracketStaples && !c.fromTribalFloor &&
-    !c.fromTutorFloor && !c.fromRemovalFloor && !c.fromWinconBackstop
-  )
+  const candidates = deck.filter(c => isOffender(c) && !isLockedByFloor(c))
   if (candidates.length === 0) return null
 
   // Sort by offender rank desc (most impactful to swap first)
@@ -1389,11 +1405,7 @@ function runHeuristicCritique({ deck, legalNonLands, commander, bracket, strateg
   // strongest first.
   const swappableDeck = deck
     .map((c, idx) => ({ idx, card: c, score: scoreFor(c) }))
-    .filter(({ card }) =>
-      !card.fromManaSolver && !card.fromSkeleton && !card.fromBracketStaples &&
-      !card.fromTribalFloor && !card.fromTutorFloor && !card.fromRemovalFloor &&
-      !card.fromWinconBackstop
-    )
+    .filter(({ card }) => !isLockedByFloor(card))
     .sort((a, b) => a.score - b.score)
 
   const scoredPool = pool
@@ -1459,10 +1471,8 @@ function applyCritiqueSwaps(deck, swaps, availablePool, usedNames) {
       continue
     }
     const outCard = deck[outIdx]
-    if (outCard.fromManaSolver || outCard.fromSkeleton || outCard.fromBracketStaples ||
-        outCard.fromTribalFloor || outCard.fromTutorFloor || outCard.fromRemovalFloor ||
-        outCard.fromWinconBackstop) {
-      rejected.push({ out: outName, in: inName, reason: 'out-card is locked (mana base, skeleton, bracket staple, tribal/tutor/removal/wincon floor)' })
+    if (isLockedByFloor(outCard)) {
+      rejected.push({ out: outName, in: inName, reason: 'out-card is locked (mana base, skeleton, bracket staple, or floor add)' })
       continue
     }
 
