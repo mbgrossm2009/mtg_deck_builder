@@ -1106,7 +1106,7 @@ Return ONLY JSON. No markdown.`
 // and reports strengths/weaknesses. Used by the eval harness to grade
 // many generations across many commanders without trying to mutate them.
 
-export function buildEvaluationPrompt({ commander, bracket, deck, criticalCardCounts, detectedWincons, executionScore }) {
+export function buildEvaluationPrompt({ commander, bracket, deck, criticalCardCounts, detectedWincons, executionScore, lensResults }) {
   const bracketLabel   = BRACKET_LABELS[bracket] ?? 'Unknown'
   const bracketMeaning = BRACKET_DESCRIPTIONS[bracket] ?? ''
 
@@ -1142,6 +1142,30 @@ Same rule applies to \`detected_wincon_patterns\`. If that field lists
 + Impact Tremors" or "combat-tribal: 4 lords + 22 vampires", the deck
 HAS a win plan. Do NOT write "no clear win condition" when a pattern is
 listed — describe the pattern as the win plan instead.
+═══════════════════════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════════════════════
+LENS VERDICTS — the user payload includes a \`lens_verdicts\` array at
+the top. Each entry is a structured verdict from one analysis lens
+(commander_execution, win_plan, bracket_fit, mana_base) that our system
+has ALREADY computed. Each verdict includes:
+
+  - lens:        which lens
+  - verdict:     'pass' | 'warn' | 'fail' | 'info'
+  - score:       0-1 fraction
+  - summary:     one-line human-readable
+  - evidence:    per-card facts ({ kind, card?, detail })
+  - suggestions: actionable improvements
+
+Your job as evaluator is to GRADE OUR ANALYSIS, not redo it from scratch.
+If \`win_plan.verdict === 'fail'\`, the deck genuinely has no plan — your
+score must reflect that. If \`bracket_fit.verdict === 'fail'\`, the deck
+overshoots its target bracket — call that out. The lens evidence array
+gives you specific cards to cite — use those names directly.
+
+WRONG: ignoring a 'fail' verdict and writing "this deck looks well-tuned."
+RIGHT: "the bracket_fit lens flags X cards bumping this deck to bracket
+        Y; the deck does not meet the requested bracket."
 ═══════════════════════════════════════════════════════════════════════════
 
 EVALUATION RUBRIC:
@@ -1416,10 +1440,26 @@ Impact Tremors" — those ARE the win plan.
 
 Return ONLY JSON.`
 
-  // counts and detected_wincon_patterns FIRST — LLMs weight earlier
-  // payload content more heavily. Putting these before the card list
-  // makes them harder to ignore than burying them after the deck array.
+  // Knowledge-layer lens results FIRST — these are the structured
+  // verdicts our system has already computed. The LLM should grade our
+  // analysis (or augment it), not rebuild it from card names. Each lens
+  // result includes evidence (per-card facts) and suggestions (actionable
+  // improvements) — the LLM gets to see the WHY behind every verdict.
+  //
+  // Legacy `counts`, `detected_wincon_patterns`, and `commander_execution`
+  // remain for compatibility — they overlap with lens output but help if
+  // the model ignores the structured form. They will be removed in a
+  // future phase once we confirm the LLM trusts the lens block.
   const user = {
+    lens_verdicts: (lensResults ?? []).map(r => ({
+      lens:        r.name,
+      verdict:     r.verdict,
+      score:       r.score,
+      summary:     r.summary,
+      evidence:    r.evidence ?? [],
+      suggestions: r.suggestions ?? [],
+    })),
+
     counts: criticalCardCounts ?? null,
     detected_wincon_patterns: detectedWincons ?? [],
     commander_execution: executionScore ?? null,

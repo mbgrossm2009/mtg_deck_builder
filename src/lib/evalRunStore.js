@@ -151,6 +151,7 @@ async function runLoop(commanders, brackets, results, token) {
             criticalCardCounts: deckResult.criticalCardCounts,
             detectedWincons: deckResult.detectedWincons,
             executionScore: deckResult.executionScore,
+            lensResults: deckResult.lensResults,
           })
         } catch (err) {
           if (state.runToken !== token) return
