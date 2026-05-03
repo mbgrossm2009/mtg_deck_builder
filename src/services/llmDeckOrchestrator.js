@@ -618,6 +618,29 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
                           (c.tags ?? []).includes('explosive_finisher')
   const winconCount = deck.filter(isWincon).length
   const multiCardWincons = detectMultiCardWincons(deck, strategyContext, commander)
+
+  // Diagnostic: surface backstop state so eval reruns can confirm whether
+  // the floor was met at this point or below. Helps identify the
+  // "wincons drop later" failure mode (LLM critique swapping out wincons
+  // because LLM picks aren't locked-by-floor).
+  console.log('[wincon-backstop]', {
+    commander: commander.name,
+    bracket,
+    MIN_WINCONS,
+    winconCount,
+    wincons: deck.filter(isWincon).map(c => ({ name: c.name, source:
+      c.fromManaSolver ? 'mana-solver' :
+      c.fromBracketStaples ? 'bracket-staples' :
+      c.fromSkeleton ? 'skeleton' :
+      c.fromWinconBackstop ? 'wincon-backstop' :
+      c.fromTutorFloor ? 'tutor-floor' :
+      c.fromRemovalFloor ? 'removal-floor' :
+      c.fromTribalFloor ? 'tribal-floor' :
+      c.fromRampCeiling ? 'ramp-ceiling' :
+      'llm-or-fallback' })),
+    detectedPatterns: multiCardWincons,
+  })
+
   // Floor is named wincons only; patterns are surfaced but not counted.
   if (winconCount < MIN_WINCONS) {
     const winconCandidates = legalNonLands
@@ -1114,6 +1137,39 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
         message: `Bracket-fit pass swapped ${downgradeSwaps.length} card${downgradeSwaps.length === 1 ? '' : 's'} so the deck plays at the bracket you targeted.`,
       })
     }
+  }
+
+  // 11d. FINAL wincon-floor safety net. The wincon backstop at step 10b
+  // ran BEFORE the critique passes; the LLM critique can swap out wincons
+  // that came from the LLM's own picks (those aren't locked-by-floor —
+  // only fromBracketStaples / fromSkeleton / fromWinconBackstop are
+  // locked). Eval data showed Daxos B5 (capped to B4) shipping with
+  // wincons=1 because the initial backstop was satisfied (LLM picked 3
+  // wincons), then the critique replaced 2 of them with synergy cards.
+  //
+  // Re-check the final wincon count and surface a warning if we dropped
+  // below the floor. We don't try to swap more in here — too late in the
+  // pipeline, would interfere with bracket-downgrade. Just be honest with
+  // the user that the deck didn't end up with the redundancy we wanted.
+  const finalWinconCheck = deck.filter(c =>
+    (c.roles ?? []).includes('win_condition') ||
+    (c.tags ?? []).includes('explosive_finisher')
+  ).length
+  console.log('[wincon-final-check]', {
+    commander: commander.name,
+    bracket,
+    MIN_WINCONS,
+    finalWinconCount: finalWinconCheck,
+    droppedBelow: finalWinconCheck < MIN_WINCONS,
+  })
+  if (finalWinconCheck < MIN_WINCONS) {
+    warnings.push({
+      severity: 'warning',
+      message:
+        `Only ${finalWinconCheck} named wincon${finalWinconCheck === 1 ? '' : 's'} in final deck (B${bracket} floor ${MIN_WINCONS}). ` +
+        `Either the commander's color identity has limited wincon options, or critique passes replaced LLM-picked wincons with higher-scoring synergy cards. ` +
+        `The detected win plan${multiCardWincons.length > 0 ? ` (${multiCardWincons.join('; ')})` : ''} still gives the deck a path to victory.`,
+    })
   }
 
   // 12. Post-processing — same as the heuristic generator does.
