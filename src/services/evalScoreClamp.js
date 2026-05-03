@@ -17,6 +17,11 @@
  *   'fatal'  → always clamp to ≤5, summary should call it out
  *   'severe' → clamp to ≤6, signal-aware summary
  *   'mild'   → no clamp, just informational
+ *
+ * Phase 2 expansion: added ramp/interaction/wincon hard score gates.
+ * Eval data showed the LLM giving a 9 to a deck with 30 ramp and 0
+ * interaction — score-cap rules close that trust gap. The lens/warning
+ * system already flags these issues; the clamp turns flags into score.
  */
 export function classifyQualitySignals({
   bracket,
@@ -26,6 +31,10 @@ export function classifyQualitySignals({
   detectedWincons,
   executionScore,
   executionThreshold,
+  rampCount,
+  rampCap,
+  interactionCount,
+  interactionFloor,
 }) {
   const issues = []
 
@@ -45,6 +54,17 @@ export function classifyQualitySignals({
       severity: 'fatal',
       kind: 'no_win_plan',
       detail: `B${bracket} deck has no detected single-card wincon AND no multi-card pattern`,
+    })
+  }
+
+  // FATAL: ramp is more than 1.5× the cap. The LLM was scoring decks
+  // with 30 ramp (Slicer B5) at 9. Hard gate prevents that.
+  if (typeof rampCap === 'number' && typeof rampCount === 'number' &&
+      rampCount > rampCap * 1.5) {
+    issues.push({
+      severity: 'fatal',
+      kind: 'ramp_runaway',
+      detail: `${rampCount} ramp pieces (cap for B${bracket} is ~${rampCap}). Excess ramp crowds out interaction and wincons.`,
     })
   }
 
@@ -68,6 +88,44 @@ export function classifyQualitySignals({
       severity: 'severe',
       kind: 'filler_high',
       detail: `${fillerCount} true-filler cards (cap for B${bracket} is ${fillerCap})`,
+    })
+  }
+
+  // SEVERE: ramp is over the cap but within 1.5×. Excess ramp = trust
+  // breakage but not a fully broken deck.
+  if (typeof rampCap === 'number' && typeof rampCount === 'number' &&
+      rampCount > rampCap && rampCount <= rampCap * 1.5) {
+    issues.push({
+      severity: 'severe',
+      kind: 'ramp_high',
+      detail: `${rampCount} ramp pieces (cap for B${bracket} is ~${rampCap}). Excess ramp crowds out interaction and wincons.`,
+    })
+  }
+
+  // SEVERE: interaction below floor. Eval data showed B4/B5 decks with
+  // <floor interaction getting 8s. Cap to 6 — the deck can't credibly
+  // play through interaction at the target bracket.
+  if (typeof interactionFloor === 'number' && typeof interactionCount === 'number' &&
+      interactionCount < interactionFloor) {
+    issues.push({
+      severity: 'severe',
+      kind: 'interaction_low',
+      detail: `${interactionCount} interaction pieces (floor for B${bracket} is ${interactionFloor}+). Deck may struggle to answer threats.`,
+    })
+  }
+
+  // SEVERE: named wincons below the bracket floor. Patterns DON'T count
+  // here — patterns are surfaced separately to the lens; the score cap
+  // is about NAMED wincon density (deck redundancy in sustained
+  // pressure). A deck with 0 named wincons + a strong pattern still gets
+  // its lens-pass, but the score reflects the lack of redundancy.
+  const WINCON_FLOOR_BY_BRACKET = { 1: 1, 2: 2, 3: 2, 4: 3, 5: 2 }
+  const winconFloor = WINCON_FLOOR_BY_BRACKET[bracket]
+  if (winconFloor && typeof wincons === 'number' && wincons < winconFloor) {
+    issues.push({
+      severity: 'severe',
+      kind: 'wincons_low',
+      detail: `${wincons} named wincons (floor for B${bracket} is ${winconFloor}+). Multi-card patterns can compensate but the deck lacks redundancy.`,
     })
   }
 

@@ -117,6 +117,36 @@ export function scoreCard(card, role, commander, bracket, context = {}) {
   const flexBonus = Math.min(roles.length - 1, 3) * 3
   if (flexBonus > 0) { score += flexBonus; log(`Multi-role (${roles.length})`, flexBonus) }
 
+  // Phase 2.3: ramp-over-cap penalty. Eval data showed Slicer B5 shipping
+  // with 30 ramp pieces (cap ≈ 18) and Zirda B5 with 24. The cap-aware
+  // fallback (batch 6) helps but doesn't penalize ramp DURING scored
+  // selection — the heuristic critique and fallback's pass-1 still
+  // happily score ramp cards near their normal value. This penalty makes
+  // each additional ramp piece beyond the cap less attractive at score
+  // time so the scoring loop preferentially picks non-ramp options.
+  //
+  // Penalty curve:
+  //   ramp count at-or-above target → -8 (every additional piece)
+  //   ramp count > 1.2× cap         → -16 (compounded)
+  //   ramp count > 1.5× cap         → -30 (severely discouraged)
+  //
+  // Universal-role cards in the ramp bucket (Sol Ring etc.) are not
+  // exempt — by the time the running count is over cap, even Sol Ring
+  // shouldn't be PREFERRED. (Bracket-staples bypass the scorer entirely
+  // via force-lock; this only affects role-fill and critique paths.)
+  if (roles.includes('ramp') && typeof context.rampInDeckCount === 'number' && typeof context.rampCap === 'number') {
+    const cap = context.rampCap
+    const inDeck = context.rampInDeckCount
+    let rampPenalty = 0
+    if (inDeck >= cap * 1.5)      rampPenalty = -30
+    else if (inDeck >= cap * 1.2) rampPenalty = -16
+    else if (inDeck >= cap)       rampPenalty = -8
+    if (rampPenalty !== 0) {
+      score += rampPenalty
+      log(`Ramp-over-cap (${inDeck}/${cap})`, rampPenalty)
+    }
+  }
+
   // Archetype fit. When primary is set, secondary archetypes contribute zero —
   // the deck commits hard to one lane.
   if (context.archetypes?.length) {

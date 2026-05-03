@@ -29,6 +29,12 @@ import {
 } from './llmPromptBuilder'
 import { clampEvalScore } from './evalScoreClamp'
 import { getExecutionThresholdForBracket } from '../rules/commanderExecution'
+import { maxRampCount } from '../rules/bracketRules'
+
+// Phase 2.1: interaction floor mirrors the orchestrator's REMOVAL_FLOOR_BY_BRACKET
+// and the validator's INTERACTION_FLOOR. Used by the eval clamp to score-cap
+// decks that ship below the floor.
+const INTERACTION_FLOOR_BY_BRACKET = { 1: 4, 2: 5, 3: 7, 4: 8, 5: 10 }
 
 // Phrases the LLM uses to claim a deck overshoots its target bracket.
 // Used by stripFalseAboveBracketClaims to remove offending lines from
@@ -318,6 +324,7 @@ export async function evaluateDeck({ commander, bracket, deck, lensResults, onPr
       topStrength: 'Mock mode produces deterministic output.',
       strengths: ['Mock mode is deterministic for tests.'],
       weaknesses: ['No real judgment available.'],
+      bracketFitVerdict: 'within_band',
       bracketFitNotes: 'Mock — bypassed real LLM.',
       _meta: { mode: 'mock' },
     }
@@ -338,14 +345,28 @@ export async function evaluateDeck({ commander, bracket, deck, lensResults, onPr
     const execLens = lensResults?.find(r => r.name === 'commander_execution')
     const bracketLens = lensResults?.find(r => r.name === 'bracket_fit')
     const trueFiller = deck.filter(c => (c.roles ?? [])[0] === 'filler').length
+
+    // Phase 2.1: gather ramp + interaction counts for the new score gates.
+    // ramp counts cards whose primary role is 'ramp'. Interaction counts
+    // removal + wipe + counterspells (counterspells get the 'removal' role
+    // per cardRoles.js, so summing removal + wipe captures the full set).
+    const rampCount = deck.filter(c => (c.roles ?? []).includes('ramp')).length
+    const interactionCount = deck.filter(c =>
+      (c.roles ?? []).includes('removal') || (c.roles ?? []).includes('wipe')
+    ).length
+
     const clamped = clampEvalScore(withMeta, {
       bracket,
-      fillerCount:       trueFiller,
-      fillerCap:         FILLER_CAP_BY_BRACKET[bracket],
-      wincons:           winLens?._raw?.singleCardWincons ?? 0,
-      detectedWincons:   winLens?._raw?.detectedPatterns ?? [],
-      executionScore:    execLens?.score,
+      fillerCount:        trueFiller,
+      fillerCap:          FILLER_CAP_BY_BRACKET[bracket],
+      wincons:            winLens?._raw?.singleCardWincons ?? 0,
+      detectedWincons:    winLens?._raw?.detectedPatterns ?? [],
+      executionScore:     execLens?.score,
       executionThreshold: getExecutionThresholdForBracket(bracket),
+      rampCount,
+      rampCap:            maxRampCount(bracket, commander),
+      interactionCount,
+      interactionFloor:   INTERACTION_FLOOR_BY_BRACKET[bracket],
     })
     // Belt-and-suspenders: strip false "above bracket" claims when
     // bracket_fit verdict is 'pass'. The eval prompt forbids these phrases
@@ -366,6 +387,7 @@ export async function evaluateDeck({ commander, bracket, deck, lensResults, onPr
       topStrength: '',
       strengths: [],
       weaknesses: [],
+      bracketFitVerdict: null,
       bracketFitNotes: '',
       _meta: { mode: 'error', error: msg },
     }

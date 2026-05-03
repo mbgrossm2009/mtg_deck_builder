@@ -4,7 +4,7 @@ import { fetchSpellbookCombos } from '../utils/commanderSpellbook'
 import { fetchEdhrecCommander } from '../utils/edhrecApi'
 import { filterLegalCards } from './commanderRules'
 import { assignRoles } from './cardRoles'
-import { isBracketAllowed, computeActualBracket, targetLandCount, targetRoleCounts, targetAvgCmc, BRACKET_LABELS } from './bracketRules'
+import { isBracketAllowed, computeActualBracket, targetLandCount, targetRoleCounts, targetAvgCmc, BRACKET_LABELS, maxRampCount } from './bracketRules'
 import { scoreCard } from './deckScorer'
 import { solveManaBase } from './manaBaseSolver'
 import { detectCombos, registerCombos, getAllCombos } from './comboRules'
@@ -129,6 +129,12 @@ export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
   //      the deck has drifted heavy
   const rescore = (cards) => {
     scoringContext.runningCmcOverTarget = computeRunningCmcOverTarget(deck, bracket)
+    // Phase 2.3: also expose running ramp count + bracket cap so the
+    // scorer can penalize over-cap ramp picks during the fill / critique
+    // phases. Without this, ramp cards keep winning slots even after
+    // the bucket is full because their base score is high.
+    scoringContext.rampInDeckCount = deck.filter(c => (c.roles ?? []).includes('ramp')).length
+    scoringContext.rampCap = maxRampCount(bracket, commander)
     return cards.map(card => ({
       ...card,
       score: scoreCard(card, card.roles[0] ?? 'filler', commander, bracket, scoringContext),

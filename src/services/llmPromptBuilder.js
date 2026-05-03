@@ -1505,8 +1505,26 @@ OUTPUT FORMAT (JSON only — no markdown):
   "weaknesses": [
     "<concrete observation about a weakness — e.g., 'only 2 tutors in a B5 deck — should be 8-12'>"
   ],
+  "bracketFitVerdict": "<one of: 'within_band' | 'low_end' | 'high_end' | 'over_target' | 'needs_tuning'>",
   "bracketFitNotes": "<does this deck actually feel like ${bracketLabel}? what's off?>"
 }
+
+bracketFitVerdict is a STRUCTURED enum that downstream UI can render as
+a chip / badge without parsing prose. Pick exactly one:
+  - "within_band":   deck is squarely at the target bracket, no concerns
+  - "low_end":       deck functions at target but is on the casual edge
+                     (could comfortably play a bracket lower)
+  - "high_end":      deck functions at target but is on the spicy edge
+                     (could comfortably play a bracket higher)
+  - "over_target":   actualBracket > targetBracket per the lens. Use only
+                     when bracket_fit.verdict === 'fail'. The lens math is
+                     authoritative — don't pick this when verdict === 'pass'.
+  - "needs_tuning":  deck has structural issues (under-interaction,
+                     missing wincons, ramp crowding) regardless of which
+                     bracket it lands in. Pair with bracketFitNotes.
+
+The prose bracketFitNotes still gives you room to explain — the enum
+just lets the UI show consistent bracket-status badges.
 
 The topStrength field is REQUIRED — pick the single best thing about this
 deck and write one short, concrete sentence. It MUST be a paraphrased

@@ -452,6 +452,35 @@ const MECHANIC_TAG_RULES = [
     ],
   },
   {
+    // Activated-ability tag — fires when a card has an activated ability
+    // (anything with a colon `:` after a cost). Used by activated-ability
+    // commanders (Zirda, Emry, Urza Lord High Artificer, Marwyn) to detect
+    // on-plan cards. The pattern is intentionally broad — any "{cost}: do X"
+    // shape qualifies. This catches Walking Ballista, Mikaeus, Coretapper,
+    // every activated-mana creature, every wishboard-style enabler, etc.
+    //
+    // Cost-bearing keyword abilities (Cycling, Equip, Fortify, Channel,
+    // Adventure when used as cast cost) are also activated abilities and
+    // get caught by the keyword pattern.
+    tag: 'activated_ability',
+    patterns: [
+      // Generic "{cost}: do something" — the universal activated-ability shape.
+      // Cost can be mana ({W}, {2}{B}, etc.), tap/untap symbols ({T}, {Q}),
+      // life payment ("Pay 2 life"), or a sacrifice clause ("Sacrifice X").
+      /\{[wubrgctqx0-9\/p]+\}(?:,\s?\{[wubrgctqx0-9\/p]+\})*\s?:/i,
+      /(?:pay |sacrifice |discard )[^:]*:/i,
+      // Activated keywords that imply tap-and-pay activation.
+      /\bcycling\b/i,
+      /\bequip\b/i,
+      /\bunearth\b/i,
+      /\bchannel\b/i,
+      /\bninjutsu\b/i,
+      /\bfortify\b/i,
+      /\breconfigure\b/i,
+      /\bcrew\b/i,
+    ],
+  },
+  {
     tag: 'wheel',
     patterns: [
       /each player discards their hand,? then draws (?:seven|that many) cards/,

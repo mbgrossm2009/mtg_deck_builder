@@ -251,6 +251,34 @@ const COMMANDER_MECHANIC_PATTERNS = [
       /extra combat/i,
     ],
   },
+  {
+    // Activated-ability matters — Zirda the Dawnwaker, Emry Lurker of the
+    // Loch (sort of), Urza Lord High Artificer, Marwyn the Nurturer, Daretti,
+    // and similar commanders that reduce activation costs, untap permanents
+    // for activations, or trigger off activated abilities. These commanders
+    // are notoriously hard to detect because their "synergy" is "any card
+    // with a tap or activated ability" — a vast pool that needs the explicit
+    // tag to be picked over generic value.
+    tag: 'cares_about_activated_abilities',
+    patterns: [
+      // Cost reduction on activated abilities (Zirda)
+      /activated abilit(?:y|ies)[^.]*cost(?:s)? (?:up to )?\{?[\w\d]+\}? less/i,
+      /abilit(?:y|ies) of (?:creatures|permanents) you control[^.]*cost (?:up to )?\{?[\w\d]+\}? less/i,
+      // Untap-for-activation (Marwyn-style mana, Kinnan, Maro-style)
+      /\{t\}: add[^.]*\{?[wubrg\d]+\}/i,   // commander itself is a tap-for-mana
+      /untap (?:target |all )?(?:creatures|permanents|artifacts)[^.]*you control/i,
+      // Trigger off activated abilities
+      /whenever (?:a |an |you )?activate(?:d)? an? abilit/i,
+      /whenever (?:a player )?(?:activates|uses)/i,
+      // Doubles activated ability output
+      /double (?:the |that )?amount of mana/i,
+      /if .* would produce mana/i,
+      // Companion-style activated reference (Zirda's companion clause is on
+      // the back of the card and often present in the type/oracle as cycling
+      // hint — match "each card.*activated ability" too)
+      /each (?:nonland )?card[^.]*has an? activated abilit/i,
+    ],
+  },
 ]
 
 // Map a commander mechanic tag to the card mechanic tags (from cardRoles.js)
@@ -273,6 +301,7 @@ const COMMANDER_TAG_TO_CARD_TAGS = {
   cares_about_artifacts:     ['artifact_payoff', 'token_producer'],
   cares_about_enchantments:  ['enchantment_payoff'],
   cares_about_lands:         ['ramp', 'landfall_payoff'],
+  cares_about_activated_abilities: ['activated_ability', 'untap', 'mana_doubler'],
   // Tribal tags don't map to card tags directly — they layer on top of
   // the existing archetype detection in archetypeRules. Listed here for
   // completeness so they're recognized as "real" tags.

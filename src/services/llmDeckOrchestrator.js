@@ -1892,6 +1892,9 @@ function runHeuristicCritique({ deck, legalNonLands, commander, bracket, strateg
     combo.cards.some(name => candidateNames.has(name.toLowerCase()))
   )
 
+  // Phase 2.3: surface running ramp count + cap so scoreCard can penalize
+  // ramp picks once the deck is at-or-over cap. Recomputed before each
+  // scoreFor call because the deck mutates as the critique applies swaps.
   const scoringContext = {
     archetypes: strategyContext.archetypes ?? [],
     primaryArchetypeId: strategyContext.primaryArchetypeId ?? null,
@@ -1900,8 +1903,10 @@ function runHeuristicCritique({ deck, legalNonLands, commander, bracket, strateg
     edhrecRank,
     edhrecRankTotal: Math.max(edhrecData?.topCards?.length ?? 1, 1),
     commanderTagBoosts: strategyContext.commanderTagBoosts,
+    rampCap: maxRampCount(bracket, commander),
   }
   const scoreFor = (card) => {
+    scoringContext.rampInDeckCount = deck.filter(c => (c.roles ?? []).includes('ramp')).length
     let s = scoreCard(card, (card.roles ?? ['filler'])[0], commander, bracket, scoringContext)
     if (isOffTheme(card)) s -= OFF_THEME_PENALTY
     return s

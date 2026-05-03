@@ -173,7 +173,22 @@ async function runLoop(commanders, brackets, results, token) {
           // from the deck for display in the eval-harness JSON. Helpers
           // remain exported (they're still used inside the orchestrator
           // and lenses).
-          criticalCardCounts: countCriticalCards(deckResult.mainDeck),
+          criticalCardCounts: (() => {
+            // Phase 2.2: fold detected multi-card patterns into the
+            // user-facing wincon count so eval JSON doesn't say
+            // "wincons: 1" when the deck has a clear aristocrats engine.
+            // Named wincons stay separate as `namedWincons` for any
+            // consumer that wants the strict count; `wincons` becomes
+            // "named wincons + detected patterns" for display.
+            const counts = countCriticalCards(deckResult.mainDeck)
+            const patterns = (deckResult.lensResults ?? [])
+              .find(r => r.name === 'win_plan')?._raw?.detectedPatterns ?? []
+            return {
+              ...counts,
+              namedWincons: counts.wincons,
+              wincons: counts.wincons + patterns.length,
+            }
+          })(),
           detectedWincons: (deckResult.lensResults ?? [])
             .find(r => r.name === 'win_plan')?._raw?.detectedPatterns ?? [],
           evaluation: evalResult ?? {
@@ -182,6 +197,7 @@ async function runLoop(commanders, brackets, results, token) {
             topStrength: '',
             strengths: [],
             weaknesses: [],
+            bracketFitVerdict: null,
             bracketFitNotes: '',
           },
           completedAt: new Date().toISOString(),
