@@ -51,15 +51,37 @@ const TUTORS = new Set([
   'Buried Alive', 'Entomb', 'Reanimate',
 ])
 
+// Cards whose single-card presence represents a real win plan. Audited
+// 2026-05-03 after eval data showed Sorin BW decks counting 10 wincons,
+// which inflated the appearance of "multiple win conditions" while
+// detectedWincons remained empty. The pruning removed:
+//   - Exquisite Blood / Sanguine Bond — these are COMBO HALVES, not
+//     single-card wincons. Sanguine Bond also serves as the life-drain
+//     engine payoff (handled via detectMultiCardWincons), so it still
+//     contributes to a detected pattern.
+//   - Heliod's Intervention — it's removal+lifegain, not a wincon.
+//   - Consuming Aberration — a body that grows from mill, not a closer
+//     (becomes a wincon only with combat-damage payoffs).
+// Added Triskaidekaphile (alt-win on draw count, real B3+ closer).
 const WIN_CONDITIONS = new Set([
+  // Library-out alt-wincons
   'Thassa\'s Oracle', 'Laboratory Maniac', 'Jace, Wielder of Mysteries',
-  'Aetherflux Reservoir', 'Exquisite Blood', 'Sanguine Bond',
+  // Storm-tier closers
+  'Aetherflux Reservoir',
+  // X-spell finishers
   'Insurrection', 'Torment of Hailfire', 'Debt to the Deathless',
-  'Approach of the Second Sun', 'Heliod\'s Intervention', 'Craterhoof Behemoth',
-  'Triumph of the Hordes', 'Biorhythm', 'Psychosis Crawler',
-  'Altar of the Brood', 'Revel in Riches', 'Mechanized Production',
+  // 7th-cast / approach-style alt-wins
+  'Approach of the Second Sun',
+  // Mass-pump finishers
+  'Craterhoof Behemoth', 'Triumph of the Hordes', 'Biorhythm',
+  // Damage-on-draw closers
+  'Psychosis Crawler', 'Triskaidekaphile',
+  // Mill-payoff closers
+  'Altar of the Brood',
+  // Alt-wincons (upkeep/condition checks)
+  'Revel in Riches', 'Mechanized Production',
   'Felidar Sovereign', 'Test of Endurance', 'Darksteel Reactor',
-  'Mayael\'s Aria', 'Azor\'s Elocutors', 'Consuming Aberration',
+  'Mayael\'s Aria', 'Azor\'s Elocutors',
 ])
 
 // `extras` lets the generator pass through:

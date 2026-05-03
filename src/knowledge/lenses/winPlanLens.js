@@ -51,6 +51,20 @@ export const WinPlanLens = {
                 'Deck has no recognizable way to close a game.',
       })
     }
+    // "Stack of unrelated wincons" signal — 5+ named wincons but no
+    // multi-card pattern detected suggests the deck stacks finishers
+    // hoping to draw one rather than executing a coherent plan. Doesn't
+    // fail the verdict (cards ARE wincons), but flags the lack of focus
+    // so the eval evaluator and the user can see it.
+    if (singleCardWincons.length >= 5 && detectedPatterns.length === 0 && bracket >= 4) {
+      evidence.push({
+        kind: 'unfocused_wincons',
+        detail:
+          `${singleCardWincons.length} named wincon cards but no detected ` +
+          `engine/pattern. Deck plays as "draw any wincon, win" rather than ` +
+          `executing a focused plan — viable at B${bracket} but power-capped.`,
+      })
+    }
 
     const suggestions = []
     if (verdict === 'fail') {
