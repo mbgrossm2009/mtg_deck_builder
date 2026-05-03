@@ -1,4 +1,5 @@
 import { colorIdentityLegal, isCommanderLegal } from '../utils/cardHelpers'
+import { maxRampCount } from './bracketRules'
 
 export function validateDeck(mainDeck, commander) {
   const errors = []
@@ -135,6 +136,17 @@ export function validateDeckAtBracket(mainDeck, commander, bracket) {
       `${counts.land} lands at B${bracket} without compensating fast mana ` +
       `(have ${fastManaCount}, need 8+) or low curve (avg CMC ${avgCmc.toFixed(1)}, need ≤ 2.6). ` +
       `Deck may have mana problems.`
+    )
+  }
+
+  // Ramp upper-cap warning. Excess ramp crowds out interaction/draw —
+  // typical eval failure mode where the deck has 19 ramp and 6 removal.
+  const rampCap = maxRampCount(bracket, commander)
+  if (rampCount > rampCap) {
+    filtered.push(
+      `${rampCount} ramp pieces at B${bracket} (cap ≈ ${rampCap}). ` +
+      `Excess ramp crowds out interaction / draw / synergy — consider ` +
+      `swapping the weakest ramp slots for removal or wincon support.`
     )
   }
 

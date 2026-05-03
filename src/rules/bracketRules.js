@@ -222,9 +222,14 @@ export function targetRoleCounts(bracket, commander = null, archetypes = []) {
   // and needs the +4 boost to reach the 20+ ramp the real list runs.
   if (bracket === 5) {
     const cmc = commander?.cmc ?? 0
-    let ramp = 18
-    if (cmc >= 7)      ramp += 4   // Atraxa GU territory
-    else if (cmc >= 5) ramp += 2   // Yidris, Yawgmoth-tier
+    // Reduced from 18 to 14 (2026-05-03). Eval data showed B5 decks
+    // shipping with 19 ramp consistently — at the upper edge of the
+    // cEDH 12-22 range and crowding out interaction. Lower base + same
+    // high-CMC bonuses keeps the package feasible for Atraxa GU
+    // (14 + 4 = 18) while leaving room for other roles.
+    let ramp = 14
+    if (cmc >= 7)      ramp += 4   // Atraxa GU territory (→ 18)
+    else if (cmc >= 5) ramp += 2   // Yidris, Yawgmoth-tier (→ 16)
     return {
       ramp,
       draw:          8,    // cantrips + draw engines; most cEDH lists run 5-12
@@ -243,7 +248,10 @@ export function targetRoleCounts(bracket, commander = null, archetypes = []) {
     }
   }
 
-  let ramp = bracket >= 4 ? 12 : 10
+  // Ramp targets reduced (2026-05-03) from 12/10 → 11/9 after eval data
+  // showed B3/B4 decks shipping with 16-19 ramp consistently, crowding
+  // out interaction. High-CMC bonuses are unchanged.
+  let ramp = bracket >= 4 ? 11 : 9
   const cmc = commander?.cmc ?? 0
   if (cmc >= 7)      ramp += 4
   else if (cmc >= 5) ramp += 2
@@ -277,4 +285,22 @@ export function targetRoleCounts(bracket, commander = null, archetypes = []) {
     synergy,
     filler:       99, // fills whatever is left
   }
+}
+
+// Bracket-aware UPPER cap for ramp count. Excess ramp crowds out
+// interaction / draw / synergy. Numbers are deliberately above the
+// targets so a deck that organically lands at the target (or one piece
+// over) doesn't trigger; only meaningfully-over decks warn.
+//
+// High-CMC commanders get a +2/+4 allowance on top of the cap (matching
+// the bonuses in targetRoleCounts) so a Yidris/Atraxa-GU deck doesn't
+// false-positive.
+export function maxRampCount(bracket, commander = null) {
+  const cmc = commander?.cmc ?? 0
+  // Base caps roughly = target + 3 to allow honest variance.
+  const BASE_CAP = { 1: 12, 2: 12, 3: 14, 4: 16, 5: 18 }
+  let cap = BASE_CAP[bracket] ?? 14
+  if (cmc >= 7)      cap += 4
+  else if (cmc >= 5) cap += 2
+  return cap
 }

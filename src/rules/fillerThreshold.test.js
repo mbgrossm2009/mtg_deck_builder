@@ -169,3 +169,46 @@ describe('validateDeckAtBracket — context-aware land warning', () => {
     expect(warnings.some(w => /lands/i.test(w))).toBe(true)
   })
 })
+
+describe('validateDeckAtBracket — ramp upper cap', () => {
+  // Ramp upper caps prevent the eval failure mode where decks ship with
+  // 19 ramp pieces and 6 removal — ramp crowding out interaction.
+  function deckWithRamp(rampCount) {
+    const cards = []
+    for (let n = 0; n < 36; n++) {
+      cards.push({ name: `L-${n}`, roles: ['land'], color_identity: ['B'], type_line: 'Basic Land', isBasicLand: true, cmc: 0 })
+    }
+    for (let n = 0; n < rampCount; n++) {
+      cards.push({ name: `R-${n}`, roles: ['ramp'], color_identity: ['B'], type_line: 'Artifact', cmc: 2 })
+    }
+    const filler = 99 - cards.length
+    for (let n = 0; n < filler; n++) {
+      cards.push({ name: `S-${n}`, roles: ['synergy'], color_identity: ['B'], type_line: 'Creature', cmc: 3 })
+    }
+    return cards
+  }
+
+  it('B4 with 19 ramp triggers cap warning (B4 cap = 16)', () => {
+    const { warnings } = validateDeckAtBracket(deckWithRamp(19), cmdr, 4)
+    expect(warnings.some(w => /ramp pieces/.test(w))).toBe(true)
+  })
+
+  it('B5 with 25 ramp triggers cap warning (B5 cap = 18 base)', () => {
+    const { warnings } = validateDeckAtBracket(deckWithRamp(25), cmdr, 5)
+    expect(warnings.some(w => /ramp pieces/.test(w))).toBe(true)
+  })
+
+  it('B4 with 14 ramp does NOT trigger cap (within target+variance)', () => {
+    const { warnings } = validateDeckAtBracket(deckWithRamp(14), cmdr, 4)
+    expect(warnings.some(w => /ramp pieces/.test(w))).toBe(false)
+  })
+
+  it('high-CMC commander gets allowance but is still capped', () => {
+    const atraxa = { name: 'Atraxa', color_identity: ['B'], type_line: 'Legendary Creature', cmc: 7 }
+    // B5 cap base 18 + 4 (CMC>=7) = 22. 21 should pass, 23 should warn.
+    const noWarn = validateDeckAtBracket(deckWithRamp(21), atraxa, 5).warnings
+    const warns  = validateDeckAtBracket(deckWithRamp(23), atraxa, 5).warnings
+    expect(noWarn.some(w => /ramp pieces/.test(w))).toBe(false)
+    expect(warns .some(w => /ramp pieces/.test(w))).toBe(true)
+  })
+})
