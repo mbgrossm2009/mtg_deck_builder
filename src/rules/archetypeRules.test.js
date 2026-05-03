@@ -398,3 +398,79 @@ describe('anchorNamesFor', () => {
     expect(result.size).toBe(0)
   })
 })
+
+// ─── Real-commander archetype detection — uses verbatim Scryfall text ───────
+//
+// These tests verify detectArchetypes against actual oracle text from the
+// top-100 fixture set. They protect against regressions where a regex
+// tweak silently breaks classification for a well-known commander.
+//
+// Each entry: [commanderName, expectedArchetypeIds[]]. The id list contains
+// archetypes the commander MUST produce. The commander may produce others;
+// we only assert the listed ones are present.
+
+describe('Real commander archetype detection', () => {
+  it.each([
+    // Tribal commanders — oracle text mentions the tribe
+    ['Tiamat',                     ['tribal_dragon']],
+    ['The Ur-Dragon',              ['tribal_dragon']],
+    ['Krenko, Mob Boss',           ['tribal_goblin']],
+    ['Edgar Markov',               ['tribal_vampire']],
+    ['Marwyn, the Nurturer',       ['tribal_elf']],
+    ['Sliver Hivelord',            ['tribal_sliver']],
+    ['Sliver Legion',              ['tribal_sliver']],
+    ['The First Sliver',           ['tribal_sliver']],
+    ['Wilhelt, the Rotcleaver',    ['tribal_zombie']],
+    ['Lathril, Blade of the Elves', ['tribal_elf']],
+    ['Atarka, World Render',       ['tribal_dragon']],
+    ['Lathliss, Dragon Queen',     ['tribal_dragon']],
+
+    // Mechanic-driven archetypes
+    ['Korvold, Fae-Cursed King',   ['aristocrats']],
+    ['Meren of Clan Nel Toth',     ['aristocrats']],
+    ['Niv-Mizzet, Parun',          ['spellslinger']],
+    ['Mizzix of the Izmagnus',     ['spellslinger']],
+    ['Atraxa, Praetors\' Voice',   ['plus_one_counters']],
+  ])('%s should detect archetype(s): %j', async (name, expectedIds) => {
+    const { findCommander } = await import('../test/fixtures/top100commanders.js')
+    const commander = findCommander(name)
+    expect(commander, `Commander "${name}" missing from fixture`).toBeDefined()
+    const archetypes = detectArchetypes(commander)
+    const detectedIds = archetypes.map(a => a.id)
+    for (const expected of expectedIds) {
+      expect(detectedIds, `${name} expected to detect ${expected} (actual: ${detectedIds.join(', ')})`).toContain(expected)
+    }
+  })
+})
+
+describe('Real commander archetype detection — NEGATIVE: oracle text gates tribal', () => {
+  it('Winter, Cynical Opportunist (Human Warlock) does NOT detect tribal_human or tribal_warlock', async () => {
+    const { findCommander } = await import('../test/fixtures/top100commanders.js')
+    const winter = findCommander('Winter, Cynical Opportunist')
+    expect(winter).toBeDefined()
+    const archetypes = detectArchetypes(winter)
+    const ids = archetypes.map(a => a.id)
+    expect(ids).not.toContain('tribal_human')
+    expect(ids).not.toContain('tribal_warlock')
+  })
+
+  it('Yarok (Nightmare Horror) does NOT detect tribal_nightmare or tribal_horror', async () => {
+    const { findCommander } = await import('../test/fixtures/top100commanders.js')
+    const yarok = findCommander('Yarok, the Desecrated')
+    expect(yarok).toBeDefined()
+    const archetypes = detectArchetypes(yarok)
+    const ids = archetypes.map(a => a.id)
+    expect(ids).not.toContain('tribal_nightmare')
+    expect(ids).not.toContain('tribal_horror')
+  })
+
+  it('Kykar (Bird Wizard) does NOT detect tribal_bird or tribal_wizard', async () => {
+    const { findCommander } = await import('../test/fixtures/top100commanders.js')
+    const kykar = findCommander('Kykar, Wind\'s Fury')
+    expect(kykar).toBeDefined()
+    const archetypes = detectArchetypes(kykar)
+    const ids = archetypes.map(a => a.id)
+    expect(ids).not.toContain('tribal_bird')
+    expect(ids).not.toContain('tribal_wizard')
+  })
+})

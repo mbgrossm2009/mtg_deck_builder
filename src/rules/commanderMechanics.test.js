@@ -143,3 +143,178 @@ describe('mechanicSynergyBonus', () => {
     expect(mechanicSynergyBonus(card(['sac_outlet', 'lifegain', 'extra_combat']), boosts)).toBe(8)
   })
 })
+
+// ─── Precision tests — wording matters in Magic ─────────────────────────────
+//
+// Magic oracle text is precise. "Whenever you draw a card" is fundamentally
+// different from "draw a card" or "if you've drawn cards this turn". The
+// first is a TRIGGER (the commander cares); the second is an EFFECT (the
+// commander itself draws); the third is a CONDITION (storm-style payoff).
+// These tests pin down those distinctions for each tag pattern.
+
+describe('Precision: cares_about_lifegain — trigger vs effect', () => {
+  it('TRIGGER: "Whenever you gain life" → tagged', () => {
+    const tags = extractCommanderMechanicTags(cmdr('Whenever you gain life, draw a card.'))
+    expect(tags).toContain('cares_about_lifegain')
+  })
+  it('SELF-GAIN: "you gain N life" → tagged (commander gains life)', () => {
+    // Sheoldred-style: "Whenever you draw a card, you gain 2 life"
+    const tags = extractCommanderMechanicTags(cmdr('Whenever you draw a card, you gain 2 life.'))
+    expect(tags).toContain('cares_about_lifegain')
+  })
+  it('LIFELINK keyword → tagged', () => {
+    const tags = extractCommanderMechanicTags(cmdr('Lifelink. {T}: Add {W}.'))
+    expect(tags).toContain('cares_about_lifegain')
+  })
+  it('SINGLE one-shot life gain (not commander-relevant) → NOT tagged', () => {
+    // A commander whose only "life" reference is a one-shot life payment
+    // is NOT a lifegain commander — should not tag.
+    const tags = extractCommanderMechanicTags(cmdr('When this enters, target opponent loses 3 life.'))
+    expect(tags).not.toContain('cares_about_lifegain')
+  })
+})
+
+describe('Precision: cares_about_lifeloss — opponent damage payoff', () => {
+  it('TRIGGER: "Whenever an opponent loses life" → tagged', () => {
+    // Vito-style
+    const tags = extractCommanderMechanicTags(
+      cmdr('Whenever an opponent loses life, you gain that much life.')
+    )
+    expect(tags).toContain('cares_about_lifeloss')
+  })
+  it('SHEOLDRED: "they lose 2 life" → tagged', () => {
+    // Sheoldred, the Apocalypse — lifeloss payoff in opponent draw trigger
+    const tags = extractCommanderMechanicTags(
+      cmdr('Whenever an opponent draws a card, they lose 2 life.')
+    )
+    expect(tags).toContain('cares_about_lifeloss')
+  })
+  it('SELF-LOSS payment (not commander-relevant) → NOT tagged as lifeloss-cares', () => {
+    // K'rrik pays life as a cost — that's a lifeloss ENABLER for self,
+    // not a lifeloss payoff. Different tag.
+    // (We DO tag this as something else, but not cares_about_lifeloss
+    // which is about punishing opponents.)
+    const tags = extractCommanderMechanicTags(
+      cmdr('As an additional cost to cast a Black spell, pay 2 life or {B}.')
+    )
+    expect(tags).not.toContain('cares_about_lifeloss')
+  })
+})
+
+describe('Precision: tribal tags from oracle text — NOT from creature type', () => {
+  it('Tiamat oracle text mentions Dragon → tribal_dragons tag', () => {
+    const tags = extractCommanderMechanicTags(
+      cmdr('Search your library for up to five Dragon cards, reveal them, put them into your hand.')
+    )
+    expect(tags).toContain('tribal_dragons')
+  })
+  it('Krenko oracle text mentions Goblin → tribal_goblins tag', () => {
+    const tags = extractCommanderMechanicTags(
+      cmdr('{T}: Create X 1/1 red Goblin creature tokens, where X is the number of Goblins you control.')
+    )
+    expect(tags).toContain('tribal_goblins')
+  })
+  it('Edgar Markov oracle text mentions Vampire → tribal_vampires tag', () => {
+    const tags = extractCommanderMechanicTags(
+      cmdr('Whenever you cast another Vampire spell, create a 1/1 black Vampire creature token.')
+    )
+    expect(tags).toContain('tribal_vampires')
+  })
+  it('Wilhelt oracle text mentions Zombie → tribal_zombies tag', () => {
+    const tags = extractCommanderMechanicTags(
+      cmdr('Whenever a non-token Zombie you control dies, create a 2/2 black Zombie creature token.')
+    )
+    expect(tags).toContain('tribal_zombies')
+  })
+  it('Marwyn oracle text mentions Elf → tribal_elves tag', () => {
+    const tags = extractCommanderMechanicTags(
+      cmdr('Whenever another Elf enters under your control, put a +1/+1 counter on Marwyn.')
+    )
+    expect(tags).toContain('tribal_elves')
+  })
+  it('Sliver Hivelord oracle text mentions Sliver → tribal_slivers tag', () => {
+    const tags = extractCommanderMechanicTags(cmdr('Sliver creatures you control have indestructible.'))
+    expect(tags).toContain('tribal_slivers')
+  })
+  it('Winter has Human Warlock TYPE but oracle text mentions NEITHER → NO tribal tag', () => {
+    // Winter, Cynical Opportunist — type is Human Warlock but text only
+    // mentions attack/mill/delirium/graveyard. Must NOT tag tribal.
+    const tags = extractCommanderMechanicTags(cmdr(
+      'Deathtouch\n' +
+      'Whenever Winter attacks, mill three cards.\n' +
+      'Delirium — At the beginning of your end step, you may exile any number of cards from your graveyard with four or more card types among them.'
+    ))
+    expect(tags.filter(t => t.startsWith('tribal_'))).toEqual([])
+  })
+})
+
+describe('Precision: cares_about_artifacts / cares_about_enchantments / cares_about_lands', () => {
+  it('detects artifacts when oracle text references artifact cards/spells', () => {
+    // Daretti — "Sacrifice an artifact... return target artifact card"
+    const tags = extractCommanderMechanicTags(
+      cmdr('Sacrifice an artifact. If you do, return target artifact card from your graveyard to the battlefield.')
+    )
+    expect(tags).toContain('cares_about_artifacts')
+  })
+  it('detects enchantments when oracle text references enchantment cards/spells', () => {
+    // Sythis — "Whenever you cast an enchantment spell"
+    const tags = extractCommanderMechanicTags(
+      cmdr('Whenever you cast an enchantment spell, you gain 1 life and draw a card.')
+    )
+    expect(tags).toContain('cares_about_enchantments')
+  })
+  it('detects lands when oracle text references landfall / land cards', () => {
+    // Tatyova-style
+    const tags = extractCommanderMechanicTags(
+      cmdr('Whenever a land enters under your control, draw a card and you gain 1 life.')
+    )
+    expect(tags).toContain('cares_about_lands')
+  })
+  it('does NOT tag artifacts when only "artifact creature" mentioned in passing', () => {
+    // A commander that's just an artifact creature shouldn't be tagged
+    // as cares_about_artifacts unless its abilities reference them.
+    const tags = extractCommanderMechanicTags(
+      cmdr('Flying. When this enters, draw a card.')
+    )
+    expect(tags).not.toContain('cares_about_artifacts')
+  })
+})
+
+// ─── Per-commander expectations using REAL Scryfall oracle text ─────────────
+
+describe('Real commander mechanic tags — verbatim oracle text from Scryfall', () => {
+  // Dynamic import so the JSON fixture loads lazily.
+  it.each([
+    ['Sheoldred, the Apocalypse', ['cares_about_draw', 'cares_about_lifegain', 'cares_about_lifeloss']],
+    ['Tiamat',                     ['tribal_dragons']],
+    ['Krenko, Mob Boss',           ['cares_about_tokens', 'tribal_goblins']],
+    ['Edgar Markov',               ['cares_about_tokens', 'tribal_vampires']],
+    ['Niv-Mizzet, Parun',          ['cares_about_draw', 'cares_about_spells']],
+    // Note: cares_about_draw means TRIGGERS on drawing (Niv-Mizzet, Sheoldred).
+    // Commanders that PRODUCE draws (Korvold, Sythis, Tatyova) don't get the
+    // tag — drawing is the consequence, not the trigger.
+    ['Korvold, Fae-Cursed King',   ['cares_about_sacrifice', 'cares_about_counters']],
+    ['Sythis, Harvest\'s Hand',    ['cares_about_enchantments', 'cares_about_lifegain']],
+    ['Lord Windgrace',             ['cares_about_lands', 'cares_about_graveyard', 'cares_about_discard']],
+    ['Daretti, Scrap Savant',      ['cares_about_artifacts', 'cares_about_graveyard', 'cares_about_discard']],
+    ['Tatyova, Benthic Druid',     ['cares_about_lands', 'cares_about_lifegain']],
+    ['Najeela, the Blade-Blossom', ['cares_about_attacks', 'cares_about_combat_phases']],
+    ['Marwyn, the Nurturer',       ['tribal_elves', 'cares_about_counters']],
+  ])('%s should tag: %j', async (name, expectedTags) => {
+    const { findCommander } = await import('../test/fixtures/top100commanders.js')
+    const commander = findCommander(name)
+    expect(commander, `Commander "${name}" missing from fixture`).toBeDefined()
+    const tags = extractCommanderMechanicTags(commander)
+    for (const expected of expectedTags) {
+      expect(tags, `${name} expected to have ${expected} (actual: ${tags.join(', ')})`).toContain(expected)
+    }
+  })
+
+  it('Winter, Cynical Opportunist — NO tribal tag (type ≠ text)', async () => {
+    const { findCommander } = await import('../test/fixtures/top100commanders.js')
+    const winter = findCommander('Winter, Cynical Opportunist')
+    expect(winter).toBeDefined()
+    const tags = extractCommanderMechanicTags(winter)
+    expect(tags.filter(t => t.startsWith('tribal_'))).toEqual([])
+  })
+})

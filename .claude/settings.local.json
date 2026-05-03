@@ -81,7 +81,8 @@
       "Bash(npx vitest *)",
       "Bash(npm test *)",
       "Bash(git commit *)",
-      "Bash(git restore *)"
+      "Bash(git restore *)",
+      "Bash(grep -rn \"Sheoldred\\\\|Ertai\\\\|Winter\\\\|Cynical\\\\|Ur-Dragon\" /Users/grossmanmatt/dev/src --include=\"*.js\" ! -path \"*/node_modules/*\")"
     ]
   }
 }

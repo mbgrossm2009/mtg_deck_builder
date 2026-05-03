@@ -1,0 +1,2516 @@
+[
+  {
+    "name": "Toski, Bearer of Secrets",
+    "type_line": "Legendary Creature — Squirrel",
+    "oracle_text": "This spell can't be countered.\nIndestructible\nToski attacks each combat if able.\nWhenever a creature you control deals combat damage to a player, draw a card.",
+    "mana_cost": "{3}{G}",
+    "cmc": 4,
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 378,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Tatyova, Benthic Druid",
+    "type_line": "Legendary Creature — Merfolk Druid",
+    "oracle_text": "Landfall — Whenever a land you control enters, you gain 1 life and draw a card.",
+    "mana_cost": "{3}{G}{U}",
+    "cmc": 5,
+    "colors": [
+      "G",
+      "U"
+    ],
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "uncommon",
+    "edhrec_rank": 450,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Sheoldred, the Apocalypse",
+    "type_line": "Legendary Creature — Phyrexian Praetor",
+    "oracle_text": "Deathtouch\nWhenever you draw a card, you gain 2 life.\nWhenever an opponent draws a card, they lose 2 life.",
+    "mana_cost": "{2}{B}{B}",
+    "cmc": 4,
+    "colors": [
+      "B"
+    ],
+    "color_identity": [
+      "B"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 462,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Vito, Thorn of the Dusk Rose",
+    "type_line": "Legendary Creature — Vampire Cleric",
+    "oracle_text": "Whenever you gain life, target opponent loses that much life.\n{3}{B}{B}: Creatures you control gain lifelink until end of turn.",
+    "mana_cost": "{2}{B}",
+    "cmc": 3,
+    "colors": [
+      "B"
+    ],
+    "color_identity": [
+      "B"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 492,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Goreclaw, Terror of Qal Sisma",
+    "type_line": "Legendary Creature — Bear",
+    "oracle_text": "Creature spells you cast with power 4 or greater cost {2} less to cast.\nWhenever Goreclaw attacks, each creature you control with power 4 or greater gets +1/+1 and gains trample until end of turn.",
+    "mana_cost": "{3}{G}",
+    "cmc": 4,
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "uncommon",
+    "edhrec_rank": 677,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Niv-Mizzet, Parun",
+    "type_line": "Legendary Creature — Dragon Wizard",
+    "oracle_text": "This spell can't be countered.\nFlying\nWhenever you draw a card, Niv-Mizzet deals 1 damage to any target.\nWhenever a player casts an instant or sorcery spell, you draw a card.",
+    "mana_cost": "{U}{U}{U}{R}{R}{R}",
+    "cmc": 6,
+    "colors": [
+      "R",
+      "U"
+    ],
+    "color_identity": [
+      "R",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 712,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Talrand, Sky Summoner",
+    "type_line": "Legendary Creature — Merfolk Wizard",
+    "oracle_text": "Whenever you cast an instant or sorcery spell, create a 2/2 blue Drake creature token with flying.",
+    "mana_cost": "{2}{U}{U}",
+    "cmc": 4,
+    "colors": [
+      "U"
+    ],
+    "color_identity": [
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 724,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Urza, Lord High Artificer",
+    "type_line": "Legendary Creature — Human Artificer",
+    "oracle_text": "When Urza enters, create a 0/0 colorless Construct artifact creature token with \"This token gets +1/+1 for each artifact you control.\"\nTap an untapped artifact you control: Add {U}.\n{5}: Shuffle your library, then exile the top card. Until end of turn, you may play that card without paying its mana cost.",
+    "mana_cost": "{2}{U}{U}",
+    "cmc": 4,
+    "colors": [
+      "U"
+    ],
+    "color_identity": [
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 786,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Yawgmoth, Thran Physician",
+    "type_line": "Legendary Creature — Human Cleric",
+    "oracle_text": "Protection from Humans\nPay 1 life, Sacrifice another creature: Put a -1/-1 counter on up to one target creature and draw a card.\n{B}{B}, Discard a card: Proliferate. (Choose any number of permanents and/or players, then give each another counter of each kind already there.)",
+    "mana_cost": "{2}{B}{B}",
+    "cmc": 4,
+    "colors": [
+      "B"
+    ],
+    "color_identity": [
+      "B"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 806,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Veyran, Voice of Duality",
+    "type_line": "Legendary Creature — Efreet Wizard",
+    "oracle_text": "Magecraft — Whenever you cast or copy an instant or sorcery spell, Veyran gets +1/+1 until end of turn.\nIf you casting or copying an instant or sorcery spell causes a triggered ability of a permanent you control to trigger, that ability triggers an additional time.",
+    "mana_cost": "{1}{U}{R}",
+    "cmc": 3,
+    "colors": [
+      "R",
+      "U"
+    ],
+    "color_identity": [
+      "R",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 826,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Aesi, Tyrant of Gyre Strait",
+    "type_line": "Legendary Creature — Serpent",
+    "oracle_text": "You may play an additional land on each of your turns.\nLandfall — Whenever a land you control enters, you may draw a card.",
+    "mana_cost": "{4}{G}{U}",
+    "cmc": 6,
+    "colors": [
+      "G",
+      "U"
+    ],
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 844,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Sythis, Harvest's Hand",
+    "type_line": "Legendary Enchantment Creature — Nymph",
+    "oracle_text": "Whenever you cast an enchantment spell, you gain 1 life and draw a card.",
+    "mana_cost": "{G}{W}",
+    "cmc": 2,
+    "colors": [
+      "G",
+      "W"
+    ],
+    "color_identity": [
+      "G",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 915,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Heliod, Sun-Crowned",
+    "type_line": "Legendary Enchantment Creature — God",
+    "oracle_text": "Indestructible\nAs long as your devotion to white is less than five, Heliod isn't a creature.\nWhenever you gain life, put a +1/+1 counter on target creature or enchantment you control.\n{1}{W}: Another target creature gains lifelink until end of turn.",
+    "mana_cost": "{2}{W}",
+    "cmc": 3,
+    "colors": [
+      "W"
+    ],
+    "color_identity": [
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 999,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Yahenni, Undying Partisan",
+    "type_line": "Legendary Creature — Aetherborn Vampire",
+    "oracle_text": "Haste\nWhenever a creature an opponent controls dies, put a +1/+1 counter on Yahenni.\nSacrifice another creature: Yahenni gains indestructible until end of turn.",
+    "mana_cost": "{2}{B}",
+    "cmc": 3,
+    "colors": [
+      "B"
+    ],
+    "color_identity": [
+      "B"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 1010,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Lathliss, Dragon Queen",
+    "type_line": "Legendary Creature — Dragon",
+    "oracle_text": "Flying\nWhenever another nontoken Dragon you control enters, create a 5/5 red Dragon creature token with flying.\n{1}{R}: Dragons you control get +1/+0 until end of turn.",
+    "mana_cost": "{4}{R}{R}",
+    "cmc": 6,
+    "colors": [
+      "R"
+    ],
+    "color_identity": [
+      "R"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 1044,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "K'rrik, Son of Yawgmoth",
+    "type_line": "Legendary Creature — Phyrexian Horror Minion",
+    "oracle_text": "({B/P} can be paid with either {B} or 2 life.)\nLifelink\nFor each {B} in a cost, you may pay 2 life rather than pay that mana.\nWhenever you cast a black spell, put a +1/+1 counter on K'rrik.",
+    "mana_cost": "{4}{B/P}{B/P}{B/P}",
+    "cmc": 7,
+    "colors": [
+      "B"
+    ],
+    "color_identity": [
+      "B"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 1071,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Krenko, Mob Boss",
+    "type_line": "Legendary Creature — Goblin Warrior",
+    "oracle_text": "{T}: Create X 1/1 red Goblin creature tokens, where X is the number of Goblins you control.",
+    "mana_cost": "{2}{R}{R}",
+    "cmc": 4,
+    "colors": [
+      "R"
+    ],
+    "color_identity": [
+      "R"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 1118,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Skrelv, Defector Mite",
+    "type_line": "Legendary Artifact Creature — Phyrexian Mite",
+    "oracle_text": "Toxic 1 (Players dealt combat damage by this creature also get a poison counter.)\nSkrelv can't block.\n{W/P}, {T}: Choose a color. Another target creature you control gains toxic 1 and hexproof from that color until end of turn. It can't be blocked by creatures of that color this turn. ({W/P} can be paid with either {W} or 2 life.)",
+    "mana_cost": "{W}",
+    "cmc": 1,
+    "colors": [
+      "W"
+    ],
+    "color_identity": [
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 1120,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Muldrotha, the Gravetide",
+    "type_line": "Legendary Creature — Elemental Avatar",
+    "oracle_text": "During each of your turns, you may play a land and cast a permanent spell of each permanent type from your graveyard. (If a card has multiple permanent types, choose one as you play it.)",
+    "mana_cost": "{3}{B}{G}{U}",
+    "cmc": 6,
+    "colors": [
+      "B",
+      "G",
+      "U"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 1121,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Elenda, the Dusk Rose",
+    "type_line": "Legendary Creature — Vampire Knight",
+    "oracle_text": "Lifelink\nWhenever another creature dies, put a +1/+1 counter on Elenda.\nWhen Elenda dies, create X 1/1 white Vampire creature tokens with lifelink, where X is Elenda's power.",
+    "mana_cost": "{2}{W}{B}",
+    "cmc": 4,
+    "colors": [
+      "B",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 1183,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Marwyn, the Nurturer",
+    "type_line": "Legendary Creature — Elf Druid",
+    "oracle_text": "Whenever another Elf you control enters, put a +1/+1 counter on Marwyn.\n{T}: Add an amount of {G} equal to Marwyn's power.",
+    "mana_cost": "{2}{G}",
+    "cmc": 3,
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 1227,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Teysa Karlov",
+    "type_line": "Legendary Creature — Human Advisor",
+    "oracle_text": "If a creature dying causes a triggered ability of a permanent you control to trigger, that ability triggers an additional time.\nCreature tokens you control have vigilance and lifelink.",
+    "mana_cost": "{2}{W}{B}",
+    "cmc": 4,
+    "colors": [
+      "B",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 1241,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Atarka, World Render",
+    "type_line": "Legendary Creature — Dragon",
+    "oracle_text": "Flying, trample\nWhenever a Dragon you control attacks, it gains double strike until end of turn.",
+    "mana_cost": "{5}{R}{G}",
+    "cmc": 7,
+    "colors": [
+      "G",
+      "R"
+    ],
+    "color_identity": [
+      "G",
+      "R"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 1284,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Kinnan, Bonder Prodigy",
+    "type_line": "Legendary Creature — Human Druid",
+    "oracle_text": "Whenever you tap a nonland permanent for mana, add one mana of any type that permanent produced.\n{5}{G}{U}: Look at the top five cards of your library. You may put a non-Human creature card from among them onto the battlefield. Put the rest on the bottom of your library in a random order.",
+    "mana_cost": "{G}{U}",
+    "cmc": 2,
+    "colors": [
+      "G",
+      "U"
+    ],
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 1354,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Adrix and Nev, Twincasters",
+    "type_line": "Legendary Creature — Merfolk Wizard",
+    "oracle_text": "Ward {2} (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {2}.)\nIf one or more tokens would be created under your control, twice that many of those tokens are created instead.",
+    "mana_cost": "{2}{G}{U}",
+    "cmc": 4,
+    "colors": [
+      "G",
+      "U"
+    ],
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 1391,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Meren of Clan Nel Toth",
+    "type_line": "Legendary Creature — Human Shaman",
+    "oracle_text": "Whenever another creature you control dies, you get an experience counter.\nAt the beginning of your end step, choose target creature card in your graveyard. If that card's mana value is less than or equal to the number of experience counters you have, return it to the battlefield. Otherwise, put it into your hand.",
+    "mana_cost": "{2}{B}{G}",
+    "cmc": 4,
+    "colors": [
+      "B",
+      "G"
+    ],
+    "color_identity": [
+      "B",
+      "G"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 1458,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Tergrid, God of Fright // Tergrid's Lantern",
+    "type_line": "Legendary Creature — God // Legendary Artifact",
+    "oracle_text": "Menace\nWhenever an opponent sacrifices a nontoken permanent or discards a permanent card, you may put that card from a graveyard onto the battlefield under your control.\n//\n{T}: Target player loses 3 life unless they sacrifice a nonland permanent of their choice or discard a card.\n{3}{B}: Untap Tergrid's Lantern.",
+    "mana_cost": "",
+    "cmc": 5,
+    "colors": [],
+    "color_identity": [
+      "B"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 1522,
+    "card_faces": [
+      {
+        "object": "card_face",
+        "name": "Tergrid, God of Fright",
+        "mana_cost": "{3}{B}{B}",
+        "type_line": "Legendary Creature — God",
+        "oracle_text": "Menace\nWhenever an opponent sacrifices a nontoken permanent or discards a permanent card, you may put that card from a graveyard onto the battlefield under your control.",
+        "colors": [
+          "B"
+        ],
+        "power": "4",
+        "toughness": "5",
+        "flavor_text": "Fear is her one true companion.",
+        "artist": "Yongjae Choi",
+        "artist_id": "5ab91c3b-a6da-4751-a56e-81d0f61a67ab",
+        "illustration_id": "f2369545-26a2-47f7-8c2e-134457d309b6",
+        "image_uris": {
+          "small": "https://cards.scryfall.io/small/front/1/4/14dc88ee-bba9-4625-af0d-89f3762a0ead.jpg?1631048621",
+          "normal": "https://cards.scryfall.io/normal/front/1/4/14dc88ee-bba9-4625-af0d-89f3762a0ead.jpg?1631048621",
+          "large": "https://cards.scryfall.io/large/front/1/4/14dc88ee-bba9-4625-af0d-89f3762a0ead.jpg?1631048621",
+          "png": "https://cards.scryfall.io/png/front/1/4/14dc88ee-bba9-4625-af0d-89f3762a0ead.png?1631048621",
+          "art_crop": "https://cards.scryfall.io/art_crop/front/1/4/14dc88ee-bba9-4625-af0d-89f3762a0ead.jpg?1631048621",
+          "border_crop": "https://cards.scryfall.io/border_crop/front/1/4/14dc88ee-bba9-4625-af0d-89f3762a0ead.jpg?1631048621"
+        }
+      },
+      {
+        "object": "card_face",
+        "name": "Tergrid's Lantern",
+        "mana_cost": "{3}{B}",
+        "type_line": "Legendary Artifact",
+        "oracle_text": "{T}: Target player loses 3 life unless they sacrifice a nonland permanent of their choice or discard a card.\n{3}{B}: Untap Tergrid's Lantern.",
+        "colors": [
+          "B"
+        ],
+        "flavor_text": "When Tergrid was a child, her shadow tried to kill her. Only her lantern keeps it at bay.",
+        "artist": "Yongjae Choi",
+        "artist_id": "5ab91c3b-a6da-4751-a56e-81d0f61a67ab",
+        "illustration_id": "9145f278-8a50-4275-853f-4eecf0e571de",
+        "image_uris": {
+          "small": "https://cards.scryfall.io/small/back/1/4/14dc88ee-bba9-4625-af0d-89f3762a0ead.jpg?1631048621",
+          "normal": "https://cards.scryfall.io/normal/back/1/4/14dc88ee-bba9-4625-af0d-89f3762a0ead.jpg?1631048621",
+          "large": "https://cards.scryfall.io/large/back/1/4/14dc88ee-bba9-4625-af0d-89f3762a0ead.jpg?1631048621",
+          "png": "https://cards.scryfall.io/png/back/1/4/14dc88ee-bba9-4625-af0d-89f3762a0ead.png?1631048621",
+          "art_crop": "https://cards.scryfall.io/art_crop/back/1/4/14dc88ee-bba9-4625-af0d-89f3762a0ead.jpg?1631048621",
+          "border_crop": "https://cards.scryfall.io/border_crop/back/1/4/14dc88ee-bba9-4625-af0d-89f3762a0ead.jpg?1631048621"
+        }
+      }
+    ],
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Maelstrom Wanderer",
+    "type_line": "Legendary Creature — Elemental",
+    "oracle_text": "Creatures you control have haste.\nCascade, cascade (When you cast this spell, exile cards from the top of your library until you exile a nonland card that costs less. You may cast it without paying its mana cost. Put the exiled cards on the bottom in a random order. Then do it again.)",
+    "mana_cost": "{5}{G}{U}{R}",
+    "cmc": 8,
+    "colors": [
+      "G",
+      "R",
+      "U"
+    ],
+    "color_identity": [
+      "G",
+      "R",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 1646,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Mazirek, Kraul Death Priest",
+    "type_line": "Legendary Creature — Insect Shaman",
+    "oracle_text": "Flying\nWhenever a player sacrifices another permanent, put a +1/+1 counter on each creature you control.",
+    "mana_cost": "{3}{B}{G}",
+    "cmc": 5,
+    "colors": [
+      "B",
+      "G"
+    ],
+    "color_identity": [
+      "B",
+      "G"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 1766,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Grand Arbiter Augustin IV",
+    "type_line": "Legendary Creature — Human Advisor",
+    "oracle_text": "White spells you cast cost {1} less to cast.\nBlue spells you cast cost {1} less to cast.\nSpells your opponents cast cost {1} more to cast.",
+    "mana_cost": "{2}{W}{U}",
+    "cmc": 4,
+    "colors": [
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 1777,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Daretti, Scrap Savant",
+    "type_line": "Legendary Planeswalker — Daretti",
+    "oracle_text": "+2: Discard up to two cards, then draw that many cards.\n−2: Sacrifice an artifact. If you do, return target artifact card from your graveyard to the battlefield.\n−10: You get an emblem with \"Whenever an artifact is put into your graveyard from the battlefield, return that card to the battlefield at the beginning of the next end step.\"\nDaretti, Scrap Savant can be your commander.",
+    "mana_cost": "{3}{R}",
+    "cmc": 4,
+    "colors": [
+      "R"
+    ],
+    "color_identity": [
+      "R"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 1833,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Korvold, Fae-Cursed King",
+    "type_line": "Legendary Creature — Dragon Noble",
+    "oracle_text": "Flying\nWhenever Korvold enters or attacks, sacrifice another permanent.\nWhenever you sacrifice a permanent, put a +1/+1 counter on Korvold and draw a card.",
+    "mana_cost": "{2}{B}{R}{G}",
+    "cmc": 5,
+    "colors": [
+      "B",
+      "G",
+      "R"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "R"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 1914,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Akiri, Fearless Voyager",
+    "type_line": "Legendary Creature — Kor Warrior",
+    "oracle_text": "Whenever you attack a player with one or more equipped creatures, draw a card.\n{W}: You may unattach an Equipment from a creature you control. If you do, tap that creature and it gains indestructible until end of turn.",
+    "mana_cost": "{1}{R}{W}",
+    "cmc": 3,
+    "colors": [
+      "R",
+      "W"
+    ],
+    "color_identity": [
+      "R",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "uncommon",
+    "edhrec_rank": 2038,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Brago, King Eternal",
+    "type_line": "Legendary Creature — Spirit Noble",
+    "oracle_text": "Flying\nWhenever Brago deals combat damage to a player, exile any number of target nonland permanents you control, then return those cards to the battlefield under their owner's control.",
+    "mana_cost": "{2}{W}{U}",
+    "cmc": 4,
+    "colors": [
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 2217,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Animar, Soul of Elements",
+    "type_line": "Legendary Creature — Elemental",
+    "oracle_text": "Protection from white and from black\nWhenever you cast a creature spell, put a +1/+1 counter on Animar.\nCreature spells you cast cost {1} less to cast for each +1/+1 counter on Animar.",
+    "mana_cost": "{G}{U}{R}",
+    "cmc": 3,
+    "colors": [
+      "G",
+      "R",
+      "U"
+    ],
+    "color_identity": [
+      "G",
+      "R",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 2321,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Lathril, Blade of the Elves",
+    "type_line": "Legendary Creature — Elf Noble",
+    "oracle_text": "Menace (This creature can't be blocked except by two or more creatures.)\nWhenever Lathril deals combat damage to a player, create that many 1/1 green Elf Warrior creature tokens.\n{T}, Tap ten untapped Elves you control: Each opponent loses 10 life and you gain 10 life.",
+    "mana_cost": "{2}{B}{G}",
+    "cmc": 4,
+    "colors": [
+      "B",
+      "G"
+    ],
+    "color_identity": [
+      "B",
+      "G"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 2332,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Halvar, God of Battle // Sword of the Realms",
+    "type_line": "Legendary Creature — God // Legendary Artifact — Equipment",
+    "oracle_text": "Creatures you control that are enchanted or equipped have double strike.\nAt the beginning of each combat, you may attach target Aura or Equipment attached to a creature you control to target creature you control.\n//\nEquipped creature gets +2/+0 and has vigilance.\nWhenever equipped creature dies, return it to its owner's hand.\nEquip {1}{W}",
+    "mana_cost": "",
+    "cmc": 4,
+    "colors": [],
+    "color_identity": [
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 2339,
+    "card_faces": [
+      {
+        "object": "card_face",
+        "name": "Halvar, God of Battle",
+        "mana_cost": "{2}{W}{W}",
+        "type_line": "Legendary Creature — God",
+        "oracle_text": "Creatures you control that are enchanted or equipped have double strike.\nAt the beginning of each combat, you may attach target Aura or Equipment attached to a creature you control to target creature you control.",
+        "colors": [
+          "W"
+        ],
+        "power": "4",
+        "toughness": "4",
+        "artist": "Lie Setiawan",
+        "artist_id": "6f771d3f-310e-4aa4-841f-5ba4ba9f025a",
+        "illustration_id": "a57ddc45-4a21-447f-a2f8-ddc93407b12a",
+        "image_uris": {
+          "small": "https://cards.scryfall.io/small/front/9/7/97502411-5c93-434c-b77b-ceb2c32feae7.jpg?1631045832",
+          "normal": "https://cards.scryfall.io/normal/front/9/7/97502411-5c93-434c-b77b-ceb2c32feae7.jpg?1631045832",
+          "large": "https://cards.scryfall.io/large/front/9/7/97502411-5c93-434c-b77b-ceb2c32feae7.jpg?1631045832",
+          "png": "https://cards.scryfall.io/png/front/9/7/97502411-5c93-434c-b77b-ceb2c32feae7.png?1631045832",
+          "art_crop": "https://cards.scryfall.io/art_crop/front/9/7/97502411-5c93-434c-b77b-ceb2c32feae7.jpg?1631045832",
+          "border_crop": "https://cards.scryfall.io/border_crop/front/9/7/97502411-5c93-434c-b77b-ceb2c32feae7.jpg?1631045832"
+        }
+      },
+      {
+        "object": "card_face",
+        "name": "Sword of the Realms",
+        "mana_cost": "{1}{W}",
+        "type_line": "Legendary Artifact — Equipment",
+        "oracle_text": "Equipped creature gets +2/+0 and has vigilance.\nWhenever equipped creature dies, return it to its owner's hand.\nEquip {1}{W}",
+        "colors": [
+          "W"
+        ],
+        "flavor_text": "It cuts through the Cosmos itself, carving new Omenpaths between the realms.",
+        "artist": "Lie Setiawan",
+        "artist_id": "6f771d3f-310e-4aa4-841f-5ba4ba9f025a",
+        "illustration_id": "140e740b-72b7-49fa-a407-7c41a9245124",
+        "image_uris": {
+          "small": "https://cards.scryfall.io/small/back/9/7/97502411-5c93-434c-b77b-ceb2c32feae7.jpg?1631045832",
+          "normal": "https://cards.scryfall.io/normal/back/9/7/97502411-5c93-434c-b77b-ceb2c32feae7.jpg?1631045832",
+          "large": "https://cards.scryfall.io/large/back/9/7/97502411-5c93-434c-b77b-ceb2c32feae7.jpg?1631045832",
+          "png": "https://cards.scryfall.io/png/back/9/7/97502411-5c93-434c-b77b-ceb2c32feae7.png?1631045832",
+          "art_crop": "https://cards.scryfall.io/art_crop/back/9/7/97502411-5c93-434c-b77b-ceb2c32feae7.jpg?1631045832",
+          "border_crop": "https://cards.scryfall.io/border_crop/back/9/7/97502411-5c93-434c-b77b-ceb2c32feae7.jpg?1631045832"
+        }
+      }
+    ],
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Gishath, Sun's Avatar",
+    "type_line": "Legendary Creature — Dinosaur Avatar",
+    "oracle_text": "Vigilance, trample, haste\nWhenever Gishath deals combat damage to a player, reveal that many cards from the top of your library. Put any number of Dinosaur creature cards from among them onto the battlefield and the rest on the bottom of your library in a random order.",
+    "mana_cost": "{5}{R}{G}{W}",
+    "cmc": 8,
+    "colors": [
+      "G",
+      "R",
+      "W"
+    ],
+    "color_identity": [
+      "G",
+      "R",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 2362,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Yuriko, the Tiger's Shadow",
+    "type_line": "Legendary Creature — Human Ninja",
+    "oracle_text": "Commander ninjutsu {U}{B} ({U}{B}, Return an unblocked attacker you control to hand: Put this card onto the battlefield from your hand or the command zone tapped and attacking.)\nWhenever a Ninja you control deals combat damage to a player, reveal the top card of your library and put that card into your hand. Each opponent loses life equal to that card's mana value.",
+    "mana_cost": "{1}{U}{B}",
+    "cmc": 3,
+    "colors": [
+      "B",
+      "U"
+    ],
+    "color_identity": [
+      "B",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 2394,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Atraxa, Praetors' Voice",
+    "type_line": "Legendary Creature — Phyrexian Angel Horror",
+    "oracle_text": "Flying, vigilance, deathtouch, lifelink\nAt the beginning of your end step, proliferate. (Choose any number of permanents and/or players, then give each another counter of each kind already there.)",
+    "mana_cost": "{G}{W}{U}{B}",
+    "cmc": 4,
+    "colors": [
+      "B",
+      "G",
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 2408,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Ezuri, Renegade Leader",
+    "type_line": "Legendary Creature — Elf Warrior",
+    "oracle_text": "{G}: Regenerate another target Elf.\n{2}{G}{G}{G}: Elf creatures you control get +3/+3 and gain trample until end of turn.",
+    "mana_cost": "{1}{G}{G}",
+    "cmc": 3,
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 2437,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Thrasios, Triton Hero",
+    "type_line": "Legendary Creature — Merfolk Wizard",
+    "oracle_text": "{4}: Scry 1, then reveal the top card of your library. If it's a land card, put it onto the battlefield tapped. Otherwise, draw a card.\nPartner (You can have two commanders if both have partner.)",
+    "mana_cost": "{G}{U}",
+    "cmc": 2,
+    "colors": [
+      "G",
+      "U"
+    ],
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 2449,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Chulane, Teller of Tales",
+    "type_line": "Legendary Creature — Human Druid",
+    "oracle_text": "Vigilance\nWhenever you cast a creature spell, draw a card, then you may put a land card from your hand onto the battlefield.\n{3}, {T}: Return target creature you control to its owner's hand.",
+    "mana_cost": "{2}{G}{W}{U}",
+    "cmc": 5,
+    "colors": [
+      "G",
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "G",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 2469,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Esika, God of the Tree // The Prismatic Bridge",
+    "type_line": "Legendary Creature — God // Legendary Enchantment",
+    "oracle_text": "Vigilance\n{T}: Add one mana of any color.\nOther legendary creatures you control have vigilance and \"{T}: Add one mana of any color.\"\n//\nAt the beginning of your upkeep, reveal cards from the top of your library until you reveal a creature or planeswalker card. Put that card onto the battlefield and the rest on the bottom of your library in a random order.",
+    "mana_cost": "",
+    "cmc": 3,
+    "colors": [],
+    "color_identity": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 2470,
+    "card_faces": [
+      {
+        "object": "card_face",
+        "name": "Esika, God of the Tree",
+        "mana_cost": "{1}{G}{G}",
+        "type_line": "Legendary Creature — God",
+        "oracle_text": "Vigilance\n{T}: Add one mana of any color.\nOther legendary creatures you control have vigilance and \"{T}: Add one mana of any color.\"",
+        "colors": [
+          "G"
+        ],
+        "power": "1",
+        "toughness": "4",
+        "flavor_text": "\"I know this world, from canopy to roots.\"",
+        "artist": "Johannes Voss",
+        "artist_id": "3593dd7e-c547-4a32-81cd-7da725f60118",
+        "illustration_id": "b02e8c7b-b733-4d3b-9d71-7a48c4d2e713",
+        "image_uris": {
+          "small": "https://cards.scryfall.io/small/front/f/6/f6cd7465-9dd0-473c-ac5e-dd9e2f22f5f6.jpg?1631050188",
+          "normal": "https://cards.scryfall.io/normal/front/f/6/f6cd7465-9dd0-473c-ac5e-dd9e2f22f5f6.jpg?1631050188",
+          "large": "https://cards.scryfall.io/large/front/f/6/f6cd7465-9dd0-473c-ac5e-dd9e2f22f5f6.jpg?1631050188",
+          "png": "https://cards.scryfall.io/png/front/f/6/f6cd7465-9dd0-473c-ac5e-dd9e2f22f5f6.png?1631050188",
+          "art_crop": "https://cards.scryfall.io/art_crop/front/f/6/f6cd7465-9dd0-473c-ac5e-dd9e2f22f5f6.jpg?1631050188",
+          "border_crop": "https://cards.scryfall.io/border_crop/front/f/6/f6cd7465-9dd0-473c-ac5e-dd9e2f22f5f6.jpg?1631050188"
+        }
+      },
+      {
+        "object": "card_face",
+        "name": "The Prismatic Bridge",
+        "mana_cost": "{W}{U}{B}{R}{G}",
+        "type_line": "Legendary Enchantment",
+        "oracle_text": "At the beginning of your upkeep, reveal cards from the top of your library until you reveal a creature or planeswalker card. Put that card onto the battlefield and the rest on the bottom of your library in a random order.",
+        "colors": [
+          "B",
+          "G",
+          "R",
+          "U",
+          "W"
+        ],
+        "flavor_text": "Starnheim awaits.",
+        "artist": "Johannes Voss",
+        "artist_id": "3593dd7e-c547-4a32-81cd-7da725f60118",
+        "illustration_id": "959283a3-5d90-4e9b-95ce-abc0ab93f75c",
+        "image_uris": {
+          "small": "https://cards.scryfall.io/small/back/f/6/f6cd7465-9dd0-473c-ac5e-dd9e2f22f5f6.jpg?1631050188",
+          "normal": "https://cards.scryfall.io/normal/back/f/6/f6cd7465-9dd0-473c-ac5e-dd9e2f22f5f6.jpg?1631050188",
+          "large": "https://cards.scryfall.io/large/back/f/6/f6cd7465-9dd0-473c-ac5e-dd9e2f22f5f6.jpg?1631050188",
+          "png": "https://cards.scryfall.io/png/back/f/6/f6cd7465-9dd0-473c-ac5e-dd9e2f22f5f6.png?1631050188",
+          "art_crop": "https://cards.scryfall.io/art_crop/back/f/6/f6cd7465-9dd0-473c-ac5e-dd9e2f22f5f6.jpg?1631050188",
+          "border_crop": "https://cards.scryfall.io/border_crop/back/f/6/f6cd7465-9dd0-473c-ac5e-dd9e2f22f5f6.jpg?1631050188"
+        }
+      }
+    ],
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "The Ur-Dragon",
+    "type_line": "Legendary Creature — Dragon Avatar",
+    "oracle_text": "Eminence — As long as The Ur-Dragon is in the command zone or on the battlefield, other Dragon spells you cast cost {1} less to cast.\nFlying\nWhenever one or more Dragons you control attack, draw that many cards, then you may put a permanent card from your hand onto the battlefield.",
+    "mana_cost": "{4}{W}{U}{B}{R}{G}",
+    "cmc": 9,
+    "colors": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 2547,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Wilhelt, the Rotcleaver",
+    "type_line": "Legendary Creature — Zombie Warrior",
+    "oracle_text": "Whenever another Zombie you control dies, if it didn't have decayed, create a 2/2 black Zombie creature token with decayed. (It can't block. When it attacks, sacrifice it at end of combat.)\nAt the beginning of your end step, you may sacrifice a Zombie. If you do, draw a card.",
+    "mana_cost": "{2}{U}{B}",
+    "cmc": 4,
+    "colors": [
+      "B",
+      "U"
+    ],
+    "color_identity": [
+      "B",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 2575,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Yarok, the Desecrated",
+    "type_line": "Legendary Creature — Elemental Horror",
+    "oracle_text": "Deathtouch, lifelink\nIf a permanent entering causes a triggered ability of a permanent you control to trigger, that ability triggers an additional time.",
+    "mana_cost": "{2}{B}{G}{U}",
+    "cmc": 5,
+    "colors": [
+      "B",
+      "G",
+      "U"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 2590,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Derevi, Empyrial Tactician",
+    "type_line": "Legendary Creature — Bird Wizard",
+    "oracle_text": "Flying\nWhen Derevi enters and whenever a creature you control deals combat damage to a player, you may tap or untap target permanent.\n{1}{G}{W}{U}: Put Derevi onto the battlefield from the command zone.",
+    "mana_cost": "{G}{W}{U}",
+    "cmc": 3,
+    "colors": [
+      "G",
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "G",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 2818,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Tiamat",
+    "type_line": "Legendary Creature — Dragon God",
+    "oracle_text": "Flying\nWhen Tiamat enters, if you cast it, search your library for up to five Dragon cards not named Tiamat that each have different names, reveal them, put them into your hand, then shuffle.",
+    "mana_cost": "{2}{W}{U}{B}{R}{G}",
+    "cmc": 7,
+    "colors": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 2908,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Kenrith, the Returned King",
+    "type_line": "Legendary Creature — Human Noble",
+    "oracle_text": "{R}: All creatures gain trample and haste until end of turn.\n{1}{G}: Put a +1/+1 counter on target creature.\n{2}{W}: Target player gains 5 life.\n{3}{U}: Target player draws a card.\n{4}{B}: Put target creature card from a graveyard onto the battlefield under its owner's control.",
+    "mana_cost": "{4}{W}",
+    "cmc": 5,
+    "colors": [
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 2986,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Kess, Dissident Mage",
+    "type_line": "Legendary Creature — Human Wizard",
+    "oracle_text": "Flying\nOnce during each of your turns, you may cast an instant or sorcery spell from your graveyard. If a spell cast this way would be put into your graveyard, exile it instead.",
+    "mana_cost": "{1}{U}{B}{R}",
+    "cmc": 4,
+    "colors": [
+      "B",
+      "R",
+      "U"
+    ],
+    "color_identity": [
+      "B",
+      "R",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 2995,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Light-Paws, Emperor's Voice",
+    "type_line": "Legendary Creature — Fox Advisor",
+    "oracle_text": "Whenever an Aura you control enters, if you cast it, you may search your library for an Aura card with mana value less than or equal to that Aura and with a different name than each Aura you control, put that card onto the battlefield attached to Light-Paws, then shuffle.",
+    "mana_cost": "{1}{W}",
+    "cmc": 2,
+    "colors": [
+      "W"
+    ],
+    "color_identity": [
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 3034,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Kykar, Wind's Fury",
+    "type_line": "Legendary Creature — Bird Wizard",
+    "oracle_text": "Flying\nWhenever you cast a noncreature spell, create a 1/1 white Spirit creature token with flying.\nSacrifice a Spirit: Add {R}.",
+    "mana_cost": "{1}{U}{R}{W}",
+    "cmc": 4,
+    "colors": [
+      "R",
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "R",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 3065,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Vorel of the Hull Clade",
+    "type_line": "Legendary Creature — Human Merfolk",
+    "oracle_text": "{G}{U}, {T}: Double the number of each kind of counter on target artifact, creature, or land.",
+    "mana_cost": "{1}{G}{U}",
+    "cmc": 3,
+    "colors": [
+      "G",
+      "U"
+    ],
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 3081,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Edgar Markov",
+    "type_line": "Legendary Creature — Vampire Knight",
+    "oracle_text": "Eminence — Whenever you cast another Vampire spell, if Edgar is in the command zone or on the battlefield, create a 1/1 black Vampire creature token.\nFirst strike, haste\nWhenever Edgar attacks, put a +1/+1 counter on each Vampire you control.",
+    "mana_cost": "{3}{R}{W}{B}",
+    "cmc": 6,
+    "colors": [
+      "B",
+      "R",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "R",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 3102,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Sisay, Weatherlight Captain",
+    "type_line": "Legendary Creature — Human Soldier",
+    "oracle_text": "Sisay gets +1/+1 for each color among other legendary permanents you control.\n{W}{U}{B}{R}{G}: Search your library for a legendary permanent card with mana value less than Sisay's power, put that card onto the battlefield, then shuffle.",
+    "mana_cost": "{2}{W}",
+    "cmc": 3,
+    "colors": [
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 3156,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Hamza, Guardian of Arashin",
+    "type_line": "Legendary Creature — Elephant Warrior",
+    "oracle_text": "This spell costs {1} less to cast for each creature you control with a +1/+1 counter on it.\nCreature spells you cast cost {1} less to cast for each creature you control with a +1/+1 counter on it.",
+    "mana_cost": "{4}{G}{W}",
+    "cmc": 6,
+    "colors": [
+      "G",
+      "W"
+    ],
+    "color_identity": [
+      "G",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "uncommon",
+    "edhrec_rank": 3253,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Edric, Spymaster of Trest",
+    "type_line": "Legendary Creature — Elf Rogue",
+    "oracle_text": "Whenever a creature deals combat damage to one of your opponents, its controller may draw a card.",
+    "mana_cost": "{1}{G}{U}",
+    "cmc": 3,
+    "colors": [
+      "G",
+      "U"
+    ],
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 3266,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Rhys the Redeemed",
+    "type_line": "Legendary Creature — Elf Warrior",
+    "oracle_text": "{2}{G/W}, {T}: Create a 1/1 green and white Elf Warrior creature token.\n{4}{G/W}{G/W}, {T}: For each creature token you control, create a token that's a copy of that creature.",
+    "mana_cost": "{G/W}",
+    "cmc": 1,
+    "colors": [
+      "G",
+      "W"
+    ],
+    "color_identity": [
+      "G",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 3297,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Kaalia of the Vast",
+    "type_line": "Legendary Creature — Human Cleric",
+    "oracle_text": "Flying\nWhenever Kaalia attacks an opponent, you may put an Angel, Demon, or Dragon creature card from your hand onto the battlefield tapped and attacking that opponent.",
+    "mana_cost": "{1}{R}{W}{B}",
+    "cmc": 4,
+    "colors": [
+      "B",
+      "R",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "R",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 3342,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Krark, the Thumbless",
+    "type_line": "Legendary Creature — Goblin Wizard",
+    "oracle_text": "Whenever you cast an instant or sorcery spell, flip a coin. If you lose the flip, return that spell to its owner's hand. If you win the flip, copy that spell, and you may choose new targets for the copy.\nPartner (You can have two commanders if both have partner.)",
+    "mana_cost": "{1}{R}",
+    "cmc": 2,
+    "colors": [
+      "R"
+    ],
+    "color_identity": [
+      "R"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 3396,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Sidisi, Brood Tyrant",
+    "type_line": "Legendary Creature — Snake Shaman",
+    "oracle_text": "Whenever Sidisi enters or attacks, mill three cards.\nWhenever one or more creature cards are put into your graveyard from your library, create a 2/2 black Zombie creature token.",
+    "mana_cost": "{1}{B}{G}{U}",
+    "cmc": 4,
+    "colors": [
+      "B",
+      "G",
+      "U"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 3476,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Nekusar, the Mindrazer",
+    "type_line": "Legendary Creature — Zombie Wizard",
+    "oracle_text": "At the beginning of each player's draw step, that player draws an additional card.\nWhenever an opponent draws a card, Nekusar deals 1 damage to that player.",
+    "mana_cost": "{2}{U}{B}{R}",
+    "cmc": 5,
+    "colors": [
+      "B",
+      "R",
+      "U"
+    ],
+    "color_identity": [
+      "B",
+      "R",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 3655,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Sliver Hivelord",
+    "type_line": "Legendary Creature — Sliver",
+    "oracle_text": "Sliver creatures you control have indestructible. (Damage and effects that say \"destroy\" don't destroy them.)",
+    "mana_cost": "{W}{U}{B}{R}{G}",
+    "cmc": 5,
+    "colors": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 3694,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Karlov of the Ghost Council",
+    "type_line": "Legendary Creature — Spirit Advisor",
+    "oracle_text": "Whenever you gain life, put two +1/+1 counters on Karlov.\n{W}{B}, Remove six +1/+1 counters from Karlov: Exile target creature.",
+    "mana_cost": "{W}{B}",
+    "cmc": 2,
+    "colors": [
+      "B",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 3780,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Omnath, Locus of Creation",
+    "type_line": "Legendary Creature — Elemental",
+    "oracle_text": "When Omnath enters, draw a card.\nLandfall — Whenever a land you control enters, you gain 4 life if this is the first time this ability has resolved this turn. If it's the second time, add {R}{G}{W}{U}. If it's the third time, Omnath deals 4 damage to each opponent and each planeswalker you don't control.",
+    "mana_cost": "{R}{G}{W}{U}",
+    "cmc": 4,
+    "colors": [
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 3990,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "The First Sliver",
+    "type_line": "Legendary Creature — Sliver",
+    "oracle_text": "Cascade (When you cast this spell, exile cards from the top of your library until you exile a nonland card that costs less. You may cast it without paying its mana cost. Put the exiled cards on the bottom in a random order.)\nSliver spells you cast have cascade.",
+    "mana_cost": "{W}{U}{B}{R}{G}",
+    "cmc": 5,
+    "colors": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 4072,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Tymna the Weaver",
+    "type_line": "Legendary Creature — Human Cleric",
+    "oracle_text": "Lifelink\nAt the beginning of each of your postcombat main phases, you may pay X life, where X is the number of opponents that were dealt combat damage this turn. If you do, draw X cards.\nPartner (You can have two commanders if both have partner.)",
+    "mana_cost": "{1}{W}{B}",
+    "cmc": 3,
+    "colors": [
+      "B",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 4143,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Atla Palani, Nest Tender",
+    "type_line": "Legendary Creature — Human Shaman",
+    "oracle_text": "{2}, {T}: Create a 0/1 green Egg creature token with defender.\nWhenever an Egg you control dies, reveal cards from the top of your library until you reveal a creature card. Put that card onto the battlefield and the rest on the bottom of your library in a random order.",
+    "mana_cost": "{1}{R}{G}{W}",
+    "cmc": 4,
+    "colors": [
+      "G",
+      "R",
+      "W"
+    ],
+    "color_identity": [
+      "G",
+      "R",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 4340,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Sliver Legion",
+    "type_line": "Legendary Creature — Sliver",
+    "oracle_text": "All Sliver creatures get +1/+1 for each other Sliver on the battlefield.",
+    "mana_cost": "{W}{U}{B}{R}{G}",
+    "cmc": 5,
+    "colors": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 4611,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Captain Sisay",
+    "type_line": "Legendary Creature — Human Soldier",
+    "oracle_text": "{T}: Search your library for a legendary card, reveal that card, put it into your hand, then shuffle.",
+    "mana_cost": "{2}{G}{W}",
+    "cmc": 4,
+    "colors": [
+      "G",
+      "W"
+    ],
+    "color_identity": [
+      "G",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 4682,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Winota, Joiner of Forces",
+    "type_line": "Legendary Creature — Human Warrior",
+    "oracle_text": "Whenever a non-Human creature you control attacks, look at the top six cards of your library. You may put a Human creature card from among them onto the battlefield tapped and attacking. It gains indestructible until end of turn. Put the rest of the cards on the bottom of your library in a random order.",
+    "mana_cost": "{2}{R}{W}",
+    "cmc": 4,
+    "colors": [
+      "R",
+      "W"
+    ],
+    "color_identity": [
+      "R",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 4807,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Slimefoot, the Stowaway",
+    "type_line": "Legendary Creature — Fungus",
+    "oracle_text": "Whenever a Saproling you control dies, Slimefoot deals 1 damage to each opponent and you gain 1 life.\n{4}: Create a 1/1 green Saproling creature token.",
+    "mana_cost": "{1}{B}{G}",
+    "cmc": 3,
+    "colors": [
+      "B",
+      "G"
+    ],
+    "color_identity": [
+      "B",
+      "G"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "uncommon",
+    "edhrec_rank": 5050,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Najeela, the Blade-Blossom",
+    "type_line": "Legendary Creature — Human Warrior",
+    "oracle_text": "Whenever a Warrior attacks, you may have its controller create a 1/1 white Warrior creature token that's tapped and attacking.\n{W}{U}{B}{R}{G}: Untap all attacking creatures. They gain trample, lifelink, and haste until end of turn. After this phase, there is an additional combat phase. Activate only during combat.",
+    "mana_cost": "{2}{R}",
+    "cmc": 3,
+    "colors": [
+      "R"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 5278,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Pir, Imaginative Rascal",
+    "type_line": "Legendary Creature — Human",
+    "oracle_text": "Partner with Toothy, Imaginary Friend (When this creature enters, target player may put Toothy into their hand from their library, then shuffle.)\nIf one or more counters would be put on a permanent your team controls, that many plus one of each of those kinds of counters are put on that permanent instead.",
+    "mana_cost": "{2}{G}",
+    "cmc": 3,
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 5430,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Ezuri, Claw of Progress",
+    "type_line": "Legendary Creature — Phyrexian Elf Warrior",
+    "oracle_text": "Whenever a creature you control with power 2 or less enters, you get an experience counter.\nAt the beginning of combat on your turn, put X +1/+1 counters on another target creature you control, where X is the number of experience counters you have.",
+    "mana_cost": "{2}{G}{U}",
+    "cmc": 4,
+    "colors": [
+      "G",
+      "U"
+    ],
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 5549,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Lord Windgrace",
+    "type_line": "Legendary Planeswalker — Windgrace",
+    "oracle_text": "+2: Discard a card, then draw a card. If a land card is discarded this way, draw an additional card.\n−3: Return up to two target land cards from your graveyard to the battlefield.\n−11: Destroy up to six target nonland permanents, then create six 2/2 green Cat Warrior creature tokens with forestwalk.\nLord Windgrace can be your commander.",
+    "mana_cost": "{2}{B}{R}{G}",
+    "cmc": 5,
+    "colors": [
+      "B",
+      "G",
+      "R"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "R"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 5814,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Mizzix of the Izmagnus",
+    "type_line": "Legendary Creature — Goblin Wizard",
+    "oracle_text": "Whenever you cast an instant or sorcery spell with mana value greater than the number of experience counters you have, you get an experience counter.\nInstant and sorcery spells you cast cost {1} less to cast for each experience counter you have.",
+    "mana_cost": "{2}{U}{R}",
+    "cmc": 4,
+    "colors": [
+      "R",
+      "U"
+    ],
+    "color_identity": [
+      "R",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 6203,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Oloro, Ageless Ascetic",
+    "type_line": "Legendary Creature — Giant Soldier",
+    "oracle_text": "At the beginning of your upkeep, you gain 2 life.\nWhenever you gain life, you may pay {1}. If you do, draw a card and each opponent loses 1 life.\nAt the beginning of your upkeep, if Oloro is in the command zone, you gain 2 life.",
+    "mana_cost": "{3}{W}{U}{B}",
+    "cmc": 6,
+    "colors": [
+      "B",
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 6297,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Judith, the Scourge Diva",
+    "type_line": "Legendary Creature — Human Shaman",
+    "oracle_text": "Other creatures you control get +1/+0.\nWhenever a nontoken creature you control dies, Judith deals 1 damage to any target.",
+    "mana_cost": "{1}{B}{R}",
+    "cmc": 3,
+    "colors": [
+      "B",
+      "R"
+    ],
+    "color_identity": [
+      "B",
+      "R"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "uncommon",
+    "edhrec_rank": 6364,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Galadriel of Lothlórien",
+    "type_line": "Legendary Creature — Elf Noble",
+    "oracle_text": "Whenever the Ring tempts you, if you chose a creature other than Galadriel as your Ring-bearer, scry 3.\nWhenever you scry, you may reveal the top card of your library. If a land card is revealed this way, put it onto the battlefield tapped.",
+    "mana_cost": "{1}{G}{U}",
+    "cmc": 3,
+    "colors": [
+      "G",
+      "U"
+    ],
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 6983,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "The Mimeoplasm",
+    "type_line": "Legendary Creature — Ooze",
+    "oracle_text": "As The Mimeoplasm enters, you may exile two creature cards from graveyards. If you do, it enters as a copy of one of those cards with a number of additional +1/+1 counters on it equal to the power of the other card.",
+    "mana_cost": "{2}{B}{G}{U}",
+    "cmc": 5,
+    "colors": [
+      "B",
+      "G",
+      "U"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 7438,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Tasigur, the Golden Fang",
+    "type_line": "Legendary Creature — Human Shaman",
+    "oracle_text": "Delve (Each card you exile from your graveyard while casting this spell pays for {1}.)\n{2}{G/U}{G/U}: Mill two cards, then return a nonland card of an opponent's choice from your graveyard to your hand.",
+    "mana_cost": "{5}{B}",
+    "cmc": 6,
+    "colors": [
+      "B"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 7551,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Tuvasa the Sunlit",
+    "type_line": "Legendary Creature — Merfolk Shaman",
+    "oracle_text": "Tuvasa gets +1/+1 for each enchantment you control.\nWhenever you cast your first enchantment spell each turn, draw a card.",
+    "mana_cost": "{G}{W}{U}",
+    "cmc": 3,
+    "colors": [
+      "G",
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "G",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 7980,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Skullbriar, the Walking Grave",
+    "type_line": "Legendary Creature — Zombie Elemental",
+    "oracle_text": "Haste\nWhenever Skullbriar deals combat damage to a player, put a +1/+1 counter on it.\nCounters remain on Skullbriar as it moves to any zone other than a player's hand or library.",
+    "mana_cost": "{B}{G}",
+    "cmc": 2,
+    "colors": [
+      "B",
+      "G"
+    ],
+    "color_identity": [
+      "B",
+      "G"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 8338,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Inalla, Archmage Ritualist",
+    "type_line": "Legendary Creature — Human Wizard",
+    "oracle_text": "Eminence — Whenever another nontoken Wizard you control enters, if Inalla is in the command zone or on the battlefield, you may pay {1}. If you do, create a token that's a copy of that Wizard. The token gains haste. Exile it at the beginning of the next end step.\nTap five untapped Wizards you control: Target player loses 7 life.",
+    "mana_cost": "{2}{U}{B}{R}",
+    "cmc": 5,
+    "colors": [
+      "B",
+      "R",
+      "U"
+    ],
+    "color_identity": [
+      "B",
+      "R",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 8394,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Niv-Mizzet Reborn",
+    "type_line": "Legendary Creature — Dragon Avatar",
+    "oracle_text": "Flying\nWhen Niv-Mizzet enters, reveal the top ten cards of your library. For each color pair, choose a card that's exactly those colors from among them. Put the chosen cards into your hand and the rest on the bottom of your library in a random order.",
+    "mana_cost": "{W}{U}{B}{R}{G}",
+    "cmc": 5,
+    "colors": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 8716,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Yidris, Maelstrom Wielder",
+    "type_line": "Legendary Creature — Ogre Wizard",
+    "oracle_text": "Trample\nWhenever Yidris deals combat damage to a player, as you cast spells from your hand this turn, they gain cascade. (When you cast the spell, exile cards from the top of your library until you exile a nonland card that costs less. You may cast it without paying its mana cost. Put the exiled cards on the bottom in a random order.)",
+    "mana_cost": "{U}{B}{R}{G}",
+    "cmc": 4,
+    "colors": [
+      "B",
+      "G",
+      "R",
+      "U"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "R",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 8774,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Winter, Cynical Opportunist",
+    "type_line": "Legendary Creature — Human Warlock",
+    "oracle_text": "Deathtouch\nWhenever Winter attacks, mill three cards.\nDelirium — At the beginning of your end step, you may exile any number of cards from your graveyard with four or more card types among them. If you do, put a permanent card from among them onto the battlefield with a finality counter on it.",
+    "mana_cost": "{2}{B}{G}",
+    "cmc": 4,
+    "colors": [
+      "B",
+      "G"
+    ],
+    "color_identity": [
+      "B",
+      "G"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 9038,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Sen Triplets",
+    "type_line": "Legendary Artifact Creature — Human Wizard",
+    "oracle_text": "At the beginning of your upkeep, choose target opponent. This turn, that player can't cast spells or activate abilities and plays with their hand revealed. You may play lands and cast spells from that player's hand this turn.",
+    "mana_cost": "{2}{W}{U}{B}",
+    "cmc": 5,
+    "colors": [
+      "B",
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 9116,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Ghave, Guru of Spores",
+    "type_line": "Legendary Creature — Fungus Shaman",
+    "oracle_text": "Ghave enters with five +1/+1 counters on it.\n{1}, Remove a +1/+1 counter from a creature you control: Create a 1/1 green Saproling creature token.\n{1}, Sacrifice a creature: Put a +1/+1 counter on target creature.",
+    "mana_cost": "{2}{W}{B}{G}",
+    "cmc": 5,
+    "colors": [
+      "B",
+      "G",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 9216,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Kalamax, the Stormsire",
+    "type_line": "Legendary Creature — Elemental Dinosaur",
+    "oracle_text": "Whenever you cast your first instant spell each turn, if Kalamax is tapped, copy that spell. You may choose new targets for the copy.\nWhenever you copy an instant spell, put a +1/+1 counter on Kalamax.",
+    "mana_cost": "{1}{G}{U}{R}",
+    "cmc": 4,
+    "colors": [
+      "G",
+      "R",
+      "U"
+    ],
+    "color_identity": [
+      "G",
+      "R",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 9230,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Mishra, Eminent One",
+    "type_line": "Legendary Creature — Human Artificer",
+    "oracle_text": "At the beginning of combat on your turn, create a token that's a copy of target noncreature artifact you control, except its name is Mishra's Warform and it's a 4/4 Construct artifact creature in addition to its other types. It gains haste until end of turn. Sacrifice it at the beginning of the next end step.",
+    "mana_cost": "{2}{U}{B}{R}",
+    "cmc": 5,
+    "colors": [
+      "B",
+      "R",
+      "U"
+    ],
+    "color_identity": [
+      "B",
+      "R",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 9361,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Karador, Ghost Chieftain",
+    "type_line": "Legendary Creature — Centaur Spirit",
+    "oracle_text": "This spell costs {1} less to cast for each creature card in your graveyard.\nOnce during each of your turns, you may cast a creature spell from your graveyard.",
+    "mana_cost": "{5}{W}{B}{G}",
+    "cmc": 8,
+    "colors": [
+      "B",
+      "G",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 10060,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Saskia the Unyielding",
+    "type_line": "Legendary Creature — Human Soldier",
+    "oracle_text": "Vigilance, haste\nAs Saskia enters, choose a player.\nWhenever a creature you control deals combat damage to a player, it deals that much damage to the chosen player.",
+    "mana_cost": "{B}{R}{G}{W}",
+    "cmc": 4,
+    "colors": [
+      "B",
+      "G",
+      "R",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "R",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 10214,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Kestia, the Cultivator",
+    "type_line": "Legendary Enchantment Creature — Nymph",
+    "oracle_text": "Bestow {3}{G}{W}{U} (If you cast this card for its bestow cost, it's an Aura spell with enchant creature. It becomes a creature again if it's not attached.)\nEnchanted creature gets +4/+4.\nWhenever an enchanted creature or enchantment creature you control attacks, draw a card.",
+    "mana_cost": "{1}{G}{W}{U}",
+    "cmc": 4,
+    "colors": [
+      "G",
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "G",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 12957,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Uril, the Miststalker",
+    "type_line": "Legendary Creature — Beast",
+    "oracle_text": "Hexproof (This creature can't be the target of spells or abilities your opponents control.)\nUril gets +2/+2 for each Aura attached to it.",
+    "mana_cost": "{2}{R}{G}{W}",
+    "cmc": 5,
+    "colors": [
+      "G",
+      "R",
+      "W"
+    ],
+    "color_identity": [
+      "G",
+      "R",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 13053,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Greven, Predator Captain",
+    "type_line": "Legendary Creature — Phyrexian Human Warrior",
+    "oracle_text": "Menace\nGreven gets +X/+0, where X is the amount of life you've lost this turn.\nWhenever Greven attacks, you may sacrifice another creature. If you do, you draw cards equal to that creature's power and you lose life equal to that creature's toughness.",
+    "mana_cost": "{3}{B}{R}",
+    "cmc": 5,
+    "colors": [
+      "B",
+      "R"
+    ],
+    "color_identity": [
+      "B",
+      "R"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 14318,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Borborygmos and Fblthp",
+    "type_line": "Legendary Creature — Cyclops Homunculus",
+    "oracle_text": "Whenever Borborygmos and Fblthp enters or attacks, draw a card, then you may discard any number of land cards. When you discard one or more cards this way, Borborygmos and Fblthp deals twice that much damage to target creature.\n{1}{U}: Put Borborygmos and Fblthp into its owner's library third from the top.",
+    "mana_cost": "{2}{G}{U}{R}",
+    "cmc": 5,
+    "colors": [
+      "G",
+      "R",
+      "U"
+    ],
+    "color_identity": [
+      "G",
+      "R",
+      "U"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "mythic",
+    "edhrec_rank": 17210,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  },
+  {
+    "name": "Ertai, the Corrupted",
+    "type_line": "Legendary Creature — Phyrexian Human Wizard",
+    "oracle_text": "{U}, {T}, Sacrifice a creature or enchantment: Counter target spell.",
+    "mana_cost": "{2}{W}{U}{B}",
+    "cmc": 5,
+    "colors": [
+      "B",
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "U",
+      "W"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "rarity": "rare",
+    "edhrec_rank": 17722,
+    "card_faces": null,
+    "image_uris": null,
+    "quantity": 1
+  }
+]

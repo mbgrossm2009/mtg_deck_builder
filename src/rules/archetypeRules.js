@@ -104,8 +104,14 @@ const ARCHETYPES = [
     id: 'aristocrats',
     label: 'Aristocrats / Sacrifice',
     commanderHints: [
-      /sacrifice .* creature/, /whenever .* dies/, /whenever a creature .* dies/,
+      // Older "creature/permanent" wording variants AND modern bare "enters"
+      // (post-2022 Magic dropped "the battlefield" in most ETB triggers).
+      // Korvold uses "sacrifice a permanent" not "creature" — match either.
+      /sacrifice (?:another |an? )?(?:creature|permanent|token)/,
+      /whenever you sacrifice/,
+      /whenever .* dies/, /whenever a creature .* dies/,
       /enters the battlefield/, /when .* dies/,
+      /\benters\b/,
     ],
     cardSignals: [
       /sacrifice .* creature/, /whenever .* dies/, /enters the battlefield/,
@@ -178,8 +184,11 @@ const ARCHETYPES = [
     id: 'spellslinger',
     label: 'Spellslinger',
     commanderHints: [
-      /whenever you cast .* (instant|sorcery)/, /noncreature spell/, /prowess/, /storm count/,
-      /magecraft/,
+      // "Whenever you cast an instant or sorcery" AND any-player variants
+      // (Niv-Mizzet Parun: "Whenever a player casts an instant or sorcery
+      // spell, you draw a card"). Match either subject.
+      /whenever (?:you|a player) cast(?:s)? .* (instant|sorcery)/,
+      /noncreature spell/, /prowess/, /storm count/, /magecraft/,
     ],
     cardSignals: [
       /whenever you cast .* (instant|sorcery)/, /noncreature spell/, /prowess/,
