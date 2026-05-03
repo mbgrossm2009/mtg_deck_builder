@@ -3,12 +3,20 @@ import { useNavigate } from 'react-router-dom'
 import { getDecks, deleteDeck } from '../utils/localStorage'
 import { getCardImageSmall } from '../utils/scryfallApi'
 
-const COLOR_PIPS = {
-  W: { bg: '#f5f0e8', color: '#4a3728' },
-  U: { bg: '#1a6fb0', color: '#fff'    },
-  B: { bg: '#2c2c2c', color: '#c0c0c0' },
-  R: { bg: '#d43f1e', color: '#fff'    },
-  G: { bg: '#1a7a3a', color: '#fff'    },
+// Per-color glow tints lifted from the design tokens, used to surround
+// the deck card with the commander's color identity. Multi-color decks
+// blend their two strongest colors into the box-shadow so the card
+// reads as "this is a Boros deck" / "this is a Golgari deck" at a glance.
+const COLOR_GLOW = {
+  W: 'var(--mana-w-glow)',
+  U: 'var(--mana-u-glow)',
+  B: 'var(--mana-b-glow)',
+  R: 'var(--mana-r-glow)',
+  G: 'var(--mana-g-glow)',
+}
+
+const COLOR_TO_PIP_CLASS = {
+  W: 'mana-pip-w', U: 'mana-pip-u', B: 'mana-pip-b', R: 'mana-pip-r', G: 'mana-pip-g',
 }
 
 function formatDate(iso) {
@@ -45,14 +53,27 @@ export default function MyDecks() {
         <h1 style={styles.heading}>My Decks</h1>
         <p style={styles.sub}>
           {decks.length > 0
-            ? `${decks.length} saved deck${decks.length !== 1 ? 's' : ''}`
+            ? `${decks.length} saved deck${decks.length !== 1 ? 's' : ''} — every one built from your collection.`
             : 'No decks saved yet. Generate one in the Deck Builder and save it.'}
         </p>
       </header>
 
       {decks.length === 0 ? (
-        <div style={styles.placeholder}>
-          Head to the Deck Builder, generate a deck, and click "Save Deck" to keep it here.
+        <div className="empty-state">
+          <div className="empty-state-ornament" aria-hidden>◆</div>
+          <div className="empty-state-title">No decks yet</div>
+          <div className="empty-state-body">
+            Head to the Deck Builder, generate a deck, and click <strong>Save Deck</strong> to
+            keep it here. Every saved deck shows its commander, color identity, and a quick
+            shortcut back into the builder.
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={() => navigate('/deck-builder')}
+            style={{ padding: '10px 20px', fontSize: 'var(--text-sm)' }}
+          >
+            Open Deck Builder →
+          </button>
         </div>
       ) : (
         <div style={styles.grid}>
@@ -78,8 +99,12 @@ function DeckCard({ deck, onLoad, onAskDelete, isConfirmingDelete, onConfirmDele
   const totalCards = (deck.mainDeck ?? []).reduce((s, c) => s + (c.quantity ?? 1), 0)
   const colorIdentity = deck.commander?.color_identity ?? []
 
+  // Color-identity glow ring — picks up the first 1-2 mana colors so the
+  // deck tile visually telegraphs its WUBRG identity.
+  const cardStyle = identityGlowStyle(colorIdentity)
+
   return (
-    <div className="card-hover" style={styles.card}>
+    <div className="card-hover" style={{ ...styles.card, ...cardStyle }}>
       <div style={styles.imageWrap}>
         {image
           ? <img src={image} alt={deck.commander?.name ?? ''} style={styles.image} loading="lazy" />
@@ -94,11 +119,11 @@ function DeckCard({ deck, onLoad, onAskDelete, isConfirmingDelete, onConfirmDele
         <div style={styles.pips}>
           {colorIdentity.length > 0
             ? colorIdentity.map(c => (
-                <span key={c} style={{ ...styles.pip, background: COLOR_PIPS[c]?.bg, color: COLOR_PIPS[c]?.color }}>
+                <span key={c} className={`mana-pip ${COLOR_TO_PIP_CLASS[c]}`}>
                   {c}
                 </span>
               ))
-            : <span style={styles.colorless}>Colorless</span>
+            : <span className="mana-pip mana-pip-c">C</span>
           }
         </div>
         <div style={styles.meta}>
@@ -121,6 +146,31 @@ function DeckCard({ deck, onLoad, onAskDelete, isConfirmingDelete, onConfirmDele
       </div>
     </div>
   )
+}
+
+// Build a subtle outer glow whose tone reflects the commander's color
+// identity. Mono = single color. Two colors = blended ring. 3+ = soft
+// rainbow. Falls back to neutral border when colorless.
+function identityGlowStyle(colorIdentity) {
+  if (!colorIdentity || colorIdentity.length === 0) return {}
+  if (colorIdentity.length === 1) {
+    const g = COLOR_GLOW[colorIdentity[0]]
+    return g ? { borderColor: g, boxShadow: `0 8px 24px ${g}` } : {}
+  }
+  if (colorIdentity.length === 2) {
+    const [a, b] = colorIdentity
+    return {
+      borderColor: COLOR_GLOW[a],
+      boxShadow: `0 4px 16px ${COLOR_GLOW[a]}, 0 8px 24px ${COLOR_GLOW[b]}`,
+    }
+  }
+  // 3+: light rainbow blend (pull the first three present in WUBRG order).
+  const tones = colorIdentity.slice(0, 3).map(c => COLOR_GLOW[c]).filter(Boolean)
+  if (tones.length === 0) return {}
+  return {
+    borderColor: 'var(--border-strong)',
+    boxShadow: tones.map((t, i) => `0 ${4 + i * 2}px ${12 + i * 4}px ${t}`).join(', '),
+  }
 }
 
 const styles = {
@@ -167,12 +217,6 @@ const styles = {
   deckName:      { fontWeight: 700, fontSize: 'var(--text-sm)', color: 'var(--text)', lineHeight: 1.3 },
   commanderName: { color: 'var(--accent-hover)', fontSize: 'var(--text-xs)' },
   pips: { display: 'flex', gap: '4px', flexWrap: 'wrap' },
-  pip: {
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    width: '20px', height: '20px', borderRadius: '50%',
-    fontSize: 'var(--text-xs)', fontWeight: 700,
-  },
-  colorless: { fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' },
   meta: { fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: '4px' },
   metaDate: { color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' },
   actions: { marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', paddingTop: 'var(--space-2)' },
