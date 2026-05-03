@@ -41,6 +41,15 @@ export function validateDeck(mainDeck, commander) {
   if (roleCounts.removal < 5)       warnings.push(`Only ${roleCounts.removal} removal spells. May struggle to answer threats.`)
   if (roleCounts.win_condition < 1) warnings.push('No clear win conditions found. How does this deck plan to win?')
 
+  // Filler warning — flag if a substantial portion of the deck is tagged
+  // as filler (the role assigned by cardRoles.js when nothing else fits).
+  // Threshold of 12 means roughly 12% of non-land slots are off-plan;
+  // anything above that suggests the deck pool was thin or the LLM picked
+  // generic cards over synergy.
+  if (roleCounts.filler > 12) {
+    warnings.push(`${roleCounts.filler} filler cards. Many slots aren't advancing the deck's plan.`)
+  }
+
   return { errors, warnings }
 }
 

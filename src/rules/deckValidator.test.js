@@ -257,3 +257,84 @@ describe('countRoles', () => {
     ].sort())
   })
 })
+
+// ─── Validation warning conditions ──────────────────────────────────────────
+
+describe('validateDeck warning conditions', () => {
+  function deckOf(roleCounts) {
+    // Build a 99-card deck where each card is a single-role placeholder.
+    // Uses unique names to avoid singleton errors.
+    const cards = []
+    let i = 0
+    for (const [role, count] of Object.entries(roleCounts)) {
+      for (let j = 0; j < count; j++) {
+        cards.push({
+          name: `Card-${role}-${i++}`,
+          roles: [role],
+          color_identity: ['B'],
+          legalities: { commander: 'legal' },
+          isBasicLand: role === 'land',
+        })
+      }
+    }
+    while (cards.length < 99) {
+      cards.push({
+        name: `Filler-${i++}`,
+        roles: ['filler'],
+        color_identity: ['B'],
+        legalities: { commander: 'legal' },
+      })
+    }
+    return cards
+  }
+  const cmdr = { name: 'Test', color_identity: ['B'], type_line: 'Legendary Creature' }
+
+  it('warns when fewer than 33 lands', () => {
+    const deck = deckOf({ land: 30, ramp: 10, draw: 10, removal: 10, win_condition: 5 })
+    const { warnings } = validateDeck(deck, cmdr)
+    expect(warnings.some(w => /Only 30 lands/.test(w))).toBe(true)
+  })
+
+  it('warns when fewer than 6 ramp pieces', () => {
+    const deck = deckOf({ land: 36, ramp: 3, draw: 10, removal: 10, win_condition: 5 })
+    const { warnings } = validateDeck(deck, cmdr)
+    expect(warnings.some(w => /Only 3 ramp/.test(w))).toBe(true)
+  })
+
+  it('warns when fewer than 6 draw sources', () => {
+    const deck = deckOf({ land: 36, ramp: 8, draw: 4, removal: 10, win_condition: 5 })
+    const { warnings } = validateDeck(deck, cmdr)
+    expect(warnings.some(w => /Only 4 draw sources/.test(w))).toBe(true)
+  })
+
+  it('warns when fewer than 5 removal pieces', () => {
+    const deck = deckOf({ land: 36, ramp: 8, draw: 8, removal: 2, win_condition: 5 })
+    const { warnings } = validateDeck(deck, cmdr)
+    expect(warnings.some(w => /Only 2 removal spells/.test(w))).toBe(true)
+  })
+
+  it('warns when zero win conditions', () => {
+    const deck = deckOf({ land: 36, ramp: 8, draw: 8, removal: 8 })
+    const { warnings } = validateDeck(deck, cmdr)
+    expect(warnings.some(w => /No clear win conditions/.test(w))).toBe(true)
+  })
+
+  it('warns when more than 12 filler cards', () => {
+    // The deckOf helper pads remaining slots with filler — for this input
+    // 99 - (36+8+8+8+2) = 37 filler. Well above the 12 threshold.
+    const deck = deckOf({ land: 36, ramp: 8, draw: 8, removal: 8, win_condition: 2 })
+    const { warnings } = validateDeck(deck, cmdr)
+    expect(warnings.some(w => /filler cards/.test(w))).toBe(true)
+  })
+
+  it('does NOT warn about filler when count is at threshold (12)', () => {
+    const deck = []
+    for (let i = 0; i < 36; i++) deck.push({ name: `L-${i}`, roles: ['land'], color_identity: ['B'], isBasicLand: true })
+    for (let i = 0; i < 30; i++) deck.push({ name: `R-${i}`, roles: ['ramp'], color_identity: ['B'] })
+    for (let i = 0; i < 20; i++) deck.push({ name: `D-${i}`, roles: ['draw'], color_identity: ['B'] })
+    for (let i = 0; i < 12; i++) deck.push({ name: `F-${i}`, roles: ['filler'], color_identity: ['B'] })
+    deck.push({ name: 'W-1', roles: ['win_condition'], color_identity: ['B'] })
+    const { warnings } = validateDeck(deck, cmdr)
+    expect(warnings.some(w => /filler cards/.test(w))).toBe(false)
+  })
+})
