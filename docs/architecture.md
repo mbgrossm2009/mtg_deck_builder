@@ -207,20 +207,14 @@ Add a new lens:
 | 3 — Lens framework + 4 lenses | ✅ Done | `src/knowledge/lens.js` + lenses/ + 22 tests |
 | 4 — Wire into orchestrator | ✅ Done | `result.lensResults` and `result.commanderProfile` in payload |
 | 5 — Architecture doc | ✅ Done | this file |
+| 6 — Eval prompt consumes lens output | ✅ Done | `lens_verdicts` is the single source of truth in the eval prompt |
+| 7 — Deck Doctor page | ✅ Done | `/deck-doctor` route + `evaluateDecklist` service (10 tests) |
+| 8 — Retire legacy inline fields | ✅ Done | `criticalCardCounts` / `detectedWincons` / `executionScore` removed from orchestrator return + eval prompt; helpers retained for internal use |
 
-**Future phases (not started):**
-
-- **Phase 6 — Migrate eval prompt to lens output.** The eval prompt
-  currently consumes raw `criticalCardCounts` + `detectedWincons` +
-  `executionScore` (the legacy inline computations). Replace with lens
-  results — gives the LLM richer evidence (per-card off-plan list, etc.)
-  and removes duplicate-knowledge maintenance.
-- **Phase 7 — Deck Doctor page.** New use case that consumes the lens
-  layer end-to-end. Paste a decklist, see per-lens evidence + suggestions.
-  No deck building required.
-- **Phase 8 — Retire legacy inline computations.** Once all consumers
-  use lens output, remove `countCriticalCards` / `detectMultiCardWincons` /
-  `computeCommanderExecutionScore` from the orchestrator inline path.
+**Done.** All migration phases shipped. The system understands decks
+across multiple analytical dimensions, surfaces per-card evidence and
+actionable suggestions, and supports two end-user use cases (deck
+builder + deck doctor) on the same knowledge layer.
 
 ## Testing philosophy
 

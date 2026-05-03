@@ -84,6 +84,9 @@ export function extractCommanderProfile(commander) {
     name: commander.name,
     colorIdentity: commander.color_identity ?? commander.colors ?? [],
     cmc: commander.cmc ?? 0,
+    // Oracle text exposed so consumers (e.g., WinPlanLens) can pass a
+    // commander shape into detectMultiCardWincons without re-fetching.
+    oracleText: text,
 
     archetypes,
     primaryArchetype: archetypes[0]?.id ?? null,

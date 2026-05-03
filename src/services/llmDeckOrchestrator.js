@@ -423,8 +423,6 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       explanation: [...explanation, ...(heuristic.explanation ?? [])],
       warnings: fallbackWarnings,
       llmStrategy: null,
-      criticalCardCounts: fallbackCounts,
-      detectedWincons: fallbackWincons,
       lensResults: fallbackLensResults,
       commanderProfile: fallbackProfile,
     }
@@ -978,16 +976,18 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     })),
   ]
 
-  // Final critical-card counts and detected wincon patterns. Surfaced to
-  // the eval harness AND passed into the eval prompt so the LLM evaluator
-  // doesn't have to count tutors/removal/etc. by eyeballing card names.
+  // Phase 8: legacy inline computations (countCriticalCards,
+  // detectMultiCardWincons, computeCommanderExecutionScore) are no
+  // longer surfaced as separate return fields. The lens framework
+  // computes the same data with richer structured output (evidence +
+  // suggestions). The helpers remain exported and are still used:
+  //   - by the lenses themselves
+  //   - by filterStaleCountWarnings (counts feed warning filtering)
+  //   - by the execution-score warning (still emitted as a top-level
+  //     warning, in addition to the lens output)
+  //   - by evalRunStore for display data (computed at the consumer)
   const criticalCardCounts = countCriticalCards(deck)
   const detectedWincons = detectMultiCardWincons(deck, strategyContext, commander)
-
-  // Commander execution score — what fraction of non-land non-staple
-  // slots actually advance the commander's plan? Surfaced to the eval
-  // payload so the LLM can stop guessing how on-theme a deck is, and
-  // adds a warning when below the bracket-appropriate threshold.
   const execution = computeCommanderExecutionScore({
     deck,
     commander,
@@ -1033,9 +1033,6 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     combos,
     archetypes,
     explanation,
-    criticalCardCounts,
-    detectedWincons,
-    executionScore: execution,
     lensResults,
     commanderProfile,
 

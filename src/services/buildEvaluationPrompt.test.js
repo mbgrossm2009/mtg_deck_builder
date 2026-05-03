@@ -64,17 +64,16 @@ describe('buildEvaluationPrompt — lens_verdicts is in the user payload', () =>
     expect(keys.indexOf('lens_verdicts')).toBeLessThan(keys.indexOf('deck'))
   })
 
-  it('preserves legacy counts/detected_wincon_patterns/commander_execution alongside', () => {
+  it('Phase 8: legacy counts/detected_wincon_patterns/commander_execution fields removed', () => {
+    // Those fields are no longer in the user payload — lens_verdicts is
+    // the single source of truth for analytical signals.
     const { user } = buildEvaluationPrompt({
       commander, bracket: 3, deck: [card('A', 'synergy')],
-      criticalCardCounts: { tutors: 3, ramp: 10 },
-      detectedWincons: ['aristocrats: ...'],
-      executionScore: { score: 0.5, considered: 50, relevant: 25 },
       lensResults: [],
     })
-    expect(user.counts).toEqual({ tutors: 3, ramp: 10 })
-    expect(user.detected_wincon_patterns).toEqual(['aristocrats: ...'])
-    expect(user.commander_execution).toEqual({ score: 0.5, considered: 50, relevant: 25 })
+    expect(user.counts).toBeUndefined()
+    expect(user.detected_wincon_patterns).toBeUndefined()
+    expect(user.commander_execution).toBeUndefined()
   })
 })
 

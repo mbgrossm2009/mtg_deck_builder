@@ -78,7 +78,10 @@ describe('cEDH B5 invariants — Najeela (B5-capable, not capped)', () => {
       (c.roles ?? []).includes('win_condition') ||
       (c.tags ?? []).includes('explosive_finisher')
     )
-    const detectedPatterns = result.detectedWincons ?? []
+    // Phase 8: detectedWincons is no longer a top-level orchestrator
+    // field. Read from win_plan lens result._raw.
+    const winLens = result.lensResults?.find(r => r.name === 'win_plan')
+    const detectedPatterns = winLens?._raw?.detectedPatterns ?? []
     expect(singleCardWincons.length + detectedPatterns.length).toBeGreaterThanOrEqual(1)
   })
 

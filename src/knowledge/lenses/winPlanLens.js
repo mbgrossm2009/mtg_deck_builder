@@ -26,7 +26,7 @@ export const WinPlanLens = {
     const detectedPatterns = detectMultiCardWincons(
       deck,
       { archetypes: commanderProfile.archetypes },
-      { name: commanderProfile.name, oracle_text: commanderProfile.oracleText ?? '' }
+      { name: commanderProfile.name, oracle_text: commanderProfile.oracleText ?? '' },
     )
 
     const total = singleCardWincons.length + detectedPatterns.length

@@ -179,7 +179,7 @@ export async function critiqueDeck({
  * Returns null if the LLM is disabled or the call fails — callers should
  * treat null as "evaluation unavailable" not "deck is bad".
  */
-export async function evaluateDeck({ commander, bracket, deck, criticalCardCounts, detectedWincons, executionScore, lensResults, onProgress }) {
+export async function evaluateDeck({ commander, bracket, deck, lensResults, onProgress }) {
   if (currentMode === LLM_MODE.DISABLED) return null
   if (currentMode === LLM_MODE.MOCK) {
     return {
@@ -193,21 +193,26 @@ export async function evaluateDeck({ commander, bracket, deck, criticalCardCount
   }
 
   onProgress?.({ stage: 'evaluate' })
-  const prompt = buildEvaluationPrompt({ commander, bracket, deck, criticalCardCounts, detectedWincons, executionScore, lensResults })
+  const prompt = buildEvaluationPrompt({ commander, bracket, deck, lensResults })
   try {
     const out = await callBackend(prompt)
     const withMeta = { ...out, _meta: { promptTokens: estimatePromptTokens(prompt) } }
     // Post-process: clamp the LLM's score down if the deck has severe
     // quality issues the model failed to weigh appropriately. The clamp
     // returns the same object when no clamp is needed (no false positives).
+    //
+    // Phase 8: derive clamp inputs from lensResults._raw rather than
+    // accepting them as explicit args. Single source of truth.
+    const winLens  = lensResults?.find(r => r.name === 'win_plan')
+    const execLens = lensResults?.find(r => r.name === 'commander_execution')
     const trueFiller = deck.filter(c => (c.roles ?? [])[0] === 'filler').length
     return clampEvalScore(withMeta, {
       bracket,
-      fillerCount: trueFiller,
-      fillerCap:   FILLER_CAP_BY_BRACKET[bracket],
-      wincons:     criticalCardCounts?.wincons ?? 0,
-      detectedWincons,
-      executionScore:     executionScore?.score,
+      fillerCount:       trueFiller,
+      fillerCap:         FILLER_CAP_BY_BRACKET[bracket],
+      wincons:           winLens?._raw?.singleCardWincons ?? 0,
+      detectedWincons:   winLens?._raw?.detectedPatterns ?? [],
+      executionScore:    execLens?.score,
       executionThreshold: getExecutionThresholdForBracket(bracket),
     })
   } catch (err) {

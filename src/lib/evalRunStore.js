@@ -148,9 +148,6 @@ async function runLoop(commanders, brackets, results, token) {
             commander: cmdr,
             bracket: effectiveBracket,
             deck: deckResult.mainDeck,
-            criticalCardCounts: deckResult.criticalCardCounts,
-            detectedWincons: deckResult.detectedWincons,
-            executionScore: deckResult.executionScore,
             lensResults: deckResult.lensResults,
           })
         } catch (err) {
@@ -172,8 +169,13 @@ async function runLoop(commanders, brackets, results, token) {
           warnings: (deckResult.warnings ?? [])
             .filter(w => w.severity === 'warning' || w.severity === 'error')
             .map(w => w.message),
-          criticalCardCounts: deckResult.criticalCardCounts ?? countCriticalCards(deckResult.mainDeck),
-          detectedWincons: deckResult.detectedWincons ?? [],
+          // Phase 8: orchestrator no longer returns these fields. Compute
+          // from the deck for display in the eval-harness JSON. Helpers
+          // remain exported (they're still used inside the orchestrator
+          // and lenses).
+          criticalCardCounts: countCriticalCards(deckResult.mainDeck),
+          detectedWincons: (deckResult.lensResults ?? [])
+            .find(r => r.name === 'win_plan')?._raw?.detectedPatterns ?? [],
           evaluation: evalResult ?? {
             score: null,
             summary: 'Eval call failed',

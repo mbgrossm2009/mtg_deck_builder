@@ -1106,7 +1106,7 @@ Return ONLY JSON. No markdown.`
 // and reports strengths/weaknesses. Used by the eval harness to grade
 // many generations across many commanders without trying to mutate them.
 
-export function buildEvaluationPrompt({ commander, bracket, deck, criticalCardCounts, detectedWincons, executionScore, lensResults }) {
+export function buildEvaluationPrompt({ commander, bracket, deck, lensResults }) {
   const bracketLabel   = BRACKET_LABELS[bracket] ?? 'Unknown'
   const bracketMeaning = BRACKET_DESCRIPTIONS[bracket] ?? ''
 
@@ -1117,31 +1117,32 @@ Your job: SCORE the deck and identify its strengths and weaknesses. You are
 NOT proposing swaps — only judging.
 
 ═══════════════════════════════════════════════════════════════════════════
-USE THE PRECOMPUTED \`counts\` FIELD AT THE TOP OF THE USER PAYLOAD.
-The deck builder already counted tutors, removal, ramp, draw, fastMana,
-and wincons by tag. This count INCLUDES soft tutors (Goblin Matron,
-Eladamri's Call, Diabolic Intent, Birthing Pod, Survival of the Fittest,
-Chord of Calling, Worldly Tutor, Mystical Tutor, Green Sun's Zenith,
-Demonic/Vampiric Tutor, Imperial Seal, etc.). DO NOT recount tutors,
-removal, or wincons by reading the card list yourself — your eyeball
-count consistently misses soft tutors and tagged removal.
+USE THE \`lens_verdicts\` BLOCK AT THE TOP OF THE USER PAYLOAD.
+The deck-builder already analyzed this deck across multiple dimensions
+(commander_execution, win_plan, bracket_fit, mana_base) and produced
+verdicts with evidence (per-card facts) and suggestions. DO NOT recount
+tutors, wincons, removal, or anything else by reading the card list
+yourself — your eyeball count consistently misses soft tutors and
+multi-card patterns.
+
+If \`win_plan\` lists a detected pattern in its evidence
+("aristocrats: sac outlet + Blood Artist" or "etb-drain: token producer
++ Impact Tremors" or "combat-tribal: 4 lords + 22 vampires"), the deck
+HAS a win plan. Do NOT write "no clear win condition" — describe the
+pattern as the win plan instead.
+
+If \`commander_execution\` reports 65% on-plan, do NOT invent a lower
+number from your own card-list eyeball.
 
 WRONG (do NOT do this):
-  counts.tutors = 6, but evaluator writes:
-    "Only 4 tutors (Demonic, Vampiric, Imperial Seal, Gamble) — low for B4"
-  ❌ This invents a count of 4 by listing only the named-after-tutor cards.
+  lens reports score 0.65, but evaluator writes:
+    "Only 4 cards advance the strategy" (invented from card-name eyeball)
+  ❌
 
 RIGHT:
-  counts.tutors = 6, evaluator writes:
-    "6 tutors is appropriate for B4" or
-    "6 tutors — could push to 8 for B5 consistency"
-  ✓ Trusts the precomputed count, focuses critique on actual gaps.
-
-Same rule applies to \`detected_wincon_patterns\`. If that field lists
-"aristocrats: sac outlet + Blood Artist" or "etb-drain: token producer
-+ Impact Tremors" or "combat-tribal: 4 lords + 22 vampires", the deck
-HAS a win plan. Do NOT write "no clear win condition" when a pattern is
-listed — describe the pattern as the win plan instead.
+  lens reports score 0.65 with evidence "24 of 37 on plan", evaluator:
+    "65% commander-relevant — solid for B3, room to push higher for B5"
+  ✓ Trusts the lens evidence, focuses critique on actual gaps.
 ═══════════════════════════════════════════════════════════════════════════
 
 ═══════════════════════════════════════════════════════════════════════════
@@ -1446,10 +1447,10 @@ Return ONLY JSON.`
   // result includes evidence (per-card facts) and suggestions (actionable
   // improvements) — the LLM gets to see the WHY behind every verdict.
   //
-  // Legacy `counts`, `detected_wincon_patterns`, and `commander_execution`
-  // remain for compatibility — they overlap with lens output but help if
-  // the model ignores the structured form. They will be removed in a
-  // future phase once we confirm the LLM trusts the lens block.
+  // Phase 8: legacy `counts`, `detected_wincon_patterns`, and
+  // `commander_execution` fields removed. The same data lives inside
+  // each lens's `evidence` and `_raw` — the LLM should consume
+  // `lens_verdicts` as the single source of truth.
   const user = {
     lens_verdicts: (lensResults ?? []).map(r => ({
       lens:        r.name,
@@ -1460,9 +1461,6 @@ Return ONLY JSON.`
       suggestions: r.suggestions ?? [],
     })),
 
-    counts: criticalCardCounts ?? null,
-    detected_wincon_patterns: detectedWincons ?? [],
-    commander_execution: executionScore ?? null,
     commander: compactCommander(commander),
     bracket: { number: bracket, label: bracketLabel, meaning: bracketMeaning },
     deck_size: deck.length,
