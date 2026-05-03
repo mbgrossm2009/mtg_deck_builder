@@ -142,15 +142,18 @@ const COMMANDER_MECHANIC_PATTERNS = [
     ],
   },
   {
-    // Commander cares about opponents losing life (Sheoldred, Vito, etc.).
-    // Distinct from "you pay X life" or "this deals damage to" — those are
-    // life COSTS or direct damage. Lifeloss-cares means the commander has
-    // a TRIGGER or ABILITY tied to opponents losing life, OR drains life
-    // off opponents as part of its core text.
+    // Commander cares about opponents losing life (Sheoldred, Vito, Far
+    // Fortune's speed mechanic, etc.). Distinct from "you pay X life"
+    // (cost) or "this deals damage to" (direct damage). Lifeloss-cares
+    // means the commander has a TRIGGER or ABILITY tied to opponents
+    // losing life, OR drains life off opponents as part of its core text.
+    //
+    // Match both "whenever" (recurring trigger) and "when" (one-shot or
+    // continuous trigger) — both signal that the commander cares.
     tag: 'cares_about_lifeloss',
     patterns: [
-      /whenever (?:an? |any )?opponent loses life/i,
-      /whenever a player loses life/i,
+      /when(?:ever)? (?:an? |any )?opponent loses life/i,
+      /when(?:ever)? a player loses life/i,
       /(?:they|target opponent|target player|each opponent|each player) loses? \d+ life/i,
       /loses? life equal to/i,
     ],

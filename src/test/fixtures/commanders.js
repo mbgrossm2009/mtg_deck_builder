@@ -154,6 +154,23 @@ export const WINTER = commander('Winter, Cynical Opportunist', ['B'], {
   subtype: 'Human Warlock',
 })
 
+// ─── Niche commander with brand-new keywords (Far Fortune — Aetherdrift) ───
+//
+// Why this fixture exists: Far Fortune introduced the "Start your engines!"
+// and "Max speed" mechanics in Aetherdrift (2025). Niche, low EDHREC rank,
+// and uses oracle text patterns the role/mechanic detectors had never seen.
+// Including Far Fortune in ALL_COMMANDERS forces the deck-gen pipeline to
+// gracefully handle weird new templates instead of silently crashing.
+
+export const FAR_FORTUNE = commander('Far Fortune, End Boss', ['B','R'], {
+  type: 'Legendary Creature — Human Mercenary',
+  cmc: 4, cost: '{2}{B}{R}',
+  text: 'Start your engines! (If you have no speed, it starts at 1. It increases once on each of your turns when an opponent loses life. Max speed is 4.)\n' +
+    'Whenever you attack, Far Fortune deals 1 damage to each opponent.\n' +
+    'Max speed — If a source you control would deal damage to an opponent or a permanent an opponent controls, it deals that much damage plus 1 instead.',
+  subtype: 'Human Mercenary',
+})
+
 // ─── Cost-reduction tribal (Ur-Dragon) ──────────────────────────────────────
 
 export const UR_DRAGON = commander('The Ur-Dragon', ['W','U','B','R','G'], {
@@ -174,7 +191,7 @@ export const ALL_COMMANDERS = [
   MEREN, KARADOR,
   HELIOD,
   ATRAXA,
-  SHEOLDRED, ERTAI, WINTER, UR_DRAGON,
+  SHEOLDRED, ERTAI, WINTER, UR_DRAGON, FAR_FORTUNE,
 ]
 
 export const TRIBAL_COMMANDERS  = [TIAMAT, KRENKO, EDGAR_MARKOV, MARWYN, SHELOB, UR_DRAGON]
