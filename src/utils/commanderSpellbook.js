@@ -79,11 +79,23 @@ function normalizeSpellbookEntry(entry) {
   }
 }
 
+// True when running under vitest (or any test runner that sets MODE=test).
+// We skip the network call entirely in tests to avoid noisy warnings and
+// flaky behavior — the hardcoded combo list in comboRules.js is what tests
+// rely on anyway.
+const IS_TEST_ENV =
+  (typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'test') ||
+  (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') ||
+  (typeof process !== 'undefined' && process.env?.VITEST === 'true')
+
 // Fetches combos from Commander Spellbook for the given commander+collection.
 // Returns an array of internal combo objects (cards/description/minimumBracket).
 // Best-effort: returns [] on failure, hits the cache aggressively.
 export async function fetchSpellbookCombos(commander, collection) {
   if (!commander || !collection || collection.length === 0) return []
+  // Skip the network call in tests — hardcoded combos are sufficient and
+  // the live API has been returning 400 from the test environment.
+  if (IS_TEST_ENV) return []
 
   const sig = signature(commander, collection)
   const cache = readCache()
