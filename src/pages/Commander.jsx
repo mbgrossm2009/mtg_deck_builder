@@ -62,7 +62,11 @@ export default function Commander() {
   return (
     <div>
       <header style={styles.header}>
-        <h1 style={styles.title}>Choose Your Commander</h1>
+        <div style={styles.eyebrow}>
+          <span aria-hidden style={styles.eyebrowOrnament}>◆</span>
+          Commander
+        </div>
+        <h1 style={styles.title}>Choose your commander</h1>
         <p style={styles.description}>
           Search for a legendary creature. The deck will be built around its color identity, abilities, and the strategy that fits your collection.
         </p>
@@ -126,6 +130,25 @@ export default function Commander() {
 const styles = {
   header: {
     marginBottom: 'var(--space-8)',
+  },
+  eyebrow: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 'var(--space-2)',
+    fontSize: 'var(--text-xs)',
+    fontWeight: 600,
+    letterSpacing: '0.10em',
+    textTransform: 'uppercase',
+    color: 'var(--accent-hover)',
+    marginBottom: 'var(--space-3)',
+    padding: '4px 12px',
+    background: 'var(--accent-soft)',
+    border: '1px solid var(--accent-ring)',
+    borderRadius: '999px',
+  },
+  eyebrowOrnament: {
+    color: 'var(--accent-2)',
+    fontSize: '0.7rem',
   },
   title: {
     fontSize: 'var(--text-3xl)',

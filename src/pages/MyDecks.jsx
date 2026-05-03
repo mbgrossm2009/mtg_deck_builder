@@ -50,7 +50,11 @@ export default function MyDecks() {
   return (
     <div>
       <header style={styles.header}>
-        <h1 style={styles.heading}>My Decks</h1>
+        <div style={styles.eyebrow}>
+          <span aria-hidden style={styles.eyebrowOrnament}>◆</span>
+          My Decks
+        </div>
+        <h1 style={styles.heading}>Your saved builds</h1>
         <p style={styles.sub}>
           {decks.length > 0
             ? `${decks.length} saved deck${decks.length !== 1 ? 's' : ''} — every one built from your collection.`
@@ -175,8 +179,24 @@ function identityGlowStyle(colorIdentity) {
 
 const styles = {
   header:  { marginBottom: 'var(--space-8)' },
+  eyebrow: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 'var(--space-2)',
+    fontSize: 'var(--text-xs)',
+    fontWeight: 600,
+    letterSpacing: '0.10em',
+    textTransform: 'uppercase',
+    color: 'var(--accent-hover)',
+    marginBottom: 'var(--space-3)',
+    padding: '4px 12px',
+    background: 'var(--accent-soft)',
+    border: '1px solid var(--accent-ring)',
+    borderRadius: '999px',
+  },
+  eyebrowOrnament: { color: 'var(--accent-2)', fontSize: '0.7rem' },
   heading: { fontSize: 'var(--text-3xl)', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)', marginBottom: 'var(--space-2)' },
-  sub:     { color: 'var(--text-muted)', fontSize: 'var(--text-base)', lineHeight: 1.6 },
+  sub:     { color: 'var(--text-muted)', fontSize: 'var(--text-base)', lineHeight: 1.6, maxWidth: '640px' },
   placeholder: {
     padding: 'var(--space-12)',
     background: 'var(--surface-1)',

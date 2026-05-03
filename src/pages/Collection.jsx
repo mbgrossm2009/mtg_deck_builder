@@ -794,14 +794,18 @@ export default function Collection() {
   return (
     <div>
       <header style={styles.header}>
-        <h1 style={styles.heading}>My Collection</h1>
-        <p style={styles.tagline}>The cards you own. Every generated deck is built from this pool — even your bulk has potential.</p>
+        <div style={styles.eyebrow}>
+          <span aria-hidden style={styles.eyebrowOrnament}>◆</span>
+          My Collection
+        </div>
+        <h1 style={styles.heading}>The cards you own</h1>
+        <p style={styles.tagline}>Every generated deck is built from this pool — even your bulk has potential.</p>
       </header>
       <div style={styles.subRow}>
         <p style={styles.sub}>
           {totalUnique > 0
             ? `${totalUnique} unique card${totalUnique !== 1 ? 's' : ''} · ${totalCopies} total cop${totalCopies !== 1 ? 'ies' : 'y'}`
-            : 'Your collection is empty. Add cards from the Commander page or import below.'}
+            : 'Your collection is empty. Import a CSV/TXT below to get started.'}
         </p>
         {totalUnique > 0 && (
           confirmingClear ? (
@@ -1067,8 +1071,27 @@ const SearchBar = memo(function SearchBar({ value, onChange, collection }) {
 
 const styles = {
   header:   { marginBottom: 'var(--space-6)' },
+  eyebrow: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 'var(--space-2)',
+    fontSize: 'var(--text-xs)',
+    fontWeight: 600,
+    letterSpacing: '0.10em',
+    textTransform: 'uppercase',
+    color: 'var(--accent-hover)',
+    marginBottom: 'var(--space-3)',
+    padding: '4px 12px',
+    background: 'var(--accent-soft)',
+    border: '1px solid var(--accent-ring)',
+    borderRadius: '999px',
+  },
+  eyebrowOrnament: {
+    color: 'var(--accent-2)',
+    fontSize: '0.7rem',
+  },
   heading:  { fontSize: 'var(--text-3xl)', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)', marginBottom: 'var(--space-2)' },
-  tagline:  { color: 'var(--text-muted)', fontSize: 'var(--text-base)', lineHeight: 1.6 },
+  tagline:  { color: 'var(--text-muted)', fontSize: 'var(--text-base)', lineHeight: 1.6, maxWidth: '640px' },
   sub: { color: 'var(--text-muted)', marginBottom: '0', fontSize: 'var(--text-sm)' },
   subRow: {
     display: 'flex',

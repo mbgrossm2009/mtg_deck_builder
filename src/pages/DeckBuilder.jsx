@@ -32,6 +32,20 @@ const ROLE_ORDER = ['land', 'ramp', 'draw', 'removal', 'wipe', 'protection', 'wi
 
 const SEVERITY_COLORS = { error: 'var(--danger)', warning: 'var(--warning)', info: '#60a5fa' }
 
+// Bracket tint mapping — each bracket gets an MTG color personality.
+// B1 Exhibition / B2 Core feel casual = white (life-gain, tokens, low-power).
+// B3 Upgraded sits in the middle = blue (analysis, optimization).
+// B4 Optimized leans aggressive = red (fast mana, fast wins).
+// B5 Competitive is the apex = black (tutors, combos, no mercy).
+// G is reserved for the "Generate with AI" sparkle treatment.
+const BRACKET_TINT = {
+  1: { glow: 'var(--mana-w-glow)', soft: 'var(--mana-w-soft)', fg: 'var(--mana-w)' },
+  2: { glow: 'var(--mana-w-glow)', soft: 'var(--mana-w-soft)', fg: 'var(--mana-w)' },
+  3: { glow: 'var(--mana-u-glow)', soft: 'var(--mana-u-soft)', fg: 'var(--mana-u)' },
+  4: { glow: 'var(--mana-r-glow)', soft: 'var(--mana-r-soft)', fg: 'var(--mana-r)' },
+  5: { glow: 'var(--mana-b-glow)', soft: 'var(--mana-b-soft)', fg: 'var(--mana-b)' },
+}
+
 export default function DeckBuilder() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -186,8 +200,12 @@ export default function DeckBuilder() {
   return (
     <div style={styles.page}>
       <header style={styles.pageHeader}>
-        <h1 style={styles.heading}>Deck Builder</h1>
-        <p style={styles.subhead}>Generate a 99-card deck tuned to your commander.</p>
+        <div style={styles.pageEyebrow}>
+          <span aria-hidden style={styles.pageEyebrowOrnament}>◆</span>
+          Deck Builder
+        </div>
+        <h1 style={styles.heading}>Build your 99</h1>
+        <p style={styles.subhead}>Tune the bracket and let BuiltFromBulk assemble a deck around your commander — using only the cards you already own.</p>
       </header>
 
       {/* Commander strip */}
@@ -197,16 +215,28 @@ export default function DeckBuilder() {
       <div style={styles.section}>
         <div style={styles.sectionLabel}>Target Bracket</div>
         <div style={styles.bracketRow}>
-          {[1, 2, 3, 4, 5].map(b => (
-            <button
-              key={b}
-              onClick={() => setBracket(b)}
-              style={{ ...styles.bracketBtn, ...(bracket === b ? styles.bracketBtnActive : {}) }}
-            >
-              <span style={{ ...styles.bracketNum, ...(bracket === b ? styles.bracketNumActive : {}) }}>{b}</span>
-              <span style={styles.bracketLabel}>{BRACKET_LABELS[b]}</span>
-            </button>
-          ))}
+          {[1, 2, 3, 4, 5].map(b => {
+            const tint = BRACKET_TINT[b]
+            const isActive = bracket === b
+            const activeStyle = isActive && tint ? {
+              borderColor: tint.glow,
+              background: tint.soft,
+              color: 'var(--text)',
+              boxShadow: `0 0 0 1px ${tint.glow}, 0 4px 16px ${tint.glow}`,
+            } : (isActive ? styles.bracketBtnActive : {})
+            const numStyle = isActive && tint ? { color: tint.fg } :
+                             (isActive ? styles.bracketNumActive : {})
+            return (
+              <button
+                key={b}
+                onClick={() => setBracket(b)}
+                style={{ ...styles.bracketBtn, ...activeStyle }}
+              >
+                <span style={{ ...styles.bracketNum, ...numStyle }}>{b}</span>
+                <span style={styles.bracketLabel}>{BRACKET_LABELS[b]}</span>
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -572,25 +602,62 @@ export default function DeckBuilder() {
 
 function CommanderStrip({ commander }) {
   const image = getCardImage(commander)
+  const colorIdentity = commander.color_identity ?? []
+  const stripStyle = { ...styles.commanderStrip, ...identityGlow(colorIdentity) }
   return (
-    <div style={styles.commanderStrip}>
-      {image && <img src={image} alt={commander.name} style={styles.commanderImg} />}
-      <div>
+    <div style={stripStyle}>
+      {image && (
+        <div style={styles.commanderImgWrap}>
+          <img src={image} alt={commander.name} style={styles.commanderImg} />
+        </div>
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={styles.commanderEyebrow}>◆ Building for</div>
         <div style={styles.commanderName}>{commander.name}</div>
         <div style={styles.commanderType}>{commander.type_line}</div>
-        <div style={styles.pips}>
-          {commander.color_identity.length > 0
-            ? commander.color_identity.map(c => (
-                <span key={c} style={{ ...styles.pip, background: COLOR_PIPS[c]?.bg, color: COLOR_PIPS[c]?.color }}>
-                  {c}
-                </span>
+        <div className="mana-pip-row" style={{ marginTop: 'var(--space-2)' }}>
+          {colorIdentity.length > 0
+            ? colorIdentity.map(c => (
+                <span key={c} className={`mana-pip ${MANA_PIP_CLASS[c]}`}>{c}</span>
               ))
-            : <span style={styles.colorless}>Colorless</span>
+            : <span className="mana-pip mana-pip-c">C</span>
           }
         </div>
       </div>
     </div>
   )
+}
+
+const MANA_PIP_CLASS = {
+  W: 'mana-pip-w', U: 'mana-pip-u', B: 'mana-pip-b', R: 'mana-pip-r', G: 'mana-pip-g',
+}
+
+const COLOR_GLOW = {
+  W: 'var(--mana-w-glow)',
+  U: 'var(--mana-u-glow)',
+  B: 'var(--mana-b-glow)',
+  R: 'var(--mana-r-glow)',
+  G: 'var(--mana-g-glow)',
+}
+
+function identityGlow(colorIdentity) {
+  if (!colorIdentity || colorIdentity.length === 0) return {}
+  if (colorIdentity.length === 1) {
+    const g = COLOR_GLOW[colorIdentity[0]]
+    return g ? { borderColor: g, boxShadow: `0 0 0 1px ${g}, 0 8px 24px ${g}` } : {}
+  }
+  if (colorIdentity.length === 2) {
+    const [a, b] = colorIdentity
+    return {
+      borderColor: COLOR_GLOW[a],
+      boxShadow: `0 0 0 1px ${COLOR_GLOW[a]}, 0 6px 18px ${COLOR_GLOW[a]}, 0 12px 28px ${COLOR_GLOW[b]}`,
+    }
+  }
+  const tones = colorIdentity.slice(0, 3).map(c => COLOR_GLOW[c]).filter(Boolean)
+  return {
+    borderColor: 'var(--border-strong)',
+    boxShadow: tones.map((t, i) => `0 0 ${10 + i * 6}px ${t}`).join(', '),
+  }
 }
 
 function StatPill({ label, value, highlight }) {
@@ -1021,8 +1088,27 @@ function groupByPrimaryRole(cards) {
 const styles = {
   page:            { position: 'relative' },
   pageHeader:      { marginBottom: 'var(--space-8)' },
+  pageEyebrow: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 'var(--space-2)',
+    fontSize: 'var(--text-xs)',
+    fontWeight: 600,
+    letterSpacing: '0.10em',
+    textTransform: 'uppercase',
+    color: 'var(--accent-hover)',
+    marginBottom: 'var(--space-3)',
+    padding: '4px 12px',
+    background: 'var(--accent-soft)',
+    border: '1px solid var(--accent-ring)',
+    borderRadius: '999px',
+  },
+  pageEyebrowOrnament: {
+    color: 'var(--accent-2)',
+    fontSize: '0.7rem',
+  },
   heading:         { fontSize: 'var(--text-3xl)', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 'var(--space-2)', color: 'var(--text)' },
-  subhead:         { fontSize: 'var(--text-base)', color: 'var(--text-muted)', lineHeight: 1.6 },
+  subhead:         { fontSize: 'var(--text-base)', color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: '640px' },
   emptyState:      {
                      padding: 'var(--space-12) var(--space-6)',
                      background: 'var(--surface-1)',
@@ -1041,13 +1127,35 @@ const styles = {
   section:         { marginBottom: 'var(--space-6)' },
   sectionLabel:    { color: 'var(--text-muted)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.10em', fontWeight: 600, marginBottom: 'var(--space-3)' },
 
-  commanderStrip:  { display: 'flex', gap: 'var(--space-4)', alignItems: 'center', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', marginBottom: 'var(--space-6)', boxShadow: 'var(--shadow-sm)' },
-  commanderImg:    { width: '70px', borderRadius: 'var(--radius-sm)', flexShrink: 0 },
+  commanderStrip:  {
+    display: 'flex',
+    gap: 'var(--space-4)',
+    alignItems: 'center',
+    background: 'linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 60%), var(--surface-1)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-lg)',
+    padding: 'var(--space-4)',
+    marginBottom: 'var(--space-6)',
+    boxShadow: 'var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,0.04)',
+    transition: 'border-color 240ms ease, box-shadow 240ms ease',
+  },
+  commanderImgWrap: {
+    flexShrink: 0,
+    borderRadius: 'var(--radius-sm)',
+    overflow: 'hidden',
+    boxShadow: '0 4px 16px rgba(0,0,0,0.40)',
+  },
+  commanderImg:    { width: '70px', display: 'block' },
+  commanderEyebrow: {
+    fontSize: 'var(--text-xs)',
+    fontWeight: 600,
+    color: 'var(--text-subtle)',
+    letterSpacing: '0.10em',
+    textTransform: 'uppercase',
+    marginBottom: 'var(--space-1)',
+  },
   commanderName:   { fontWeight: 700, fontSize: 'var(--text-lg)', color: 'var(--text)', marginBottom: '4px' },
   commanderType:   { color: 'var(--text-muted)', fontSize: 'var(--text-sm)', fontStyle: 'italic', marginBottom: 'var(--space-2)' },
-  pips:            { display: 'flex', gap: '4px', flexWrap: 'wrap' },
-  pip:             { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', borderRadius: '50%', fontSize: '0.7rem', fontWeight: '700' },
-  colorless:       { fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' },
 
   modeRow:         { display: 'flex', gap: '10px', flexWrap: 'wrap' },
   modeBtn:         { flex: '1', minWidth: '180px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px', padding: '12px 14px', background: 'var(--bg-app)', border: '1px solid var(--border)', borderRadius: '8px', cursor: 'pointer', color: 'var(--text-muted)', textAlign: 'left' },
@@ -1068,17 +1176,23 @@ const styles = {
   aiGenerateBtn:   {
                      display: 'flex',
                      width: '100%',
-                     padding: '14px',
-                     background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+                     padding: '16px',
+                     // Multi-stop WUBRG-inspired gradient. Reads as "all five
+                     // colors at work" without naming any of them — the AI
+                     // pass is the marquee feature; the gradient sells it.
+                     background:
+                       'linear-gradient(135deg, #8b5cf6 0%, #6366f1 30%, #3b82f6 55%, #f59e0b 100%)',
+                     backgroundSize: '200% 200%',
                      color: '#fff',
-                     border: '1px solid rgba(255,255,255,0.08)',
+                     border: '1px solid rgba(255,255,255,0.10)',
                      borderRadius: 'var(--radius-md)',
                      fontSize: 'var(--text-base)',
                      fontWeight: 700,
                      letterSpacing: '0.01em',
                      marginBottom: 'var(--space-3)',
-                     boxShadow: '0 4px 14px rgba(99, 102, 241, 0.30)',
-                     transition: 'transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease',
+                     boxShadow:
+                       '0 6px 20px rgba(99, 102, 241, 0.35), 0 1px 0 rgba(255,255,255,0.08) inset',
+                     transition: 'transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease, background-position 600ms ease',
                    },
   heuristicBtn:    {
                      display: 'flex',
