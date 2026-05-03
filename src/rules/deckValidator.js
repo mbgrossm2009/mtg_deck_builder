@@ -150,6 +150,22 @@ export function validateDeckAtBracket(mainDeck, commander, bracket) {
     )
   }
 
+  // Interaction floor warning. Counts removal + wipe + counterspells
+  // (cardRoles tags counters as `removal`). Floors match the orchestrator's
+  // REMOVAL_FLOOR_BY_BRACKET; the orchestrator tries to add interaction up
+  // to the floor, but if the user's collection doesn't have more, we still
+  // want the deck-quality warning.
+  const INTERACTION_FLOOR = { 1: 4, 2: 5, 3: 7, 4: 8, 5: 10 }
+  const interactionCount = (counts.removal ?? 0) + (counts.wipe ?? 0)
+  const interactionFloor = INTERACTION_FLOOR[bracket]
+  if (interactionFloor && interactionCount < interactionFloor) {
+    filtered.push(
+      `Only ${interactionCount} interaction pieces at B${bracket} ` +
+      `(floor ${interactionFloor}+). Includes removal, wipes, and counterspells. ` +
+      `Deck may struggle to answer threats or protect its plan.`
+    )
+  }
+
   return { errors, warnings: filtered }
 }
 

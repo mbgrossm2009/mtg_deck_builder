@@ -656,10 +656,15 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     }
   }
 
-  // 10b.2. Removal floor — every deck needs answers. The LLM keeps
-  // shipping decks with 1-3 removal pieces, which is what the eval
+  // 10b.2. Removal/interaction floor — every deck needs answers. The LLM
+  // keeps shipping decks with 1-3 removal pieces, which is what the eval
   // evaluator complains about. Combined removal + wipe count vs floor.
-  const REMOVAL_FLOOR_BY_BRACKET = { 1: 5, 2: 6, 3: 7, 4: 7, 5: 6 }
+  // Counts include counterspells (cardRoles tags counters as `removal`
+  // role) so the B5 floor of 10 is "10 interaction pieces" — typical
+  // cEDH spread is ~5 spot removal + ~5 counters. Raised B4 7→8 and
+  // B5 6→10 (2026-05-03) after eval data showed B5 decks at 6-9
+  // interaction were under-equipped against fast combo.
+  const REMOVAL_FLOOR_BY_BRACKET = { 1: 5, 2: 6, 3: 7, 4: 8, 5: 10 }
   const removalFloor = REMOVAL_FLOOR_BY_BRACKET[bracket] ?? 6
   {
     const isRemoval = (c) => (c.roles ?? []).includes('removal') ||

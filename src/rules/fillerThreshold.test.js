@@ -212,3 +212,43 @@ describe('validateDeckAtBracket — ramp upper cap', () => {
     expect(warns .some(w => /ramp pieces/.test(w))).toBe(true)
   })
 })
+
+describe('validateDeckAtBracket — interaction floor', () => {
+  // Builds a deck with explicit interaction count. Interaction = removal
+  // + wipe + counterspells (counterspells get the `removal` role).
+  function deckWithInteraction(interactionCount, opts = {}) {
+    const lands = opts.lands ?? 36
+    const ramp  = opts.ramp ?? 8
+    const cards = []
+    for (let n = 0; n < lands; n++)
+      cards.push({ name: `L-${n}`, roles: ['land'], color_identity: ['B'], type_line: 'Basic Land', isBasicLand: true, cmc: 0 })
+    for (let n = 0; n < ramp; n++)
+      cards.push({ name: `R-${n}`, roles: ['ramp'], color_identity: ['B'], type_line: 'Artifact', cmc: 2 })
+    for (let n = 0; n < interactionCount; n++)
+      cards.push({ name: `X-${n}`, roles: ['removal'], color_identity: ['B'], type_line: 'Instant', cmc: 2 })
+    const filler = 99 - cards.length
+    for (let n = 0; n < filler; n++)
+      cards.push({ name: `S-${n}`, roles: ['synergy'], color_identity: ['B'], type_line: 'Creature', cmc: 3 })
+    return cards
+  }
+
+  it('B4 with 6 interaction triggers floor warning (B4 floor = 8)', () => {
+    const { warnings } = validateDeckAtBracket(deckWithInteraction(6), cmdr, 4)
+    expect(warnings.some(w => /interaction pieces/.test(w))).toBe(true)
+  })
+
+  it('B5 with 6 interaction triggers floor warning (B5 floor = 10)', () => {
+    const { warnings } = validateDeckAtBracket(deckWithInteraction(6), cmdr, 5)
+    expect(warnings.some(w => /interaction pieces/.test(w))).toBe(true)
+  })
+
+  it('B5 with 12 interaction does NOT trigger', () => {
+    const { warnings } = validateDeckAtBracket(deckWithInteraction(12), cmdr, 5)
+    expect(warnings.some(w => /interaction pieces/.test(w))).toBe(false)
+  })
+
+  it('B3 with 7 interaction does NOT trigger', () => {
+    const { warnings } = validateDeckAtBracket(deckWithInteraction(7), cmdr, 3)
+    expect(warnings.some(w => /interaction pieces/.test(w))).toBe(false)
+  })
+})
