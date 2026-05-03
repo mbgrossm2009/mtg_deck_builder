@@ -326,6 +326,7 @@ export async function evaluateDeck({ commander, bracket, deck, lensResults, onPr
       weaknesses: ['No real judgment available.'],
       bracketFitVerdict: 'within_band',
       bracketFitNotes: 'Mock — bypassed real LLM.',
+      deckViability: 'valid',
       _meta: { mode: 'mock' },
     }
   }
@@ -389,6 +390,7 @@ export async function evaluateDeck({ commander, bracket, deck, lensResults, onPr
       weaknesses: [],
       bracketFitVerdict: null,
       bracketFitNotes: '',
+      deckViability: null,
       _meta: { mode: 'error', error: msg },
     }
   }

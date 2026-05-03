@@ -12,7 +12,7 @@
 //   mild   → no cap
 
 import { describe, it, expect } from 'vitest'
-import { classifyQualitySignals, clampEvalScore } from './evalScoreClamp'
+import { classifyQualitySignals, clampEvalScore, classifyDeckViability } from './evalScoreClamp'
 
 const eval8 = {
   score: 8,
@@ -178,12 +178,18 @@ describe('clampEvalScore — fatal beats severe', () => {
 })
 
 describe('clampEvalScore — passthrough cases', () => {
-  it('returns input unchanged when no issues', () => {
+  it('returns input score+content unchanged when no issues (deckViability is added)', () => {
+    // Phase 2.6: clampEvalScore always sets deckViability now, so the
+    // returned object is no longer the strict-identity input. Score and
+    // content remain untouched; only the new flag is added.
     const result = clampEvalScore(eval8, {
       bracket: 3, fillerCount: 4, fillerCap: 6,
       wincons: 2, detectedWincons: [],
     })
-    expect(result).toBe(eval8)        // strict identity — same object
+    expect(result.score).toBe(eval8.score)
+    expect(result.summary).toBe(eval8.summary)
+    expect(result.deckViability).toBe('valid')
+    expect(result._clampedFrom).toBeUndefined()
   })
 
   it('passes through null eval result (LLM call failed)', () => {
@@ -216,5 +222,83 @@ describe('clampEvalScore — preserves other eval fields', () => {
     expect(result.weaknesses).toEqual(['w1'])
     expect(result.bracketFitNotes).toBe('notes')
     expect(result._meta).toEqual({ promptTokens: 100 })
+  })
+})
+
+// Phase 2.6: deck viability flag aggregates the existing severity signals
+// into a single user-facing enum. Used by UI to render a status badge
+// without parsing the clamp-reasons array.
+describe('classifyDeckViability', () => {
+  it('returns "valid" when no quality issues are detected', () => {
+    const v = classifyDeckViability({
+      bracket: 3, fillerCount: 2, fillerCap: 6,
+      wincons: 3, detectedWincons: ['aristocrats: ...'],
+      rampCount: 10, rampCap: 14,
+      interactionCount: 8, interactionFloor: 7,
+    })
+    expect(v).toBe('valid')
+  })
+
+  it('returns "unstable" when a severe issue fires (filler-high)', () => {
+    const v = classifyDeckViability({
+      bracket: 3, fillerCount: 8, fillerCap: 6,    // severe: 6 < 8 ≤ 12
+      wincons: 3, detectedWincons: [],
+    })
+    expect(v).toBe('unstable')
+  })
+
+  it('returns "non-competitive" when a fatal issue fires (filler-runaway)', () => {
+    const v = classifyDeckViability({
+      bracket: 3, fillerCount: 14, fillerCap: 6,   // fatal: > 12
+      wincons: 3, detectedWincons: [],
+    })
+    expect(v).toBe('non-competitive')
+  })
+
+  it('returns "non-competitive" when ramp is over 1.5× cap', () => {
+    const v = classifyDeckViability({
+      bracket: 4, fillerCount: 0, fillerCap: 5,
+      wincons: 3, detectedWincons: [],
+      rampCount: 30, rampCap: 16,                  // 30 > 16 × 1.5 = 24
+    })
+    expect(v).toBe('non-competitive')
+  })
+
+  it('returns "unstable" when interaction is below floor', () => {
+    const v = classifyDeckViability({
+      bracket: 4, fillerCount: 0, fillerCap: 5,
+      wincons: 3, detectedWincons: [],
+      interactionCount: 4, interactionFloor: 8,
+    })
+    expect(v).toBe('unstable')
+  })
+})
+
+describe('clampEvalScore — surfaces deckViability', () => {
+  it('attaches deckViability:"valid" when score is clean', () => {
+    const result = clampEvalScore(
+      { score: 8, summary: 'Clean' },
+      { bracket: 3, fillerCount: 2, fillerCap: 6, wincons: 3, detectedWincons: [] }
+    )
+    expect(result.deckViability).toBe('valid')
+    expect(result.score).toBe(8)
+  })
+
+  it('attaches deckViability:"non-competitive" when score is fatal-clamped', () => {
+    const result = clampEvalScore(
+      { score: 9, summary: 'Inflated' },
+      { bracket: 3, fillerCount: 14, fillerCap: 6, wincons: 3, detectedWincons: [] }
+    )
+    expect(result.deckViability).toBe('non-competitive')
+    expect(result.score).toBe(5)
+  })
+
+  it('attaches deckViability:"unstable" when severe-clamped', () => {
+    const result = clampEvalScore(
+      { score: 8, summary: 'Inflated' },
+      { bracket: 3, fillerCount: 8, fillerCap: 6, wincons: 3, detectedWincons: [] }
+    )
+    expect(result.deckViability).toBe('unstable')
+    expect(result.score).toBe(6)
   })
 })

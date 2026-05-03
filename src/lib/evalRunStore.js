@@ -199,6 +199,7 @@ async function runLoop(commanders, brackets, results, token) {
             weaknesses: [],
             bracketFitVerdict: null,
             bracketFitNotes: '',
+            deckViability: null,
           },
           completedAt: new Date().toISOString(),
         })

@@ -133,6 +133,27 @@ export function classifyQualitySignals({
 }
 
 /**
+ * Aggregate the quality signals into a single deck-viability verdict.
+ * Used by UI to render a single status badge ("Valid" / "Unstable" /
+ * "Non-competitive") without parsing the full clamp-reasons array.
+ *
+ * Mapping:
+ *   - non-competitive → any FATAL issue (filler runaway, ramp runaway,
+ *                      no win plan). Deck functions but won't perform at
+ *                      the target bracket.
+ *   - unstable        → any SEVERE issue (filler-high, ramp-high,
+ *                      interaction-low, execution-low, wincons-low).
+ *                      Deck has structural concerns but can still play.
+ *   - valid           → no issues. Deck meets all bracket-floor checks.
+ */
+export function classifyDeckViability(signals) {
+  const issues = classifyQualitySignals(signals)
+  if (issues.some(i => i.severity === 'fatal'))  return 'non-competitive'
+  if (issues.some(i => i.severity === 'severe')) return 'unstable'
+  return 'valid'
+}
+
+/**
  * Apply the clamp to an LLM eval result given quality signals.
  *
  * @param {object} evalResult — raw output from the LLM evaluator (must
@@ -140,11 +161,19 @@ export function classifyQualitySignals({
  * @param {object} signals    — same shape as classifyQualitySignals input
  * @returns {object} new eval result; score may be clamped, summary may
  *   be prefixed with the clamp reason. Original input is not mutated.
+ *   Always sets `deckViability` ('valid' | 'unstable' | 'non-competitive')
+ *   regardless of whether the score itself was clamped.
  */
 export function clampEvalScore(evalResult, signals) {
   if (!evalResult || typeof evalResult.score !== 'number') return evalResult
   const issues = classifyQualitySignals(signals)
-  if (issues.length === 0) return evalResult
+  const viability = classifyDeckViability(signals)
+
+  if (issues.length === 0) {
+    // No structural issues — keep the LLM's score, but still surface
+    // the (positive) viability flag for downstream consumers.
+    return { ...evalResult, deckViability: viability }
+  }
 
   const fatal  = issues.filter(i => i.severity === 'fatal')
   const severe = issues.filter(i => i.severity === 'severe')
@@ -154,9 +183,9 @@ export function clampEvalScore(evalResult, signals) {
   if (severe.length > 0) cap = Math.min(cap, 6)
 
   if (evalResult.score <= cap) {
-    // Already at or below the cap — the LLM's score is honest. Return
-    // the original (no need to mutate).
-    return evalResult
+    // Already at or below the cap — the LLM's score is honest. Still
+    // attach the viability flag for the UI.
+    return { ...evalResult, deckViability: viability }
   }
 
   // Clamp the score and prepend a clamp note to the summary.
@@ -167,5 +196,6 @@ export function clampEvalScore(evalResult, signals) {
     summary: `[score clamped from ${evalResult.score} to ${cap}: ${reasons}] ${evalResult.summary ?? ''}`.trim(),
     _clampedFrom: evalResult.score,
     _clampReasons: issues,
+    deckViability: viability,
   }
 }
