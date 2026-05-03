@@ -164,3 +164,74 @@ describe('Deck summary properties — Winter at B3 (non-tribal Human Warlock)', 
     expect(s.deckSize).toBe(99)
   })
 })
+
+// ─── Filler count — end-to-end against real generated decks ─────────────────
+//
+// The original "62-71 filler cards" warnings on production runs were a
+// counting bug, not a deck-quality bug. cardRoles.js appends 'filler' to
+// EVERY non-land card as a slot-bucket fallback; countRoles was iterating
+// all roles and counting every card with 'filler' anywhere in its array.
+// After the fix in deckValidator.js, filler is only counted when it's the
+// PRIMARY (first) role — i.e., no other role detected.
+//
+// These tests build real decks via the full orchestrator and assert the
+// filler count is in the realistic range (low single digits to ~15),
+// NOT in the 60s. Without these, the bug could regress silently if
+// someone "fixes" countRoles back to the old behavior.
+
+describe('Filler count — real deck generation must produce realistic counts', () => {
+  // For each curated commander, build a deck and assert filler is in a
+  // sane range. The exact count varies by commander/collection but should
+  // never approach the deck size (which would mean every non-land tagged
+  // as filler — the original bug).
+  it.each([
+    ['Tiamat',     TIAMAT,     3],
+    ['Sheoldred',  SHEOLDRED,  3],
+    ['Ertai',      ERTAI,      3],
+    ['Winter',     WINTER,     3],
+  ])('%s B%d filler count is < 25 (not the entire non-land slice)', async (_name, commander, bracket) => {
+    const result = await buildDeck(commander, bracket)
+    const fillerCount = result.mainDeck.filter(c =>
+      (c.roles ?? [])[0] === 'filler'
+    ).length
+    // The original bug produced 60+ on real decks. After the fix, even
+    // the worst commander/collection combo shouldn't exceed ~25.
+    expect(fillerCount).toBeLessThan(25)
+  })
+
+  it('Tiamat B3: filler count + role-tagged count + lands ≈ 99 (no double-count)', async () => {
+    const result = await buildDeck(TIAMAT, 3)
+    const deck = result.mainDeck
+    const lands     = deck.filter(c => (c.type_line ?? '').toLowerCase().includes('land')).length
+    const trueFiller = deck.filter(c => (c.roles ?? [])[0] === 'filler').length
+    const roleCarrying = deck.filter(c => {
+      const roles = c.roles ?? []
+      return roles.length > 0 && roles[0] !== 'filler' && roles[0] !== 'land'
+    }).length
+    // The three buckets should sum to ~99 without inflating from
+    // multi-role cards being counted twice.
+    expect(lands + trueFiller + roleCarrying).toBeGreaterThanOrEqual(99 - 2)
+    expect(lands + trueFiller + roleCarrying).toBeLessThanOrEqual(99 + 2)
+  })
+
+  it('Tiamat B3 stats.roleCounts.filler matches the primary-role definition', async () => {
+    // The orchestrator returns stats.roleCounts which uses countRoles().
+    // Verify the value matches our manual primary-role count.
+    const result = await buildDeck(TIAMAT, 3)
+    const deck = result.mainDeck
+    const reportedFiller = result.stats?.roleCounts?.filler ?? 0
+    const manualFiller   = deck.filter(c => (c.roles ?? [])[0] === 'filler').length
+    expect(reportedFiller).toBe(manualFiller)
+  })
+
+  it('Tiamat B3 reportedFiller is much smaller than the non-land slice', async () => {
+    // Sanity: the bug would have made these counts equal. With the fix,
+    // reportedFiller should be a small fraction of nonLandCount.
+    const result = await buildDeck(TIAMAT, 3)
+    const deck = result.mainDeck
+    const reportedFiller = result.stats?.roleCounts?.filler ?? 0
+    const nonLandCount   = deck.filter(c => !(c.type_line ?? '').toLowerCase().includes('land')).length
+    // Bug shape: reportedFiller === nonLandCount (~63). Post-fix: well under.
+    expect(reportedFiller).toBeLessThan(nonLandCount * 0.5)
+  })
+})
