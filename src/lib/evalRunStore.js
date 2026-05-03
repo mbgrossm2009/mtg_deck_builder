@@ -179,6 +179,7 @@ async function runLoop(commanders, brackets, results, token) {
           evaluation: evalResult ?? {
             score: null,
             summary: 'Eval call failed',
+            topStrength: '',
             strengths: [],
             weaknesses: [],
             bracketFitNotes: '',

@@ -348,6 +348,7 @@ export default function EvalHarness() {
                 <th style={styles.th}>Bracket</th>
                 <th style={styles.th}>Score</th>
                 <th style={styles.th}>Critical cards</th>
+                <th style={styles.th}>Top strength</th>
                 <th style={styles.th}>Top weakness</th>
               </tr>
             </thead>
@@ -360,6 +361,9 @@ export default function EvalHarness() {
                     {row.error ? '⚠' : row.evaluation?.score ?? '?'}
                   </td>
                   <td style={styles.td}>{row.criticalCardCounts ? formatCriticalCards(row.criticalCardCounts) : '-'}</td>
+                  <td style={styles.tdSmall}>
+                    {row.error ? '' : (row.evaluation?.topStrength ?? row.evaluation?.strengths?.[0] ?? '')}
+                  </td>
                   <td style={styles.tdSmall}>
                     {row.error ? row.error : (row.evaluation?.weaknesses?.[0] ?? row.evaluation?.summary ?? '')}
                   </td>

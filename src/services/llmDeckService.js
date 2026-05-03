@@ -185,7 +185,7 @@ export async function critiqueDeck({
  * Critique tries to FIX (proposes swaps). Evaluation just SCORES.
  * Used by the eval harness to grade many decks across many commanders.
  *
- * Returns: { score, summary, strengths[], weaknesses[], bracketFitNotes }
+ * Returns: { score, summary, topStrength, strengths[], weaknesses[], bracketFitNotes }
  * Returns null if the LLM is disabled or the call fails — callers should
  * treat null as "evaluation unavailable" not "deck is bad".
  */
@@ -195,6 +195,7 @@ export async function evaluateDeck({ commander, bracket, deck, lensResults, onPr
     return {
       score: 7,
       summary: 'Mock evaluation — pass disabled in mock mode.',
+      topStrength: 'Mock mode produces deterministic output.',
       strengths: ['Mock mode is deterministic for tests.'],
       weaknesses: ['No real judgment available.'],
       bracketFitNotes: 'Mock — bypassed real LLM.',
@@ -235,6 +236,7 @@ export async function evaluateDeck({ commander, bracket, deck, lensResults, onPr
     return {
       score: null,
       summary: `Eval call failed: ${msg}`,
+      topStrength: '',
       strengths: [],
       weaknesses: [],
       bracketFitNotes: '',

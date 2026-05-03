@@ -1438,6 +1438,11 @@ OUTPUT FORMAT (JSON only — no markdown):
 {
   "score": <integer 1-10>,
   "summary": "<1-2 sentence overall judgment>",
+  "topStrength": "<the SINGLE most notable strength — one short headline that
+    a player would brag about. Pick the one thing this deck does best, not a
+    generic 'mana base is fine'. e.g. 'aggressive 18-tutor cEDH package built
+    around Thoracle' or 'tribal density of 24 vampires + 5 lords closes via
+    combat'. This is the headline; the strengths array is the supporting list.>",
   "strengths": [
     "<concrete observation about a strong aspect — e.g., 'mana base is well-tuned for B5 with 10 fast mana sources and untapped fixing'>"
   ],
@@ -1446,6 +1451,10 @@ OUTPUT FORMAT (JSON only — no markdown):
   ],
   "bracketFitNotes": "<does this deck actually feel like ${bracketLabel}? what's off?>"
 }
+
+The topStrength field is REQUIRED — pick the single best thing about this
+deck and write one short, concrete sentence. It MUST be a paraphrased
+headline, not a verbatim copy of the first item in the strengths array.
 
 Aim for 3 strengths and 3 weaknesses. If the deck genuinely has fewer of
 either, fewer is fine — don't pad.
