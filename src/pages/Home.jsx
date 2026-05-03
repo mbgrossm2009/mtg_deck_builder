@@ -30,24 +30,30 @@ export default function Home() {
       <section style={{ ...styles.hero, ...(isMobile ? styles.heroMobile : {}) }}>
         <div style={styles.heroGlow} aria-hidden />
         <div style={styles.eyebrow}>
-          <span style={styles.eyebrowOrnament} aria-hidden>◆</span>
-          Commander Deck Builder
-          <span style={styles.eyebrowOrnament} aria-hidden>◆</span>
+          <span className="mana-pip-row" aria-hidden>
+            <span className="mana-pip mana-pip-w">W</span>
+            <span className="mana-pip mana-pip-u">U</span>
+            <span className="mana-pip mana-pip-b">B</span>
+            <span className="mana-pip mana-pip-r">R</span>
+            <span className="mana-pip mana-pip-g">G</span>
+          </span>
+          <span style={styles.eyebrowText}>BuiltFromBulk · Commander Deck Builder</span>
         </div>
         <h1 style={{ ...styles.title, ...(isMobile ? styles.titleMobile : {}) }}>
-          Build optimized <span style={styles.titleAccent}>Commander</span> decks
-          <br />from the cards you own.
+          Turn your collection into{' '}
+          <span style={styles.titleAccent}>real Commander decks</span>.
         </h1>
         <p style={styles.subtitle}>
-          Import your collection, pick a commander, and let Deckify generate a
-          power-tuned 99-card deck with strategy detection, bracket-aware filtering,
-          and AI-assisted card selection.
+          Import your collection, pick a commander, and BuiltFromBulk assembles
+          a power-tuned 99-card deck — strategy-aware, bracket-aware, built only
+          from cards you already own.
         </p>
       </section>
 
       <section style={styles.steps}>
         <StepCard
           number={1}
+          mana="w"
           title="Add your cards"
           description="Paste or upload a CSV/TXT export of your collection. Card data is fetched from Scryfall."
           status={hasCards ? 'done' : nextStep === 1 ? 'next' : 'todo'}
@@ -57,6 +63,7 @@ export default function Home() {
         />
         <StepCard
           number={2}
+          mana="u"
           title="Choose your commander"
           description="Search Scryfall for any legendary creature or designated commander."
           status={hasCommander ? 'done' : nextStep === 2 ? 'next' : 'todo'}
@@ -67,8 +74,9 @@ export default function Home() {
         />
         <StepCard
           number={3}
+          mana="r"
           title="Generate your deck"
-          description="Pick a power bracket. Deckify analyzes your collection and assembles 99 cards tuned to your commander."
+          description="Pick a power bracket. BuiltFromBulk analyzes your collection and assembles 99 cards tuned to your commander."
           status={hasDecks ? 'done' : nextStep === 3 ? 'next' : 'todo'}
           progressLabel={hasDecks ? `${progress.decks} saved deck${progress.decks !== 1 ? 's' : ''}` : null}
           ctaLabel={hasDecks ? 'Open builder' : 'Generate deck'}
@@ -94,15 +102,31 @@ export default function Home() {
   )
 }
 
-function StepCard({ number, title, description, status, progressLabel, ctaLabel, to, locked = false }) {
+function StepCard({ number, mana, title, description, status, progressLabel, ctaLabel, to, locked = false }) {
   const isDone = status === 'done'
   const isNext = status === 'next' && !locked
+  const tint = manaTint(mana)
+
+  // The "next up" step uses the assigned mana color for its glow + badge,
+  // cycling W → U → R across the three onboarding steps so the page reads
+  // as MTG-coded without any one step dominating the palette.
+  const nextStyle = isNext && tint ? {
+    borderColor: tint.glow,
+    boxShadow: `0 0 0 1px ${tint.glow}, 0 12px 32px ${tint.glow}`,
+  } : (isNext ? styles.cardNext : {})
+
+  const badgeNextStyle = isNext && tint ? {
+    background: tint.fg,
+    borderColor: tint.fg,
+    color: '#0a0d18',
+    boxShadow: `0 0 12px ${tint.glow}`,
+  } : (isNext ? styles.stepBadgeNext : {})
 
   return (
     <div
       style={{
         ...styles.card,
-        ...(isNext ? styles.cardNext : {}),
+        ...nextStyle,
         ...(locked ? styles.cardLocked : {}),
       }}
     >
@@ -111,12 +135,12 @@ function StepCard({ number, title, description, status, progressLabel, ctaLabel,
           style={{
             ...styles.stepBadge,
             ...(isDone ? styles.stepBadgeDone : {}),
-            ...(isNext ? styles.stepBadgeNext : {}),
+            ...badgeNextStyle,
           }}
         >
           {isDone ? '✓' : number}
         </div>
-        {isNext && <span style={styles.nextPill}>Up next</span>}
+        {isNext && <span style={{ ...styles.nextPill, ...(tint ? { color: tint.fg, background: tint.soft } : {}) }}>Up next</span>}
         {isDone && <span style={styles.donePill}>Complete</span>}
       </div>
 
@@ -142,6 +166,17 @@ function StepCard({ number, title, description, status, progressLabel, ctaLabel,
       )}
     </div>
   )
+}
+
+function manaTint(mana) {
+  switch (mana) {
+    case 'w': return { soft: 'var(--mana-w-soft)', glow: 'var(--mana-w-glow)', fg: 'var(--mana-w)' }
+    case 'u': return { soft: 'var(--mana-u-soft)', glow: 'var(--mana-u-glow)', fg: 'var(--mana-u)' }
+    case 'b': return { soft: 'var(--mana-b-soft)', glow: 'var(--mana-b-glow)', fg: 'var(--mana-b)' }
+    case 'r': return { soft: 'var(--mana-r-soft)', glow: 'var(--mana-r-glow)', fg: 'var(--mana-r)' }
+    case 'g': return { soft: 'var(--mana-g-soft)', glow: 'var(--mana-g-glow)', fg: 'var(--mana-g)' }
+    default:  return null
+  }
 }
 
 const styles = {
@@ -172,20 +207,21 @@ const styles = {
   eyebrow: {
     position: 'relative',
     zIndex: 1,
-    color: 'var(--accent-hover)',
     fontSize: 'var(--text-xs)',
     fontWeight: 600,
-    letterSpacing: '0.12em',
+    letterSpacing: '0.10em',
     textTransform: 'uppercase',
-    marginBottom: 'var(--space-4)',
+    marginBottom: 'var(--space-5)',
     display: 'inline-flex',
     alignItems: 'center',
     gap: 'var(--space-3)',
+    padding: '6px 14px',
+    borderRadius: '999px',
+    background: 'var(--surface-1)',
+    border: '1px solid var(--border)',
   },
-  eyebrowOrnament: {
-    color: 'var(--accent-2)',
-    fontSize: '0.6rem',
-    opacity: 0.7,
+  eyebrowText: {
+    color: 'var(--text-muted)',
   },
   title: {
     position: 'relative',

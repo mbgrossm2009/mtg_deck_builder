@@ -42,8 +42,20 @@ export default function NavBar() {
     <header style={styles.header}>
       <div style={styles.inner}>
         <NavLink to="/" style={styles.brand} end>
-          <span style={styles.brandMark} aria-hidden>D</span>
-          <span style={styles.brandWord}>Deckify</span>
+          <span style={styles.brandMark} aria-hidden>
+            {/* Five mana-color pips arranged in a tight diamond echo the
+                WUBRG palette without using any WotC artwork. */}
+            <span style={styles.brandPipW} />
+            <span style={styles.brandPipU} />
+            <span style={styles.brandPipB} />
+            <span style={styles.brandPipR} />
+            <span style={styles.brandPipG} />
+          </span>
+          <span style={styles.brandWord}>
+            <span style={styles.brandWordBuilt}>Built</span>
+            <span style={styles.brandWordFrom}>From</span>
+            <span style={styles.brandWordBulk}>Bulk</span>
+          </span>
         </NavLink>
 
         {/* Desktop / tablet nav. Hidden on mobile via conditional render. */}
@@ -205,23 +217,49 @@ const styles = {
     color: 'var(--text)',
   },
   brandMark: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 32,
-    height: 32,
+    position: 'relative',
+    display: 'inline-block',
+    width: 34,
+    height: 34,
     borderRadius: 'var(--radius-md)',
-    background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
-    color: '#fff',
-    fontWeight: 800,
-    fontSize: 'var(--text-base)',
-    letterSpacing: '-0.02em',
-    boxShadow: '0 1px 0 rgba(255,255,255,0.06) inset, 0 4px 12px rgba(139,92,246,0.35)',
+    background: 'linear-gradient(135deg, rgba(139,92,246,0.20) 0%, rgba(99,102,241,0.10) 60%, rgba(245,158,11,0.10) 100%)',
+    border: '1px solid var(--border-strong)',
+    boxShadow: '0 1px 0 rgba(255,255,255,0.06) inset, 0 4px 12px rgba(139,92,246,0.30)',
+    flexShrink: 0,
+  },
+  brandPipW: {
+    position: 'absolute', top: 4, left: '50%', marginLeft: -4, width: 8, height: 8, borderRadius: '50%',
+    background: 'var(--mana-w)', boxShadow: '0 0 6px var(--mana-w-glow)',
+  },
+  brandPipU: {
+    position: 'absolute', top: '50%', right: 3, marginTop: -4, width: 8, height: 8, borderRadius: '50%',
+    background: 'var(--mana-u)', boxShadow: '0 0 6px var(--mana-u-glow)',
+  },
+  brandPipB: {
+    position: 'absolute', bottom: 4, right: 8, width: 8, height: 8, borderRadius: '50%',
+    background: 'var(--mana-b)', boxShadow: '0 0 6px var(--mana-b-glow)',
+  },
+  brandPipR: {
+    position: 'absolute', bottom: 4, left: 8, width: 8, height: 8, borderRadius: '50%',
+    background: 'var(--mana-r)', boxShadow: '0 0 6px var(--mana-r-glow)',
+  },
+  brandPipG: {
+    position: 'absolute', top: '50%', left: 3, marginTop: -4, width: 8, height: 8, borderRadius: '50%',
+    background: 'var(--mana-g)', boxShadow: '0 0 6px var(--mana-g-glow)',
   },
   brandWord: {
     fontSize: 'var(--text-lg)',
     fontWeight: 700,
     letterSpacing: '-0.02em',
+    display: 'inline-flex',
+  },
+  brandWordBuilt: { color: 'var(--text)' },
+  brandWordFrom:  { color: 'var(--text-muted)', fontWeight: 500 },
+  brandWordBulk:  {
+    background: 'linear-gradient(135deg, #a78bfa 0%, #f59e0b 100%)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
+    backgroundClip: 'text',
   },
   nav: {
     display: 'flex',

@@ -39,10 +39,18 @@ import { getExecutionThresholdForBracket } from '../rules/commanderExecution'
 // drafts used `pushes?` which actually means "pushe" or "pushes" — the
 // `?` only applies to the immediately preceding `s`, leaving the `e`
 // mandatory. The bug ate every "push above bracket" phrase silently.
+//
+// Phrase coverage built up empirically from eval-LLM output. The model
+// is creative with synonyms — when adding a new phrase to handle, also
+// add a test case to stripFalseAboveBracketClaims.test.js so future
+// regex changes don't silently break it.
 const ABOVE_BRACKET_PHRASES = [
   /push(?:es)? (?:the |this )?deck above (?:the |its )?(?:target |intended )?bracket/i,
   /push(?:es)? (?:this |it )?above (?:the |its )?(?:target |intended )?bracket/i,
   /push(?:es)? (?:it |this )?(?:slightly )?above bracket/i,
+  // "pushes the deck towards a higher (competitive) bracket"
+  /push(?:es)? (?:the |this )?deck (?:slightly )?(?:towards?|into) (?:a |the )?higher(?: competitive)? (?:tier|bracket)/i,
+  /push(?:es)? (?:it |this )?(?:slightly )?(?:towards?|into) (?:a |the )?higher(?: competitive)? (?:tier|bracket)/i,
   /(?:bump(?:s)?|elevate(?:s)?) (?:the |this )?deck (?:significantly )?above (?:the |its )?(?:target |intended )?bracket/i,
   /(?:slightly )?(?:over[- ]?tuned|over[- ]?powered)(?:\b| for(?: the)?| at(?: the)?| compared)/i,
   /(?:feels |seems |appears |is )(?:slightly |a bit |a little )?(?:more like |above |over )(?:bracket )?b?[345]\b/i,
@@ -50,6 +58,25 @@ const ABOVE_BRACKET_PHRASES = [
   /power level (?:significantly )?above (?:the |its )?(?:target |intended )?bracket/i,
   /technically (?:within|in) (?:the )?bracket but/i,
   /skirt(?:s)? the upper (?:edge|limit) of the bracket/i,
+  // "creates a sense of higher power", "leaning towards higher tiers"
+  /create(?:s)? a sense of higher power/i,
+  /lean(?:s|ing)? (?:towards?|into) (?:a |the )?higher (?:tier|bracket|power)/i,
+  // "could feel out of place in a B3 setting"
+  /(?:could |may |might )(?:feel|seem) out of place (?:in|at)? ?(?:a |the )?b?[345](?: setting| environment| meta)?/i,
+  // "high density of powerful cards inflates its competitiveness"
+  /(?:high |excessive |elevated )?density of (?:powerful|high[- ]impact|elite) cards (?:inflates?|elevates?|raises?) (?:its|the) competitiveness/i,
+  // "indicating a potential mismatch" / "potential mismatch in power level"
+  /(?:indicating |suggesting |implying )?(?:a |the )?potential (?:bracket |power[- ]level )?mismatch/i,
+  // "above the desired bracket"
+  /above (?:the |its )?desired bracket/i,
+  // "could feel more like a B5 deck"
+  /(?:could |may |might )?feel more like (?:a |the )?b?[345](?: deck)?/i,
+  // "exceeds the bracket" / "exceeds the target bracket"
+  /(?:exceed(?:s|ed|ing)?) (?:the |its )?(?:target |intended |desired )?(?:competitive )?bracket/i,
+  // "more competitive feel than intended"
+  /more competitive feel than intended/i,
+  // "raise(s) concerns? about (overall )?power level"
+  /raise(?:s)? concerns? about (?:overall |the )?power[- ]?level/i,
 ]
 
 /**

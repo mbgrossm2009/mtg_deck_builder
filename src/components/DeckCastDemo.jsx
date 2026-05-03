@@ -18,7 +18,7 @@ import { useIsMobile } from '../lib/useMediaQuery'
 // (bottlenecked by OpenAI's output token speed on ~5,000-token JSON responses).
 const DEMOS = [
   {
-    command: 'deckify --commander "Atraxa, Praetors\' Voice" --bracket 4',
+    command: 'builtfrombulk --commander "Atraxa, Praetors\' Voice" --bracket 4',
     lines: [
       { t: '00:00.2', text: '✓ Loaded collection (2,847 cards)',          tone: 'ok'   },
       { t: '00:00.4', text: '✓ Detected archetype: +1/+1 Counters · str 4', tone: 'ok'   },
@@ -31,7 +31,7 @@ const DEMOS = [
     ],
   },
   {
-    command: 'deckify --commander "Najeela, the Blade-Blossom" --bracket 5',
+    command: 'builtfrombulk --commander "Najeela, the Blade-Blossom" --bracket 5',
     lines: [
       { t: '00:00.3', text: '✓ Loaded collection (1,124 cards)',          tone: 'ok'   },
       { t: '00:00.5', text: '✓ Detected archetype: combo · str 5',         tone: 'ok'   },
@@ -44,7 +44,7 @@ const DEMOS = [
     ],
   },
   {
-    command: 'deckify --commander "Krenko, Mob Boss" --bracket 3',
+    command: 'builtfrombulk --commander "Krenko, Mob Boss" --bracket 3',
     lines: [
       { t: '00:00.1', text: '✓ Loaded collection (843 cards)',            tone: 'ok'   },
       { t: '00:00.3', text: '✓ Detected archetype: tribal · goblins · str 3', tone: 'ok' },
@@ -57,7 +57,7 @@ const DEMOS = [
     ],
   },
   {
-    command: 'deckify --commander "Edgar Markov" --bracket 2',
+    command: 'builtfrombulk --commander "Edgar Markov" --bracket 2',
     lines: [
       { t: '00:00.2', text: '✓ Loaded collection (1,602 cards)',          tone: 'ok'   },
       { t: '00:00.4', text: '✓ Detected archetype: tribal · vampires · str 4', tone: 'ok' },
@@ -70,7 +70,7 @@ const DEMOS = [
     ],
   },
   {
-    command: 'deckify --commander "Sliver Overlord" --bracket 4',
+    command: 'builtfrombulk --commander "Sliver Overlord" --bracket 4',
     lines: [
       { t: '00:00.3', text: '✓ Loaded collection (3,128 cards)',          tone: 'ok'   },
       { t: '00:00.5', text: '✓ Detected archetype: tribal · slivers · str 5', tone: 'ok' },
@@ -127,12 +127,12 @@ export default function DeckCastDemo() {
   }, [demoIdx, demo.command, demo.lines.length])
 
   return (
-    <div style={styles.frame} aria-label="Live demo of Deckify generating a deck">
+    <div style={styles.frame} aria-label="Live demo of BuiltFromBulk generating a deck">
       <div style={{ ...styles.titleBar, ...(isMobile ? styles.titleBarMobile : {}) }}>
         <span style={{ ...styles.dot, background: '#ff5f57' }} aria-hidden />
         <span style={{ ...styles.dot, background: '#febc2e' }} aria-hidden />
         <span style={{ ...styles.dot, background: '#28c840' }} aria-hidden />
-        <span style={styles.titleText}>deckify · live demo</span>
+        <span style={styles.titleText}>builtfrombulk · live demo</span>
         <span style={styles.statusDot} aria-hidden>
           <span style={styles.statusPulse} />
           <span style={styles.statusCore} />

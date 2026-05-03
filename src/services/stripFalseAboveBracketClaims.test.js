@@ -125,3 +125,42 @@ describe('stripFalseAboveBracketClaims — only acts when bracket_fit verdict is
     expect(stripFalseAboveBracketClaims(null, passLens)).toBeNull()
   })
 })
+
+// Phrase coverage from real eval-LLM output. Each entry below is a sentence
+// the LLM has actually emitted in production runs. When the model invents a
+// new euphemism for "above bracket," add the example here AND extend
+// ABOVE_BRACKET_PHRASES in llmDeckService.js.
+describe('stripFalseAboveBracketClaims — empirical phrase coverage', () => {
+  const empiricalPhrases = [
+    // run 0a6b4372 — Sorin B3
+    'The presence of several high-powered cards like Chrome Mox and Demonic Tutor pushes the deck towards a higher competitive bracket than intended.',
+    // run 0a6b4372 — Daxos B3
+    'Despite passing the bracket fit, the presence of certain cards suggests the deck is leaning towards higher tiers.',
+    // run 0a6b4372 — Daxos B4
+    'Despite fitting the actual bracket as B4, the presence of multiple high-impact ramp cards creates a sense of higher power, potentially impacting game balance.',
+    // run 0a6b4372 — Amalia B5 (built at B4 due to cap)
+    'The deck matches the target bracket of 4, but the number of high-impact cards suggests it could feel more like a B5 deck due to the excessive tutor and ramp density.',
+    // historical — over-tuned variants
+    'The deck feels slightly over-tuned for B4.',
+    'Slightly over-tuned for B4.',
+    // historical — bracket mismatch language
+    'This may lead to a power-level mismatch in casual play.',
+    // run a606abe3 — Daxos B5
+    'Indicating a potential mismatch.',
+    // run a606abe3 — Sorin B3 (synonym for "above bracket")
+    'The presence of multiple cards exceeds the target bracket.',
+    // run a606abe3 — Daxos B4
+    'The deck includes too many high-impact cards that could lead to a more competitive feel than intended for B4.',
+  ]
+
+  it.each(empiricalPhrases)('strips: %s', (phrase) => {
+    const evalIn = {
+      ...baseEval,
+      weaknesses: [phrase, 'Unrelated weakness about card draw.'],
+    }
+    const out = stripFalseAboveBracketClaims(evalIn, passLens)
+    expect(out.weaknesses).not.toContain(phrase)
+    // Unrelated weakness should survive.
+    expect(out.weaknesses).toContain('Unrelated weakness about card draw.')
+  })
+})

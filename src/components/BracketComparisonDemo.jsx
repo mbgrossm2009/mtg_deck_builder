@@ -63,7 +63,7 @@ export default function BracketComparisonDemo() {
     setVisible(0)
 
     // Phase 1: type the command (same on both terminals)
-    const cmd = '$ deckify ' + COMMANDER
+    const cmd = '$ builtfrombulk ' + COMMANDER
     for (let i = 0; i <= cmd.length; i++) {
       timeouts.push(setTimeout(() => setTyped(cmd.slice(0, i)), i * CHAR_SPEED_MS))
     }
@@ -91,8 +91,8 @@ export default function BracketComparisonDemo() {
           One collection. <span style={styles.headerAccent}>Five distinct deck shapes.</span>
         </h3>
         <p style={styles.headerCaption}>
-          Watch Deckify generate the same commander at both extremes of the
-          bracket spectrum. Live, lockstep, no editing.
+          Watch BuiltFromBulk generate the same commander at both extremes of
+          the bracket spectrum. Live, lockstep, no editing.
         </p>
       </div>
 

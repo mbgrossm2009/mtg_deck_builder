@@ -64,7 +64,7 @@ export default function Commander() {
       <header style={styles.header}>
         <h1 style={styles.title}>Choose Your Commander</h1>
         <p style={styles.description}>
-          Search for a legendary creature. Deckify will build the deck around its color identity and abilities.
+          Search for a legendary creature. The deck will be built around its color identity, abilities, and the strategy that fits your collection.
         </p>
       </header>
 

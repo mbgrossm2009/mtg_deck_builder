@@ -901,6 +901,11 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     for (const { card: incoming, why } of candidatePool) {
       if (swappedRamp >= excess) break
       // Find the lowest-priority swappable RAMP card (from the deck end).
+      // Bracket staples stay locked even when over the cap — staples are
+      // already bracket-aware, and breaking them here regressed cEDH
+      // invariants (Najeela B5 lost Mana Crypt). Sorin-style over-ramp
+      // from heavy staple coverage is an accepted limitation; the warning
+      // surfaces it but the deck composition stands.
       let swapIdx = -1
       for (let i = deck.length - 1; i >= 0; i--) {
         const c = deck[i]

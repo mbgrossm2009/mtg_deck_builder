@@ -167,11 +167,11 @@ export default function DeckBuilder() {
           <p style={styles.subhead}>Generate a 99-card deck tuned to your commander.</p>
         </header>
         <div style={styles.emptyState}>
-          <div style={styles.emptyIcon} aria-hidden>👑</div>
-          <div style={styles.emptyTitle}>Pick a commander to start deckifying</div>
+          <div className="empty-state-ornament" aria-hidden>◆</div>
+          <div style={styles.emptyTitle}>Pick a commander to start building</div>
           <div style={styles.emptyDesc}>
-            Deckify builds the deck around your commander's color identity and abilities.
-            Choose one and come back here.
+            Every deck is built around your commander's color identity, abilities,
+            and strategy — and the cards you actually own. Choose one and come back here.
           </div>
           <Link to="/commander" className="btn btn-primary" style={styles.emptyBtn}>
             Choose Commander →

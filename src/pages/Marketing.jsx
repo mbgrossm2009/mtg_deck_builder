@@ -15,19 +15,26 @@ export default function Marketing() {
             an actual image (keeps bundle size tiny and avoids IP risk). */}
         <div style={styles.heroGlow} aria-hidden />
 
+        {/* Mana-pip eyebrow — five tiny WUBRG dots flank the format label,
+            instantly placing the product in the MTG world without art assets. */}
         <div style={styles.eyebrow}>
-          <span style={styles.eyebrowOrnament} aria-hidden>◆</span>
-          Commander Deck Builder
-          <span style={styles.eyebrowOrnament} aria-hidden>◆</span>
+          <span className="mana-pip-row" aria-hidden>
+            <span className="mana-pip mana-pip-w">W</span>
+            <span className="mana-pip mana-pip-u">U</span>
+            <span className="mana-pip mana-pip-b">B</span>
+            <span className="mana-pip mana-pip-r">R</span>
+            <span className="mana-pip mana-pip-g">G</span>
+          </span>
+          <span style={styles.eyebrowText}>BuiltFromBulk · Commander Deck Builder</span>
         </div>
         <h1 style={{ ...styles.title, ...(isMobile ? styles.titleMobile : {}) }}>
-          Build optimized <span style={styles.titleAccent}>Commander</span> decks
-          <br />from the cards you own.
+          Turn your collection into{' '}
+          <span style={styles.titleAccent}>real Commander decks</span>.
         </h1>
         <p style={styles.subtitle}>
-          Import your collection. Pick a commander. Deckify it into a power-tuned
-          99-card build with strategy detection, bracket-aware filtering, and AI-assisted
-          card selection.
+          Even your bulk has potential. BuiltFromBulk imports your collection,
+          detects your commander's strategy, and assembles a power-tuned 99-card
+          deck — using only the cards you already own.
         </p>
         <div style={styles.ctaRow}>
           <Link to="/login" className="btn btn-primary" style={styles.primaryCta}>
@@ -72,18 +79,21 @@ export default function Marketing() {
         <div style={styles.steps}>
           <FeatureCard
             number="1"
+            mana="w"
             title="Import your collection"
-            description="Paste or upload a CSV/TXT export from any deck-tracking app. We validate every card against Scryfall."
+            description="Paste or upload a CSV/TXT export from any deck-tracking app. Every card is validated against Scryfall."
           />
           <FeatureCard
             number="2"
-            title="Pick a commander"
-            description="Search any legendary creature. Deckify detects the strategy from your commander's text and your collection."
+            mana="u"
+            title="Pick your commander"
+            description="Search any legendary creature. We detect the strategy from your commander's text and the cards in your collection."
           />
           <FeatureCard
             number="3"
-            title="Generate the deck"
-            description="Pick a power bracket (1–5). Get a 99-card deck tuned to your commander, with role balance, combo detection, and bracket compliance."
+            mana="r"
+            title="Build the deck"
+            description="Pick a power bracket (1–5). Get a 99-card deck tuned to your commander — role balance, combo detection, bracket compliance, all from cards you already own."
           />
         </div>
       </section>
@@ -110,7 +120,8 @@ export default function Marketing() {
       </section>
 
       <section style={styles.cta}>
-        <h2 style={styles.ctaTitle}>Ready to deckify?</h2>
+        <div style={styles.ctaGlow} aria-hidden />
+        <h2 style={styles.ctaTitle}>Discover the decks hiding in your collection</h2>
         <p style={styles.ctaSub}>
           Free to use. Sign in with Google or Facebook.
         </p>
@@ -122,14 +133,34 @@ export default function Marketing() {
   )
 }
 
-function FeatureCard({ number, title, description }) {
+// Mana-color tinted feature card. The number badge picks up the assigned
+// mana color so the three steps cycle visually through the MTG palette
+// (W → U → R) instead of all being purple. Subtle but unmistakably MTG.
+function FeatureCard({ number, mana, title, description }) {
+  const tint = manaTint(mana)
   return (
-    <div style={styles.card}>
-      <div style={styles.cardNumber}>{number}</div>
+    <div style={{ ...styles.card, ...(tint ? { borderColor: tint.border } : {}) }} className="card-hover">
+      <div style={{
+        ...styles.cardNumber,
+        ...(tint ? { background: tint.soft, color: tint.fg, boxShadow: `0 0 12px ${tint.glow}` } : {}),
+      }}>
+        {number}
+      </div>
       <h3 style={styles.cardTitle}>{title}</h3>
       <p style={styles.cardDesc}>{description}</p>
     </div>
   )
+}
+
+function manaTint(mana) {
+  switch (mana) {
+    case 'w': return { border: 'var(--mana-w-glow)', soft: 'var(--mana-w-soft)', glow: 'var(--mana-w-glow)', fg: 'var(--mana-w)' }
+    case 'u': return { border: 'var(--mana-u-glow)', soft: 'var(--mana-u-soft)', glow: 'var(--mana-u-glow)', fg: 'var(--mana-u)' }
+    case 'b': return { border: 'var(--mana-b-glow)', soft: 'var(--mana-b-soft)', glow: 'var(--mana-b-glow)', fg: 'var(--mana-b)' }
+    case 'r': return { border: 'var(--mana-r-glow)', soft: 'var(--mana-r-soft)', glow: 'var(--mana-r-glow)', fg: 'var(--mana-r)' }
+    case 'g': return { border: 'var(--mana-g-glow)', soft: 'var(--mana-g-soft)', glow: 'var(--mana-g-glow)', fg: 'var(--mana-g)' }
+    default:  return null
+  }
 }
 
 function Capability({ title, description }) {
@@ -169,20 +200,21 @@ const styles = {
   eyebrow: {
     position: 'relative',
     zIndex: 1,
-    color: 'var(--accent-hover)',
     fontSize: 'var(--text-xs)',
     fontWeight: 600,
-    letterSpacing: '0.12em',
+    letterSpacing: '0.10em',
     textTransform: 'uppercase',
-    marginBottom: 'var(--space-4)',
+    marginBottom: 'var(--space-5)',
     display: 'inline-flex',
     alignItems: 'center',
     gap: 'var(--space-3)',
+    padding: '6px 14px',
+    borderRadius: '999px',
+    background: 'var(--surface-1)',
+    border: '1px solid var(--border)',
   },
-  eyebrowOrnament: {
-    color: 'var(--accent-2)',
-    fontSize: '0.6rem',
-    opacity: 0.7,
+  eyebrowText: {
+    color: 'var(--text-muted)',
   },
   title: {
     position: 'relative',
@@ -336,10 +368,27 @@ const styles = {
   cta: {
     padding: 'var(--space-16) var(--space-6)',
     textAlign: 'center',
-    background: 'var(--surface-1)',
+    background:
+      'linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 60%), var(--surface-1)',
     border: '1px solid var(--border)',
     borderRadius: 'var(--radius-xl)',
     margin: 'var(--space-8) 0 var(--space-4)',
+    position: 'relative',
+    overflow: 'hidden',
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
+  },
+  ctaGlow: {
+    position: 'absolute',
+    top: '-40%',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    width: '70%',
+    height: '320px',
+    background:
+      'radial-gradient(ellipse at center, rgba(245,158,11,0.10) 0%, rgba(139,92,246,0.06) 35%, transparent 70%)',
+    filter: 'blur(20px)',
+    pointerEvents: 'none',
+    zIndex: 0,
   },
   ctaTitle: {
     fontSize: 'var(--text-2xl)',

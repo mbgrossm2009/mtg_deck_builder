@@ -72,11 +72,24 @@ const B5_CAPABLE_COMMANDERS = new Set([
  * Returns the realistic max bracket for a commander.
  * Defaults to 5 (no cap) for unknowns — false positives (capping a deck
  * that COULD hit B5) are worse than false negatives.
+ *
+ * DFC handling: Sorin of House Markov (and other transform commanders)
+ * carry a name like "Sorin of House Markov // Sorin, Ravenous Neonate".
+ * Match against EITHER face — the cap set lists short front-face names,
+ * so we extract the prefix before " // " and try that too.
  */
 export function getCommanderBracketCeiling(commander) {
   if (!commander?.name) return 5
-  const name = commander.name.toLowerCase()
-  if (B5_INCAPABLE_COMMANDERS.has(name)) return 4
+  const fullName = commander.name.toLowerCase()
+  if (B5_INCAPABLE_COMMANDERS.has(fullName)) return 4
+  // DFC: try the front face (everything before " // ").
+  if (fullName.includes(' // ')) {
+    const front = fullName.split(' // ')[0].trim()
+    if (B5_INCAPABLE_COMMANDERS.has(front)) return 4
+    // Some entries might list the back face instead (rare).
+    const back = fullName.split(' // ')[1]?.trim()
+    if (back && B5_INCAPABLE_COMMANDERS.has(back)) return 4
+  }
   return 5
 }
 

@@ -795,7 +795,7 @@ export default function Collection() {
     <div>
       <header style={styles.header}>
         <h1 style={styles.heading}>My Collection</h1>
-        <p style={styles.tagline}>The cards you own. Deckify builds decks from this pool.</p>
+        <p style={styles.tagline}>The cards you own. Every generated deck is built from this pool — even your bulk has potential.</p>
       </header>
       <div style={styles.subRow}>
         <p style={styles.sub}>

@@ -41,10 +41,18 @@ export default function Login() {
   return (
     <div style={styles.wrap}>
       <div style={styles.card}>
-        <div style={styles.brandMark} aria-hidden>D</div>
-        <h1 style={styles.title}>Welcome to Deckify</h1>
+        <div style={styles.brandMark} aria-hidden>
+          <span className="mana-pip-row">
+            <span className="mana-pip mana-pip-w">W</span>
+            <span className="mana-pip mana-pip-u">U</span>
+            <span className="mana-pip mana-pip-b">B</span>
+            <span className="mana-pip mana-pip-r">R</span>
+            <span className="mana-pip mana-pip-g">G</span>
+          </span>
+        </div>
+        <h1 style={styles.title}>Welcome to BuiltFromBulk</h1>
         <p style={styles.subtitle}>
-          Sign in to import your collection and build optimized Commander decks.
+          Sign in to import your collection and discover the decks hiding in it.
         </p>
 
         <div style={styles.buttons}>
@@ -125,16 +133,12 @@ const styles = {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: 56,
-    height: 56,
-    borderRadius: 'var(--radius-lg)',
-    background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
-    color: '#fff',
-    fontWeight: 800,
-    fontSize: 'var(--text-2xl)',
-    letterSpacing: '-0.02em',
+    padding: '12px 16px',
+    borderRadius: '999px',
+    background: 'linear-gradient(135deg, rgba(139,92,246,0.15) 0%, rgba(245,158,11,0.10) 100%)',
+    border: '1px solid var(--border-strong)',
     marginBottom: 'var(--space-5)',
-    boxShadow: '0 8px 24px rgba(139,92,246,0.35)',
+    boxShadow: '0 8px 24px rgba(139,92,246,0.20)',
   },
   title: {
     fontSize: 'var(--text-2xl)',

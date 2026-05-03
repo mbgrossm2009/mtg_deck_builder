@@ -38,6 +38,28 @@
   --danger:        #ef4444;
   --info:          #3b82f6;
 
+  /* Mana colors — keyed to MTG's WUBRG palette. Used for color-identity
+     glows, panel borders, and chip accents. Each color has a base, a
+     glow rgba, and a soft tint for backgrounds. */
+  --mana-w:        #f8e7b9;   /* plains / cream-gold */
+  --mana-w-glow:   rgba(248, 231, 185, 0.35);
+  --mana-w-soft:   rgba(248, 231, 185, 0.10);
+  --mana-u:        #4a90e2;   /* island / azure */
+  --mana-u-glow:   rgba(74, 144, 226, 0.40);
+  --mana-u-soft:   rgba(74, 144, 226, 0.12);
+  --mana-b:        #a370c8;   /* swamp / amethyst — black mana reads as desaturated purple in UI */
+  --mana-b-glow:   rgba(163, 112, 200, 0.40);
+  --mana-b-soft:   rgba(163, 112, 200, 0.12);
+  --mana-r:        #e25b4a;   /* mountain / ember */
+  --mana-r-glow:   rgba(226, 91, 74, 0.40);
+  --mana-r-soft:   rgba(226, 91, 74, 0.12);
+  --mana-g:        #5db77b;   /* forest / leaf */
+  --mana-g-glow:   rgba(93, 183, 123, 0.40);
+  --mana-g-soft:   rgba(93, 183, 123, 0.12);
+  --mana-c:        #b6b8c4;   /* colorless / silver */
+  --mana-c-glow:   rgba(182, 184, 196, 0.30);
+  --mana-c-soft:   rgba(182, 184, 196, 0.10);
+
   /* Spacing scale (multiples of 4) */
   --space-1: 4px;
   --space-2: 8px;
@@ -291,4 +313,188 @@ a {
   transform: translateY(-2px);
   border-color: var(--border-strong);
   box-shadow: var(--shadow-md);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   PANEL VARIANTS (MTG card-frame inspired)
+   Subtle dual-border + inner gradient give panels a "card sleeve" feel
+   without overwhelming the content. Apply via `.panel` and optional
+   modifiers. Inline styles can still override.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.panel {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 50%),
+    var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,0.03);
+  transition: border-color var(--transition-base),
+              box-shadow var(--transition-base),
+              transform var(--transition-base);
+}
+
+.panel-elevated {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 60%),
+    var(--surface-2);
+  box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.panel-interactive {
+  cursor: pointer;
+}
+.panel-interactive:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   MANA GLOW UTILITIES
+   Apply alongside `.panel` to give a card-frame the color of its mana
+   identity. Single-color: glow-w / glow-u / glow-b / glow-r / glow-g.
+   Multi-color: layer glow tones via a single class set on the element's
+   data-colors (preferred) — see panelMultiColor() helper in JSX.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.glow-w { box-shadow: 0 0 0 1px var(--mana-w-glow), 0 8px 28px var(--mana-w-glow), inset 0 1px 0 rgba(255,255,255,0.06); border-color: var(--mana-w-glow); }
+.glow-u { box-shadow: 0 0 0 1px var(--mana-u-glow), 0 8px 28px var(--mana-u-glow), inset 0 1px 0 rgba(255,255,255,0.06); border-color: var(--mana-u-glow); }
+.glow-b { box-shadow: 0 0 0 1px var(--mana-b-glow), 0 8px 28px var(--mana-b-glow), inset 0 1px 0 rgba(255,255,255,0.06); border-color: var(--mana-b-glow); }
+.glow-r { box-shadow: 0 0 0 1px var(--mana-r-glow), 0 8px 28px var(--mana-r-glow), inset 0 1px 0 rgba(255,255,255,0.06); border-color: var(--mana-r-glow); }
+.glow-g { box-shadow: 0 0 0 1px var(--mana-g-glow), 0 8px 28px var(--mana-g-glow), inset 0 1px 0 rgba(255,255,255,0.06); border-color: var(--mana-g-glow); }
+.glow-c { box-shadow: 0 0 0 1px var(--mana-c-glow), 0 8px 24px var(--mana-c-glow), inset 0 1px 0 rgba(255,255,255,0.04); border-color: var(--mana-c-glow); }
+
+/* Mana pip — small inline circle for color identity displays.
+   Use <span class="mana-pip mana-pip-w">W</span> to render. */
+.mana-pip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+  border: 1px solid rgba(0,0,0,0.25);
+  text-shadow: 0 1px 1px rgba(0,0,0,0.3);
+  flex-shrink: 0;
+}
+.mana-pip-w { background: var(--mana-w); color: #5a4a1f; box-shadow: 0 0 8px var(--mana-w-glow); }
+.mana-pip-u { background: var(--mana-u); color: #fff;    box-shadow: 0 0 8px var(--mana-u-glow); }
+.mana-pip-b { background: var(--mana-b); color: #fff;    box-shadow: 0 0 8px var(--mana-b-glow); }
+.mana-pip-r { background: var(--mana-r); color: #fff;    box-shadow: 0 0 8px var(--mana-r-glow); }
+.mana-pip-g { background: var(--mana-g); color: #fff;    box-shadow: 0 0 8px var(--mana-g-glow); }
+.mana-pip-c { background: var(--mana-c); color: #2a2c33; box-shadow: 0 0 8px var(--mana-c-glow); }
+
+.mana-pip-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   PREMIUM ANIMATIONS
+   Used for hero accents, loading states, and subtle "alive" feel.
+   ───────────────────────────────────────────────────────────────────────── */
+
+@keyframes mana-shimmer {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.05); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px var(--accent-ring), 0 8px 24px rgba(139,92,246,0.20); }
+  50%      { box-shadow: 0 0 0 1px var(--accent),       0 12px 32px rgba(139,92,246,0.35); }
+}
+
+@keyframes float-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer-bg {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-float-up {
+  animation: float-up 400ms ease-out both;
+}
+
+.animate-pulse-glow {
+  animation: glow-pulse 2.4s ease-in-out infinite;
+}
+
+/* Skeleton loader stripe — used for loading states */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-1) 0%,
+    var(--surface-2) 50%,
+    var(--surface-1) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-bg 1.6s ease-in-out infinite;
+  border-radius: var(--radius-md);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   EMPTY STATE
+   A small reusable flourish for "no data yet" surfaces. Uses an outline
+   diamond ornament that nods to MTG card art without being ripped from it.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.empty-state {
+  text-align: center;
+  padding: var(--space-12) var(--space-4);
+  color: var(--text-muted);
+}
+.empty-state-ornament {
+  display: inline-block;
+  font-size: 1.5rem;
+  color: var(--accent-2);
+  opacity: 0.6;
+  margin-bottom: var(--space-3);
+  animation: mana-shimmer 3s ease-in-out infinite;
+}
+.empty-state-title {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: var(--space-2);
+}
+.empty-state-body {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  max-width: 380px;
+  margin: 0 auto var(--space-5);
+  line-height: 1.6;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ERROR STATE
+   ───────────────────────────────────────────────────────────────────────── */
+
+.error-state {
+  text-align: center;
+  padding: var(--space-10) var(--space-4);
+  background: rgba(239, 68, 68, 0.04);
+  border: 1px solid rgba(239, 68, 68, 0.20);
+  border-radius: var(--radius-lg);
+}
+.error-state-title {
+  color: var(--danger);
+  font-weight: 700;
+  font-size: var(--text-lg);
+  margin-bottom: var(--space-2);
+}
+.error-state-body {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  max-width: 480px;
+  margin: 0 auto;
+  line-height: 1.6;
 }
