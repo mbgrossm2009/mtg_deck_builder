@@ -39,11 +39,14 @@ import { fetchMoxfieldConsensus } from '../utils/moxfieldApi'
 import { applyCommanderBracketCap } from '../rules/commanderPowerCeiling'
 
 // Canonical lock contract. A card carrying any of these flags must NOT be
-// swapped out by any downstream pass (heuristic critique, LLM critique,
-// bracket downgrade). Each flag is set by a step that exists precisely to
-// hit a hard minimum or invariant; undoing those swaps would defeat the
-// step's purpose. When adding a new floor/backstop, set a new
-// `from*` flag AND add it here — that's the single source of truth.
+// swapped out by the heuristic critique, LLM critique, wincon backstop,
+// tutor/removal/tribal floors. Each flag is set by a step that exists
+// precisely to hit a hard minimum or invariant; undoing those swaps
+// would defeat the step's purpose. When adding a new floor/backstop,
+// set a new `from*` flag AND add it here — single source of truth.
+//
+// IMPORTANT: the bracket-downgrade pass uses its own narrower lock set
+// (LOCK_FLAGS_AGAINST_DOWNGRADE) — see isLockedAgainstDowngrade below.
 //
 // Exported so tests can verify every swap site honors the same contract.
 export const LOCK_FLAGS = [
@@ -59,6 +62,41 @@ export const LOCK_FLAGS = [
 export function isLockedByFloor(card) {
   if (!card) return false
   for (const flag of LOCK_FLAGS) {
+    if (card[flag]) return true
+  }
+  return false
+}
+
+// Narrower lock set used ONLY by the bracket-downgrade pass.
+//
+// Asymmetry rationale: the downgrade exists to bring a deck whose actual
+// computed bracket exceeds the target bracket back into compliance. If
+// EDHREC's top-cards skeleton handed us a combo piece or game-changer
+// at B3 (skeleton picks aren't bracket-aware), we MUST be able to swap
+// it out — bracket fit beats EDHREC fidelity. The wincon backstop and
+// floors must still respect skeleton (those passes are about adding
+// minimums, not enforcing bracket).
+//
+// Mana solver, bracket-staples, and tribal-floor cards remain protected:
+//   - mana solver: removing a land breaks color requirements
+//   - bracket-staples: those are ALREADY bracket-aware so they aren't
+//     the offender (Sol Ring at B3 is fine; the offender is some combo
+//     piece from skeleton)
+//   - tribal floor: tribal density is the commander's identity; we
+//     don't sacrifice it to fix bracket
+//
+// Tutor/removal/wincon floor adds are intentionally swappable here —
+// if those forced count above the bracket's "excess" threshold, bracket
+// fit wins.
+const LOCK_FLAGS_AGAINST_DOWNGRADE = [
+  'fromManaSolver',
+  'fromBracketStaples',
+  'fromTribalFloor',
+]
+
+export function isLockedAgainstDowngrade(card) {
+  if (!card) return false
+  for (const flag of LOCK_FLAGS_AGAINST_DOWNGRADE) {
     if (card[flag]) return true
   }
   return false
@@ -1417,11 +1455,14 @@ function pickDowngradeSwap({ deck, combos, targetBracket, legalNonLands }) {
 // ranked offender in the deck (by `offenderRank`) that's swappable, finds a
 // matching-role replacement from the pool that isn't itself an offender.
 function pickSwap(deck, legalNonLands, { isOffender, isReplacement, offenderRank, reasonText }) {
-  // Find swap-out: in deck, is offender, NOT a locked source. All floor
-  // additions (tutor, removal, wincon, tribal) are protected — they were
-  // added precisely to hit minimum counts and shouldn't be undone by the
-  // bracket downgrade. Mana base + bracket staples are also protected.
-  const candidates = deck.filter(c => isOffender(c) && !isLockedByFloor(c))
+  // Find swap-out: in deck, is offender, NOT locked against the downgrade.
+  // Uses the NARROWER lock set than other passes — see the comment on
+  // isLockedAgainstDowngrade. Crucially, EDHREC skeleton picks are NOT
+  // locked here: if the skeleton handed us a combo piece at B3, bracket
+  // fit beats EDHREC fidelity. Wincon/tutor/removal floor adds are also
+  // unlocked — bracket fit beats hitting minimum counts when the math
+  // says we have too many tutors / wincons for the target bracket.
+  const candidates = deck.filter(c => isOffender(c) && !isLockedAgainstDowngrade(c))
   if (candidates.length === 0) return null
 
   // Sort by offender rank desc (most impactful to swap first)

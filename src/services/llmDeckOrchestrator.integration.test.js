@@ -33,7 +33,7 @@ vi.mock('../utils/moxfieldApi', () => makeMoxfieldMock())
 vi.mock('./llmDeckService', () => makeLLMServiceMock())
 
 // Imports MUST come after vi.mock.
-import { generateDeckWithLLMAssist, isLockedByFloor, LOCK_FLAGS } from './llmDeckOrchestrator'
+import { generateDeckWithLLMAssist, isLockedByFloor, LOCK_FLAGS, isLockedAgainstDowngrade } from './llmDeckOrchestrator'
 import {
   TIAMAT, KRENKO, EDGAR_MARKOV, MARWYN, SHELOB,
   NAJEELA, KINNAN, NIV_MIZZET, MEREN, KARADOR, HELIOD, ATRAXA,
@@ -1063,4 +1063,109 @@ describe('100-commander invariants — every fixture must produce a valid deck (
       expect(result.length).toBeLessThanOrEqual(4)  // cap is 4
     }
   )
+})
+
+// ─── Lock asymmetry — bracket downgrade vs other passes ─────────────────────
+//
+// The bracket downgrade uses a NARROWER lock set than other passes. Other
+// passes (critique / floors / wincon backstop) preserve skeleton +
+// floor-added cards. The downgrade allows swapping skeleton + floor adds
+// because bracket fit beats EDHREC fidelity and beats hitting minimums.
+//
+// Regression: in commit 0cfe528 the lock-helper refactor accidentally
+// added fromSkeleton to the canonical lock set, which made the downgrade
+// unable to remove combo pieces that EDHREC's skeleton handed it. Result:
+// real-world B3/B4 builds shipped at actualBracket 5.
+
+describe('Lock asymmetry — isLockedAgainstDowngrade is NARROWER than isLockedByFloor', () => {
+  it('skeleton cards are locked against most passes BUT NOT against the downgrade', () => {
+    const skel = { name: 'EDHREC pick', fromSkeleton: true }
+    expect(isLockedByFloor(skel)).toBe(true)              // critique can't swap
+    expect(isLockedAgainstDowngrade(skel)).toBe(false)   // downgrade CAN swap
+  })
+
+  it('tutor-floor cards are locked against most passes BUT NOT against the downgrade', () => {
+    const tut = { name: 'Forced Tutor', fromTutorFloor: true }
+    expect(isLockedByFloor(tut)).toBe(true)
+    expect(isLockedAgainstDowngrade(tut)).toBe(false)
+  })
+
+  it('removal-floor cards are locked against most passes BUT NOT against the downgrade', () => {
+    const r = { name: 'Forced Removal', fromRemovalFloor: true }
+    expect(isLockedByFloor(r)).toBe(true)
+    expect(isLockedAgainstDowngrade(r)).toBe(false)
+  })
+
+  it('wincon-backstop cards are locked against most passes BUT NOT against the downgrade', () => {
+    const w = { name: 'Forced Wincon', fromWinconBackstop: true }
+    expect(isLockedByFloor(w)).toBe(true)
+    expect(isLockedAgainstDowngrade(w)).toBe(false)
+  })
+
+  it('mana-solver cards are locked against EVERYTHING (lands are sacred)', () => {
+    const land = { name: 'Forced Land', fromManaSolver: true }
+    expect(isLockedByFloor(land)).toBe(true)
+    expect(isLockedAgainstDowngrade(land)).toBe(true)
+  })
+
+  it('bracket-staples are locked against EVERYTHING (already bracket-aware)', () => {
+    const staple = { name: 'Sol Ring', fromBracketStaples: true }
+    expect(isLockedByFloor(staple)).toBe(true)
+    expect(isLockedAgainstDowngrade(staple)).toBe(true)
+  })
+
+  it('tribal-floor cards are locked against EVERYTHING (tribal density is identity)', () => {
+    const tribal = { name: 'Forced Dragon', fromTribalFloor: true }
+    expect(isLockedByFloor(tribal)).toBe(true)
+    expect(isLockedAgainstDowngrade(tribal)).toBe(true)
+  })
+
+  it('clean cards are locked nowhere', () => {
+    const clean = { name: 'Random' }
+    expect(isLockedByFloor(clean)).toBe(false)
+    expect(isLockedAgainstDowngrade(clean)).toBe(false)
+  })
+})
+
+// ─── Regression: B3 with combo-piece-in-skeleton must downgrade ─────────────
+//
+// In production the user saw B3/B4 decks shipping at actualBracket 5
+// because EDHREC skeleton handed them combo pieces and the downgrade
+// couldn't remove them (skeleton was locked). This test puts known combo
+// pieces in the skeleton via mockState.edhrecTopCards and verifies the
+// downgrade brings actualBracket back to target.
+
+describe('Regression: EDHREC skeleton combo piece must be removable by downgrade at B3', () => {
+  it('Atraxa B3 with Thassa\'s Oracle + Demonic Consultation in skeleton → actualBracket ≤ 3', async () => {
+    mockState.commander = ATRAXA
+    mockState.collection = buildRichCollection()
+    mockState.edhrecTopCards = [
+      { name: "Thassa's Oracle", inclusion: 0.95 },
+      { name: 'Demonic Consultation', inclusion: 0.93 },
+    ]
+    mockState.moxfieldCards = []
+    const result = await generateDeckWithLLMAssist(3, null, { twoPass: false })
+
+    // The downgrade pass MUST be able to break this combo. If skeleton is
+    // locked against downgrade, both pieces stick and actualBracket = 5.
+    expect(result.bracketAnalysis?.actualBracket).toBeLessThanOrEqual(3)
+
+    // And specifically, the deck cannot end with BOTH halves of the combo.
+    const hasOracle = result.mainDeck.some(c => c.name === "Thassa's Oracle")
+    const hasConsult = result.mainDeck.some(c => c.name === 'Demonic Consultation')
+    expect(hasOracle && hasConsult).toBe(false)
+  })
+
+  it('Atraxa B3 with single combo piece in skeleton → actualBracket ≤ 3', async () => {
+    // Single piece doesn't form a combo on its own, but is still a high-power
+    // game changer that bumps brackets. Downgrade must be able to swap it.
+    mockState.commander = ATRAXA
+    mockState.collection = buildRichCollection()
+    mockState.edhrecTopCards = [
+      { name: 'Mana Crypt', inclusion: 0.99 },     // game-changer fast mana
+    ]
+    mockState.moxfieldCards = []
+    const result = await generateDeckWithLLMAssist(3, null, { twoPass: false })
+    expect(result.bracketAnalysis?.actualBracket).toBeLessThanOrEqual(3)
+  })
 })
