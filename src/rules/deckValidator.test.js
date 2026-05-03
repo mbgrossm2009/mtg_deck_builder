@@ -256,6 +256,77 @@ describe('countRoles', () => {
       'synergy', 'tutor', 'win_condition', 'wipe',
     ].sort())
   })
+
+  // ─── Filler-counting bug regression ──────────────────────────────────────
+  //
+  // Background: cardRoles.js appends 'filler' to EVERY non-land card as a
+  // slot-bucket fallback (so deckGenerator's slot-fill has a catch-all).
+  // A card tagged `['ramp', 'filler']` has primary role 'ramp'; the filler
+  // tag just lets it compete for filler slots. Prior to the fix, countRoles
+  // counted any card with 'filler' in its roles array — which inflated the
+  // filler count to ~63 (every non-land) on real decks.
+  //
+  // The fix: filler is counted ONLY when it's the primary (first) role —
+  // i.e., no other role was detected by assignRoles.
+
+  it('does NOT count filler when card has another primary role', () => {
+    // Card with primary role ramp + filler as fallback bucket — NOT filler.
+    const cards = [
+      { roles: ['ramp', 'filler'] },
+      { roles: ['draw', 'filler'] },
+      { roles: ['removal', 'filler'] },
+      { roles: ['synergy', 'filler'] },
+      { roles: ['win_condition', 'filler'] },
+    ]
+    const counts = countRoles(cards)
+    expect(counts.filler).toBe(0)        // none of these are "true filler"
+    expect(counts.ramp).toBe(1)          // other role counts unaffected
+    expect(counts.draw).toBe(1)
+    expect(counts.removal).toBe(1)
+    expect(counts.synergy).toBe(1)
+    expect(counts.win_condition).toBe(1)
+  })
+
+  it('DOES count filler when filler is the only role', () => {
+    const cards = [
+      { roles: ['filler'] },
+      { roles: ['filler'] },
+      { roles: ['filler'] },
+    ]
+    const counts = countRoles(cards)
+    expect(counts.filler).toBe(3)
+  })
+
+  it('does NOT count lands as filler', () => {
+    const cards = [
+      { roles: ['land'] },
+      { roles: ['land'] },
+    ]
+    const counts = countRoles(cards)
+    expect(counts.filler).toBe(0)
+    expect(counts.land).toBe(2)
+  })
+
+  it('mixed deck: only true-filler cards add to filler count', () => {
+    // Realistic shape: most cards have meaningful roles + filler fallback;
+    // a few are true filler. Filler count should equal the latter.
+    const cards = [
+      ...Array(30).fill(null).map(() => ({ roles: ['land'] })),
+      ...Array(10).fill(null).map(() => ({ roles: ['ramp', 'filler'] })),
+      ...Array(10).fill(null).map(() => ({ roles: ['draw', 'filler'] })),
+      ...Array(8).fill(null).map(() => ({ roles: ['removal', 'filler'] })),
+      ...Array(15).fill(null).map(() => ({ roles: ['synergy', 'filler'] })),
+      // Only these 5 cards have NO other role detected — true filler.
+      ...Array(5).fill(null).map(() => ({ roles: ['filler'] })),
+    ]
+    const counts = countRoles(cards)
+    expect(counts.land).toBe(30)
+    expect(counts.ramp).toBe(10)
+    expect(counts.draw).toBe(10)
+    expect(counts.removal).toBe(8)
+    expect(counts.synergy).toBe(15)
+    expect(counts.filler).toBe(5)        // the regression: not 48
+  })
 })
 
 // ─── Validation warning conditions ──────────────────────────────────────────

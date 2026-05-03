@@ -95,9 +95,25 @@ export function validateDeckAtBracket(mainDeck, commander, bracket) {
 export function countRoles(cards) {
   const counts = { land: 0, ramp: 0, draw: 0, removal: 0, wipe: 0, protection: 0, win_condition: 0, tutor: 0, synergy: 0, filler: 0 }
   for (const card of cards) {
-    for (const role of (card.roles ?? [])) {
-      if (role in counts) counts[role]++
+    const roles = card.roles ?? []
+    // Count every detected role normally — except filler.
+    //
+    // Filler is a SLOT-BUCKET tag that cardRoles.js appends to every
+    // non-land card as a fallback so the deckGenerator slot-fill has a
+    // catch-all bucket. A card tagged ['ramp', 'filler'] is intended to
+    // mean "primary role: ramp, also eligible for filler slots if ramp
+    // bucket is full." Counting it as filler here would produce 60+
+    // filler counts on real decks even when most cards have meaningful
+    // roles — every non-land card is "in" the filler bucket by design.
+    //
+    // For COUNTING purposes (warnings + UI), filler should mean cards
+    // with NO meaningful role detected. assignRoles always pushes filler
+    // last, so filler being the FIRST/primary role means no other role
+    // matched.
+    for (const role of roles) {
+      if (role !== 'filler' && role in counts) counts[role]++
     }
+    if (roles[0] === 'filler') counts.filler++
   }
   return counts
 }

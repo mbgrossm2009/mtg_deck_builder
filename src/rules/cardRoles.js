@@ -216,10 +216,17 @@ export function assignRoles(card, commander, extras = {}) {
     }
   }
 
-  // Filler is a fallback bucket for EVERY non-land card. Without this, a synergy-
-  // tagged card that loses the (target-capped) synergy bucket has no way to land
-  // in the deck — even if it has a massive EDHREC bonus. With filler as a backstop,
-  // any high-scoring leftover competes for the open slots.
+  // Filler is a SLOT-BUCKET tag added to EVERY non-land card so the
+  // deckGenerator's slot-fill (deckGenerator.js fillRole 'filler') has a
+  // catch-all bucket. Without this, a synergy-tagged card that loses the
+  // (target-capped) synergy bucket has no way to land in the deck — even
+  // if it has a massive EDHREC bonus. With filler as a backstop, any
+  // high-scoring leftover competes for the open slots.
+  //
+  // Important: filler is the LAST role pushed. Code that counts "true
+  // filler" (cards with no meaningful role) checks `roles[0] === 'filler'`
+  // — see countRoles in deckValidator.js. Counting cards that *contain*
+  // the filler tag would inflate to nearly every non-land card.
   if (!roles.includes('land') && !roles.includes('filler')) roles.push('filler')
   if (roles.length === 0) roles.push('filler')
 
