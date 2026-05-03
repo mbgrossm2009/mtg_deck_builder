@@ -257,25 +257,45 @@ Evaluate them on their oracle_text, type_line, and tags.
 
 ---
 
-STEP 6 — BRACKET RULES
+STEP 6 — BRACKET RULES (HARD LIMITS — VIOLATIONS GET SWAPPED OUT)
 
-Respect the target bracket:
+The legal_card_pool you receive has ALREADY been filtered by bracket. If a
+card you want isn't in the pool, that's intentional — the pool excluded it
+because it overshoots the target bracket. DO NOT invent cards to fill gaps.
 
-Bracket 1–2:
-- avoid tutors
-- avoid fast mana
-- avoid combos
+Bracket 1 (Exhibition):
+- NO game changers, NO fast mana, NO tutors, NO infinite combos
+- Casual / janky decks; fun > optimization
 
-Bracket 3:
-- moderate optimization
-- limited tutors allowed
-- combos discouraged
+Bracket 2 (Core / precon):
+- NO game changers (Sol Ring/Arcane Signet exempt — they're in every precon)
+- NO fast mana beyond Sol Ring
+- NO tutors except land tutors (Cultivate, Farseek, etc.)
+- NO infinite combos
 
-Bracket 4–5:
-- optimized play
-- tutors allowed
-- fast mana allowed
-- combos allowed
+Bracket 3 (Upgraded — most common bracket):
+- HARD CAP: 3 game changers max per WotC's bracket spec.
+  Common B3 game-changer staples (Smothering Tithe, Fierce Guardianship,
+  Drannith Magistrate, etc.) — pick at most 3 across the entire deck.
+- HARD CAP: 2 non-safe-rock fast-mana pieces max.
+  (Sol Ring + Arcane Signet are always allowed; pieces like Mind Stone /
+  Talismans / Signets count as "safe.")
+- HARD CAP: 3 non-soft tutors max.
+- NO 2-card infinite combos, NO mass land destruction without an immediate
+  win, NO chained extra-turn loops.
+- Demonic Tutor / Vampiric Tutor / Force of Will / Mana Drain / Rhystic
+  Study are ALREADY filtered out at B3 — they belong to B4+.
+
+Bracket 4 (Optimized):
+- Tutors allowed (target 6-8). Fast mana allowed (target 6-10).
+- Combos allowed if the deck is built around protecting them.
+- Premium B4 staples (Force of Will, Mana Drain, Rhystic Study, Demonic
+  Tutor, Vampiric Tutor) ARE in the pool — use them when on-strategy.
+
+Bracket 5 (cEDH):
+- Maximize tutors (10-15), fast mana (10-12), and protected combo wincons.
+- Lower land count (24-28) is correct — fast mana + rituals fill the gap.
+- Every slot must earn it; no off-plan goodstuff.
 
 ---
 
@@ -333,6 +353,18 @@ If a win condition is vague, inconsistent, or unrealistic:
 A deck without a clear and executable win plan is invalid.
 
 Put this proof in the "winConditionDetails" field of the output JSON.
+
+MINIMUM NAMED WIN CONDITIONS BY BRACKET (hard floor — backstop will force-add if you under-deliver):
+- B1: ≥1 named single-card finisher (or one obvious combat plan)
+- B2: ≥2 named wincons (alt-wincons, big finishers, or proven combo)
+- B3: ≥2 named wincons + clear how-it-closes plan
+- B4: ≥3 named wincons (the deck plays through interaction; need redundancy)
+- B5 (cEDH): ≥2 named wincons — fewer is OK because tutors find them on demand
+  (Thassa's Oracle + Demonic Consultation is a complete cEDH win package)
+
+A multi-card pattern (aristocrats, etb-drain, combat-tribal, extra-combat
+loop, combat-damage-draw) COUNTS as a wincon for these floors — but only
+if the pattern's components are actually in your deck list.
 
 ---
 

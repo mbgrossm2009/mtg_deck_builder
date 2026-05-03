@@ -62,12 +62,17 @@ export function validateDeck(mainDeck, commander) {
 //
 // Thresholds tightened (2026-05-03) from earlier 18/12/8/5/3 set after
 // the filler-counting bug fix exposed how few cards are TRUE filler in
-// real decks. Values now match the original AI-feedback recommendation:
+// real decks. Then RELAXED at B4/B5 after eval data showed honest decks
+// were hitting 5-7 filler at B5 — fatal-clamping every one was punitive.
 //   B1 ≤ 12  — casual decks tolerate off-plan cards
 //   B2 ≤ 9   — precon-tier
 //   B3 ≤ 6   — focused upgraded deck
-//   B4 ≤ 3   — optimized — minimal off-plan
-//   B5 ≤ 1   — cEDH — every slot must earn it
+//   B4 ≤ 5   — optimized; some utility/protection cards don't share commander keywords
+//   B5 ≤ 3   — cEDH; every slot must earn it but staple stax (Defense Grid,
+//              Grafdigger's Cage, Drannith Magistrate) don't share keywords
+//              with most commanders
+//
+// Keep in sync with FILLER_CAP_BY_BRACKET in src/services/llmDeckService.js.
 //
 // We don't replace validateDeck because it's used in many places that
 // don't know the bracket. This wrapper produces an extended warning list
@@ -76,16 +81,23 @@ const FILLER_THRESHOLD_BY_BRACKET = {
   1: 12,
   2:  9,
   3:  6,
-  4:  3,
-  5:  1,
+  4:  5,
+  5:  3,
 }
 
 export function validateDeckAtBracket(mainDeck, commander, bracket) {
   const { errors, warnings } = validateDeck(mainDeck, commander)
 
   // Strip the flat-threshold filler warning from the base output — we'll
-  // emit our own bracket-scaled one instead. Keep all other warnings.
-  const filtered = warnings.filter(w => !/filler cards/.test(w))
+  // emit our own bracket-scaled one instead.
+  // Also strip the flat 33-land warning at B5, where 28 lands is the
+  // calibrated cEDH baseline (see targetLandCount in bracketRules.js).
+  // Keep all other warnings.
+  const filtered = warnings.filter(w => {
+    if (/filler cards/.test(w)) return false
+    if (bracket === 5 && /Only \d+ lands/.test(w)) return false
+    return true
+  })
 
   const counts = countRoles(mainDeck)
   const threshold = FILLER_THRESHOLD_BY_BRACKET[bracket]
@@ -94,6 +106,14 @@ export function validateDeckAtBracket(mainDeck, commander, bracket) {
       `${counts.filler} filler cards at B${bracket} (target ≤ ${threshold}). ` +
       `Many slots aren't advancing the deck's plan.`
     )
+  }
+
+  // Bracket-aware land-count warning. cEDH (B5) target is 28, so warn only
+  // when meaningfully below that; the rest of the brackets keep the flat 33.
+  const LAND_FLOOR_BY_BRACKET = { 1: 33, 2: 33, 3: 33, 4: 32, 5: 25 }
+  const landFloor = LAND_FLOOR_BY_BRACKET[bracket] ?? 33
+  if (counts.land < landFloor) {
+    filtered.push(`Only ${counts.land} lands at B${bracket} (target ≥ ${landFloor}). Deck may have mana problems.`)
   }
 
   return { errors, warnings: filtered }

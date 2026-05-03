@@ -57,6 +57,35 @@ describe('detectArchetypes', () => {
     expect(result.some(a => a.id === 'tribal_human')).toBe(false)
   })
 
+  it('detects token-tribal when commander creates tokens of a non-self creature type (Toxrill / Slug)', () => {
+    // Toxrill is typed Nightmare Horror but creates Slug creature tokens —
+    // the deck is functionally slug tribal.
+    const commander = {
+      name: 'Toxrill, the Corrosive',
+      type_line: 'Legendary Creature — Nightmare Horror',
+      oracle_text:
+        'At the beginning of each other player\'s end step, put a slime counter on each creature they control. ' +
+        'Other creatures get -1/-1 for each slime counter on them. ' +
+        'Whenever a creature an opponent controls dies, if it had a slime counter on it, ' +
+        'create a 1/1 black Slug creature token.',
+    }
+    const result = detectArchetypes(commander)
+    expect(result.some(a => a.id === 'tribal_slug')).toBe(true)
+  })
+
+  it('does NOT emit bogus tribal_treasure when the commander makes Treasure tokens', () => {
+    // Treasure isn't a creature type — "create a Treasure token" should
+    // never produce tribal_treasure. The "creature token" anchor in the
+    // regex is what enforces this.
+    const commander = {
+      name: 'Treasure Commander',
+      type_line: 'Legendary Creature — Pirate',
+      oracle_text: 'Whenever you attack, create a Treasure token.',
+    }
+    const result = detectArchetypes(commander)
+    expect(result.some(a => a.id === 'tribal_treasure')).toBe(false)
+  })
+
   it('caps results at top 4 by strength', () => {
     // Engineered to match many archetypes
     const commander = {

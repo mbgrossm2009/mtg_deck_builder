@@ -13,7 +13,11 @@ export const BRACKET_LABELS = {
 //       ramp) are exempt — even though Sol Ring is officially a "game changer"
 //       in WotC's bracket spec, every precon ships with it, so blocking it at
 //       B2 (precon power level) would be absurd
-//   B3: elite fast mana still blocked (smooths the B3→B4 power curve)
+//   B3: elite fast mana still blocked (smooths the B3→B4 power curve);
+//       elite "free interaction" game-changers (Force of Will, Mana Drain,
+//       Fierce Guardianship, etc.) blocked because they unilaterally swing
+//       the B3 power curve and were the most-flagged source of B3 bracket
+//       inflation in the eval data
 //   B4 + B5: anything goes
 export function isBracketAllowed(card, bracket) {
   const { tags = [], roles = [] } = card
@@ -35,9 +39,11 @@ export function isBracketAllowed(card, bracket) {
   }
 
   if (bracket === 3) {
-    // B3 (Upgraded) allows tutors and most fast mana, but holds back the
-    // elite cEDH-tier acceleration so it doesn't feel like a power spike.
+    // B3 (Upgraded) allows most tutors and most fast mana, but holds back
+    // the elite cEDH-tier acceleration AND the elite free-interaction
+    // game-changers so the B3 power curve doesn't spike to B4 territory.
     if (tags.includes('fast_mana') && isEliteFastMana(card.name)) return false
+    if (isEliteB3GameChanger(card.name)) return false
   }
 
   return true
@@ -67,6 +73,27 @@ function isEliteFastMana(name) {
 function isInfiniteWinCon(name) {
   return ['Thassa\'s Oracle', 'Laboratory Maniac', 'Jace, Wielder of Mysteries',
           'Exquisite Blood', 'Sanguine Bond'].includes(name)
+}
+
+// Free-interaction / draw / acceleration cards that single-handedly pull a
+// deck above the B3 power curve. The eval LLM repeatedly flagged these as
+// "pushing the deck above bracket" — the right answer is to keep them out
+// of the B3 pool entirely. Allowed at B4+.
+function isEliteB3GameChanger(name) {
+  return [
+    // Free counters / removal — single biggest B3→B4 power jump
+    'Force of Will', 'Force of Negation', 'Pact of Negation',
+    'Fierce Guardianship', 'Deflecting Swat', 'Flawless Maneuver',
+    'Mana Drain',
+    // Premium card draw engines that snowball uncontrollably
+    'Rhystic Study', 'Mystic Remora', 'Necropotence',
+    'Smothering Tithe', 'Esper Sentinel',
+    // Tier-1 hard tutors (Demonic/Vampiric class) — soft tutors still allowed
+    'Demonic Tutor', 'Vampiric Tutor', 'Imperial Seal',
+    'Grim Tutor', 'Cruel Tutor',
+    // Free creature protection
+    'Mental Misstep',
+  ].includes(name)
 }
 
 // Compute the actual bracket a finished deck belongs to
@@ -100,6 +127,11 @@ export function computeActualBracket(mainDeck, combos) {
 
   const fastManaCount = mainDeck.filter(c => (c.tags ?? []).includes('fast_mana') && !isSafeRock(c.name)).length
   if (fastManaCount >= 3 && bracket < 4) { bracket = 4 }
+
+  // WotC's bracket spec caps game-changer count at B3 (max 3). More than
+  // that is a B4 signal regardless of which specific cards they are.
+  const gameChangerCount = mainDeck.filter(c => (c.tags ?? []).includes('game_changer') && !isSafeRock(c.name)).length
+  if (gameChangerCount > 3 && bracket < 4) { bracket = 4 }
 
   if (combos.length > 0 && bracket < 4) { bracket = 4 }
   if (combos.length >= 2 && bracket < 5) { bracket = 5 }

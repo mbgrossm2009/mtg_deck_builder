@@ -2,7 +2,11 @@
 //
 // validateDeck has a single flat threshold (12). The bracket-aware
 // validateDeckAtBracket wrapper applies the bracket norm:
-//   B1 ≤ 18, B2 ≤ 12, B3 ≤ 8, B4 ≤ 5, B5 ≤ 3
+//   B1 ≤ 12, B2 ≤ 9, B3 ≤ 6, B4 ≤ 5, B5 ≤ 3
+//
+// Caps at B4/B5 were relaxed (3→5, 1→3) after eval data showed honest
+// optimized decks legitimately ship a few non-keyword utility cards
+// (cEDH stax, B4 protection) that don't share keywords with the commander.
 //
 // These tests pin down each bracket so the threshold can't drift silently.
 
@@ -42,8 +46,8 @@ describe('validateDeckAtBracket — bracket-scaled filler thresholds', () => {
     [1, 12, 13],
     [2,  9, 10],
     [3,  6,  7],
-    [4,  3,  4],
-    [5,  1,  2],
+    [4,  5,  6],
+    [5,  3,  4],
   ])('B%d: threshold %d — at threshold = no warn, threshold+1 = warn',
     (bracket, atThreshold, overThreshold) => {
       const atDeck   = deckWithFiller(atThreshold)
@@ -67,7 +71,7 @@ describe('validateDeckAtBracket — bracket-scaled filler thresholds', () => {
     expect(fillerWarn).toBeDefined()
     expect(fillerWarn).toMatch(/10 filler/)
     expect(fillerWarn).toMatch(/B4/)
-    expect(fillerWarn).toMatch(/≤ 3/)
+    expect(fillerWarn).toMatch(/≤ 5/)
   })
 
   it('strips the flat-threshold filler warning from the base validator', () => {

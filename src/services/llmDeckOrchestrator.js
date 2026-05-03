@@ -537,17 +537,22 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     }
   }
 
-  // 10b. Wincon backstop — every deck needs at least 2 win conditions. If
-  // skeleton + LLM picks + heuristic fill all under-delivered, force-add the
-  // best available wincons from the legal pool, kicking out the lowest-priority
-  // non-skeleton/non-mana-base picks to make room.
+  // 10b. Wincon backstop — every deck needs N win conditions where N is
+  // bracket-scaled. Casual brackets (B1-B2) want at least one obvious win;
+  // optimized B4 needs density (3 named wincons) so the deck can close
+  // through interaction; cEDH (B5) intentionally runs few NAMED wincons
+  // because tutors find them on demand. If skeleton + LLM picks + heuristic
+  // fill all under-delivered, force-add the best available wincons from the
+  // legal pool, kicking out the lowest-priority non-skeleton/non-mana-base
+  // picks to make room.
   //
   // Counts BOTH single-card wincons AND multi-card patterns (aristocrats:
   // sac outlet + drain payoff; etb-drain: token producer + Impact Tremors;
   // combat tribal: lord stack + tribal density). Without pattern detection
   // a Krenko + Goblin Bombardment + Impact Tremors deck reads as "0 wincons"
   // even though it can close the game easily.
-  const MIN_WINCONS = 2
+  const MIN_WINCONS_BY_BRACKET = { 1: 1, 2: 2, 3: 2, 4: 3, 5: 2 }
+  const MIN_WINCONS = MIN_WINCONS_BY_BRACKET[bracket] ?? 2
   const isWincon = (c) => (c.roles ?? []).includes('win_condition') ||
                           (c.tags ?? []).includes('explosive_finisher')
   const winconCount = deck.filter(isWincon).length
@@ -1441,6 +1446,20 @@ function pickDowngradeSwap({ deck, combos, targetBracket, legalNonLands }) {
         isReplacement: (c) => isReplacementSafeAtBracket(c) && !(c.tags ?? []).includes('fast_mana'),
         offenderRank:  () => 1,
         reasonText:    () => 'excess fast mana (B3 cap is 2 non-safe-rock pieces)',
+      })
+      if (swap) return swap
+    }
+  }
+
+  // PRIORITY 3b: too many game changers at B3 (WotC spec caps B3 at 3)
+  if (targetBracket === 3) {
+    const gcCount = deck.filter(c => (c.tags ?? []).includes('game_changer') && !isSafeRock(c.name)).length
+    if (gcCount > 3) {
+      const swap = pickSwap(deck, legalNonLands, {
+        isOffender:    (c) => (c.tags ?? []).includes('game_changer') && !isSafeRock(c.name),
+        isReplacement: (c) => isReplacementSafeAtBracket(c) && !(c.tags ?? []).includes('game_changer'),
+        offenderRank:  () => 1,
+        reasonText:    () => 'excess game changers (B3 cap is 3 per WotC bracket spec)',
       })
       if (swap) return swap
     }

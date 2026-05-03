@@ -45,6 +45,7 @@ export function validateLLMDeckResponse({
   commander,
   legalCardPool,
   collection,
+  bracket = null,
   expectedDeckSize = 99,    // when mana base is solver-locked, this is 99 - lockedLands
 }) {
   const validCards = []
@@ -146,7 +147,21 @@ export function validateLLMDeckResponse({
     warnings.push(`LLM returned ${validCards.length} valid cards — need to fill ${missingCards} more slots from the heuristic fallback.`)
   }
   if (invalidCards.length > 0) {
-    warnings.push(`Rejected ${invalidCards.length} card${invalidCards.length === 1 ? '' : 's'} from the LLM response (see invalidCards for reasons).`)
+    // Group rejections by reason so the warning surface tells the user WHY
+    // each card was dropped, not just that N cards were dropped. Single-count
+    // warnings buried the per-card detail in the response payload where the
+    // UI never showed it.
+    const byReason = new Map()
+    for (const inv of invalidCards) {
+      const reason = inv.rejectionReason || 'Unspecified'
+      if (!byReason.has(reason)) byReason.set(reason, [])
+      byReason.get(reason).push(inv.name)
+    }
+    for (const [reason, names] of byReason.entries()) {
+      const sample = names.slice(0, 3).join(', ')
+      const more = names.length > 3 ? `, +${names.length - 3} more` : ''
+      warnings.push(`Rejected ${names.length} card${names.length === 1 ? '' : 's'} (${reason}): ${sample}${more}`)
+    }
   }
   if (duplicateCards.length > 0) {
     warnings.push(`LLM returned duplicates of ${duplicateCards.length} non-basic card${duplicateCards.length === 1 ? '' : 's'} — singleton enforced.`)
@@ -155,10 +170,13 @@ export function validateLLMDeckResponse({
   // Light role-balance feedback (purely informational; the heuristic fallback
   // is what actually fixes underweight roles). Skip the land warning when the
   // orchestrator solved the mana base separately — the LLM was correctly told
-  // not to pick lands.
+  // not to pick lands. Bracket-aware floor: cEDH (B5) targets 28 lands, so
+  // 33 is the wrong threshold there.
   const roleCounts = {}
   for (const v of validCards) roleCounts[v.role] = (roleCounts[v.role] ?? 0) + 1
-  if (expectedDeckSize === 99 && (roleCounts.land ?? 0) < 33) {
+  const LAND_FLOOR_BY_BRACKET = { 1: 33, 2: 33, 3: 33, 4: 32, 5: 25 }
+  const landFloor = (bracket && LAND_FLOOR_BY_BRACKET[bracket]) ?? 33
+  if (expectedDeckSize === 99 && (roleCounts.land ?? 0) < landFloor) {
     warnings.push(`Only ${roleCounts.land ?? 0} lands — likely mana issues.`)
   }
   if ((roleCounts.ramp ?? 0) < 6)         warnings.push(`Only ${roleCounts.ramp ?? 0} ramp pieces — deck may be slow.`)

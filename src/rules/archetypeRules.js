@@ -477,18 +477,56 @@ export function detectArchetypes(commander) {
     if (hits > 0) matches.push({ id: arch.id, label: arch.label, strength: hits })
   }
 
-  // Tribal detection — only emit a tribe if (a) it's a creature subtype on the
-  // commander's own type_line AND (b) the commander's oracle text references it.
-  // Both conditions matter:
-  //   (a) alone: too many false positives (every Human legendary becomes tribal)
-  //   (b) alone: false positives on flavor/ability words (Firebending, Voltron)
-  // Together they catch real tribal commanders (Sliver Overlord says "Sliver",
-  // Krenko says "Goblin") without triggering on every legendary creature.
+  // Tribal detection — two flavors:
+  //   (1) Subtype-on-typeline + oracle ref: classic tribal (Krenko / Sliver
+  //       Overlord). Commander IS the type AND talks about it. Both checks
+  //       are required to avoid false positives — type-line alone makes
+  //       every Human legendary "tribal"; oracle alone matches flavor words.
+  //   (2) Token-tribal: commander CREATES tokens of a creature type even
+  //       though that type isn't on its own type_line. Toxrill (Nightmare
+  //       Horror) creates Slug tokens — that IS a slug-tribal commander
+  //       even though its type line says Nightmare Horror. Detected via
+  //       "create … <Type> creature token" pattern.
   const subtypes = extractSubtypes(commander.type_line ?? '')
   const oracleLower = (commander.oracle_text ?? '').toLowerCase()
+  const seenTribes = new Set()
   for (const sub of subtypes) {
     if (oracleLower.includes(sub)) {
       matches.push(tribalArchetype(sub, 2))
+      seenTribes.add(sub)
+    }
+  }
+  // Token-tribal: scan for "create N <Type> creature token(s)" patterns.
+  // Captures Toxrill (Slug), Krenko-style goblin token producers when they
+  // say "create a 1/1 Goblin creature token", token-aristocrats commanders
+  // that name a tribe in their token output, etc. The word "creature" before
+  // "token" is REQUIRED — Treasure / Food / Clue / Blood tokens would
+  // otherwise emit bogus tribal_treasure / tribal_food archetypes.
+  const tokenCreationRe = /create [^.]*?\b(?:a|an|two|three|four|five|six|seven|x|that many|any number of)\b[^.]*?\bcreature tokens?\b/gi
+  let m
+  while ((m = tokenCreationRe.exec(oracleLower)) !== null) {
+    const slice = m[0]
+    // Find the last meaningful word before "creature token(s)" that isn't a
+    // color, number, or stat block — that's the tribe.
+    const COLORS = new Set(['white', 'blue', 'black', 'red', 'green', 'colorless', 'multicolored'])
+    const beforeCreature = slice.split(/\s+creature\s+tokens?\b/)[0]
+    if (!beforeCreature) continue
+    const words = beforeCreature.trim().split(/\s+/)
+    let chosen = null
+    for (let i = words.length - 1; i >= 0; i--) {
+      const w = words[i].replace(/[^a-z]/g, '')
+      if (!w) continue
+      if (COLORS.has(w)) continue
+      if (/^\d+$/.test(words[i]) || /^\d+\/\d+$/.test(words[i])) continue   // number or P/T
+      if (NON_TRIBE_TYPES.has(w)) continue
+      // Skip filler words that show up between number and type
+      if (['with', 'and', 'or', 'the', 'this', 'that'].includes(w)) continue
+      chosen = w
+      break
+    }
+    if (chosen && !seenTribes.has(chosen)) {
+      matches.push(tribalArchetype(chosen, 2))
+      seenTribes.add(chosen)
     }
   }
 

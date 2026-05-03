@@ -32,7 +32,17 @@ import { getExecutionThresholdForBracket } from '../rules/commanderExecution'
 
 // Bracket-scaled filler caps (kept in sync with deckValidator.js).
 // Used by the eval score clamp to know when filler is "runaway."
-const FILLER_CAP_BY_BRACKET = { 1: 12, 2: 9, 3: 6, 4: 3, 5: 1 }
+//
+// "Filler" here = cards whose PRIMARY role is `filler` (i.e. assignRoles
+// found no other role match). At B4/B5 we still expect a few legitimately
+// off-keyword cards (cEDH protection like Defense Grid / Drannith Magistrate /
+// Grafdigger's Cage; B4 utility creatures) that don't share keywords with
+// the commander but earn their slot. Earlier caps of 3/1 were so tight that
+// any honest deck triggered fatal score clamps (eval data showed 5-7 filler
+// at B5 across multiple commanders — fatal-clamping all of them was punitive).
+// Doubled values give honest decks room while still flagging genuinely
+// off-plan piles.
+const FILLER_CAP_BY_BRACKET = { 1: 12, 2: 9, 3: 6, 4: 5, 5: 3 }
 
 // Toggle the mock on/off without editing call sites. The hybrid orchestrator
 // reads this and falls back to the heuristic generator if the LLM is "down".

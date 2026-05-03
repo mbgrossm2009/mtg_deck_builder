@@ -190,13 +190,29 @@ describe('Eligibility — Bracket 3 (Upgraded) does not behave like Bracket 4', 
     expect(isBracketAllowed(card({ name: 'Talisman of Indulgence', tags: ['fast_mana'] }), 3)).toBe(true)
   })
 
-  it('B3 unlocks card tutors', () => {
-    expect(isBracketAllowed(card({ name: 'Demonic Tutor', tags: ['tutor'] }), 3)).toBe(true)
-    expect(isBracketAllowed(card({ name: 'Vampiric Tutor', tags: ['tutor'] }), 3)).toBe(true)
+  it('B3 unlocks soft tutors but still blocks the elite tier-1 hard tutors', () => {
+    // Soft / mid-tier tutors (Eladamri's Call, Idyllic Tutor, etc.) are fine at B3.
+    expect(isBracketAllowed(card({ name: "Eladamri's Call", tags: ['tutor'] }), 3)).toBe(true)
+    expect(isBracketAllowed(card({ name: 'Idyllic Tutor',   tags: ['tutor'] }), 3)).toBe(true)
+    // The tier-1 cEDH-grade tutors stay banned at B3 — they belong to B4+.
+    expect(isBracketAllowed(card({ name: 'Demonic Tutor',   tags: ['tutor'] }), 3)).toBe(false)
+    expect(isBracketAllowed(card({ name: 'Vampiric Tutor',  tags: ['tutor'] }), 3)).toBe(false)
+    // Both should be allowed at B4.
+    expect(isBracketAllowed(card({ name: 'Demonic Tutor',   tags: ['tutor'] }), 4)).toBe(true)
+    expect(isBracketAllowed(card({ name: 'Vampiric Tutor',  tags: ['tutor'] }), 4)).toBe(true)
   })
 
-  it('B3 unlocks game changers', () => {
+  it('B3 allows generic game changers but blocks the elite free-interaction set', () => {
+    // A generic non-elite game changer is fine at B3 (subject to deck-level cap).
     expect(isBracketAllowed(card({ name: 'X', tags: ['game_changer'] }), 3)).toBe(true)
+    // Elite free counters / draw engines stay banned at B3.
+    expect(isBracketAllowed(card({ name: 'Force of Will',  tags: ['game_changer'] }), 3)).toBe(false)
+    expect(isBracketAllowed(card({ name: 'Mana Drain',     tags: ['game_changer'] }), 3)).toBe(false)
+    expect(isBracketAllowed(card({ name: 'Rhystic Study',  tags: ['game_changer'] }), 3)).toBe(false)
+    expect(isBracketAllowed(card({ name: 'Smothering Tithe', tags: ['game_changer'] }), 3)).toBe(false)
+    // All allowed at B4+.
+    expect(isBracketAllowed(card({ name: 'Force of Will',  tags: ['game_changer'] }), 4)).toBe(true)
+    expect(isBracketAllowed(card({ name: 'Mana Drain',     tags: ['game_changer'] }), 4)).toBe(true)
   })
 
   it('B3 unlocks infinite wincons (lifted from B1/B2 ban)', () => {
@@ -271,10 +287,12 @@ describe('Land ramp vs card tutor', () => {
     }
   })
 
-  it('card tutors and land ramp are independent at all brackets', () => {
-    // At B3+, both should be allowed
+  it('land ramp is allowed at every bracket; elite hard tutors only B4+', () => {
+    // Land ramp is universal.
     expect(isBracketAllowed(card({ name: 'Cultivate',     roles: ['ramp'], tags: [] }), 3)).toBe(true)
-    expect(isBracketAllowed(card({ name: 'Demonic Tutor', tags: ['tutor'] }), 3)).toBe(true)
+    // Demonic Tutor unlocks at B4 (B3 keeps it out as part of the elite set).
+    expect(isBracketAllowed(card({ name: 'Demonic Tutor', tags: ['tutor'] }), 3)).toBe(false)
+    expect(isBracketAllowed(card({ name: 'Demonic Tutor', tags: ['tutor'] }), 4)).toBe(true)
   })
 })
 
@@ -465,6 +483,27 @@ describe('Bracket escalation — computeActualBracket', () => {
     const { flaggedCards } = computeActualBracket(deck, [])
     const dups = flaggedCards.filter(n => n === 'Demonic Tutor')
     expect(dups).toHaveLength(1)
+  })
+
+  it('3 or fewer game changers stay at bracket 3 (within WotC cap)', () => {
+    const deck = [
+      tagged('GC One',   ['game_changer']),
+      tagged('GC Two',   ['game_changer']),
+      tagged('GC Three', ['game_changer']),
+    ]
+    const { actualBracket } = computeActualBracket(deck, [])
+    expect(actualBracket).toBe(3)
+  })
+
+  it('more than 3 game changers escalates from B3 to B4', () => {
+    const deck = [
+      tagged('GC One',   ['game_changer']),
+      tagged('GC Two',   ['game_changer']),
+      tagged('GC Three', ['game_changer']),
+      tagged('GC Four',  ['game_changer']),
+    ]
+    const { actualBracket } = computeActualBracket(deck, [])
+    expect(actualBracket).toBeGreaterThanOrEqual(4)
   })
 })
 
