@@ -357,7 +357,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     })
 
     const fallbackCounts = countCriticalCards(heuristic.mainDeck)
-    const fallbackWincons = detectMultiCardWincons(heuristic.mainDeck, { archetypes: detectArchetypes(commander) })
+    const fallbackWincons = detectMultiCardWincons(heuristic.mainDeck, { archetypes: detectArchetypes(commander) }, commander)
     const fallbackWarnings = filterStaleCountWarnings(
       [...warnings, ...filteredHeuristicWarnings],
       fallbackCounts,
@@ -500,7 +500,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   const isWincon = (c) => (c.roles ?? []).includes('win_condition') ||
                           (c.tags ?? []).includes('explosive_finisher')
   const winconCount = deck.filter(isWincon).length
-  const multiCardWincons = detectMultiCardWincons(deck, strategyContext)
+  const multiCardWincons = detectMultiCardWincons(deck, strategyContext, commander)
   const effectiveWinconCount = winconCount + multiCardWincons.length
   if (effectiveWinconCount < MIN_WINCONS) {
     const winconCandidates = legalNonLands
@@ -929,7 +929,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   // the eval harness AND passed into the eval prompt so the LLM evaluator
   // doesn't have to count tutors/removal/etc. by eyeballing card names.
   const criticalCardCounts = countCriticalCards(deck)
-  const detectedWincons = detectMultiCardWincons(deck, strategyContext)
+  const detectedWincons = detectMultiCardWincons(deck, strategyContext, commander)
 
   // Filter stale warnings — the validator complains about "Only 0 removal"
   // because it ran on the LLM's raw response BEFORE the floors added
@@ -1087,11 +1087,12 @@ function filterStaleCountWarnings(warnings, counts, detectedWincons) {
 //                    Purphoros, Terror of the Peaks, Hellrider)
 //   - combat_tribal: 2+ tribal lords + 18+ on-tribe creatures = "swing
 //                    wide for the win" plan
-function detectMultiCardWincons(deck, strategyContext) {
+function detectMultiCardWincons(deck, strategyContext, commander = null) {
   const patterns = []
   const tags = (c) => c.tags ?? []
   const text = (c) => (c.oracle_text ?? '').toLowerCase()
   const name = (c) => (c.name ?? '').toLowerCase()
+  const commanderText = (commander?.oracle_text ?? '').toLowerCase()
 
   // Drain payoffs — cards that drain life when creatures die or ETB.
   const DRAIN_PAYOFFS = new Set([
@@ -1156,6 +1157,49 @@ function detectMultiCardWincons(deck, strategyContext) {
     if (lordCount >= 2 && onTribe >= 18) {
       patterns.push(`combat-tribal: ${lordCount} lords + ${onTribe} ${tribe}s = swing wide`)
     }
+  }
+
+  // Extra-combat loop: a commander or deck card that grants ADDITIONAL
+  // COMBAT phases is a wincon engine when paired with attack triggers
+  // (Najeela makes a Warrior token on each Warrior attack — extra combat
+  // → more Warriors → more combats → win). Same shape applies to Aurelia,
+  // Moraug, Etali — once you can take 2+ extra combats per turn the deck
+  // wins via accumulating attackers.
+  //
+  // Detect either:
+  //   - Commander grants extra combat AND deck has a token-on-attack
+  //     enabler (commander itself, or a deck card)
+  //   - Deck has 2+ extra-combat enablers (Aggravated Assault, Hellkite
+  //     Charger, Combat Celebrant, Scourge of the Throne, Aurelia, etc.)
+  //     PLUS at least 5 attackers — enough that infinite/extra combats
+  //     translate to lethal damage
+  const EXTRA_COMBAT_NAMES = new Set([
+    'aggravated assault', 'hellkite charger', 'combat celebrant',
+    'scourge of the throne', 'aurelia, the warleader', 'moraug, fury of akoum',
+    'breath of fury', 'world at war', 'savage beating', 'seize the day',
+    'relentless assault', 'waves of aggression', 'chandra\'s ignition',
+    'sword of feast and famine', 'port razer', 'godo, bandit warlord',
+  ])
+  const extraCombatRe = /additional combat (?:phase|step)/
+  const tokenOnAttackRe = /whenever .* attacks?,? .*create/
+  const commanderHasExtraCombat = extraCombatRe.test(commanderText)
+  const commanderTokenOnAttack  = tokenOnAttackRe.test(commanderText)
+  const deckExtraCombatCount = deck.filter(c =>
+    EXTRA_COMBAT_NAMES.has(name(c)) || extraCombatRe.test(text(c))
+  ).length
+  const deckAttackTriggerCount = deck.filter(c =>
+    tokenOnAttackRe.test(text(c)) || /whenever .* attacks?,? .*draw a card/i.test(text(c))
+  ).length
+
+  if (commanderHasExtraCombat && commanderTokenOnAttack) {
+    // Najeela-style: the commander itself is both halves of the engine.
+    patterns.push('extra-combat loop: commander grants extra combat + commander makes tokens on attack')
+  } else if (commanderHasExtraCombat && deckAttackTriggerCount >= 1) {
+    patterns.push(`extra-combat loop: commander grants extra combat + ${deckAttackTriggerCount} attack-trigger card${deckAttackTriggerCount === 1 ? '' : 's'}`)
+  } else if (deckExtraCombatCount >= 2 && deck.filter(c =>
+    (c.type_line ?? '').toLowerCase().includes('creature')
+  ).length >= 5) {
+    patterns.push(`extra-combat loop: ${deckExtraCombatCount} extra-combat enablers + creature density`)
   }
 
   return patterns

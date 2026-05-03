@@ -150,15 +150,14 @@ describe('Mana base stress — high brackets avoid weak/tapped lands', () => {
     expect(weakLandsInDeck.length).toBeLessThanOrEqual(nonBasic.length / 2)
   })
 
-  it('Najeela B5 deck minimizes weak guildgates (≤3 in current fixture)', async () => {
-    // TODO: At B5 the mana solver should HARD-REJECT weak lands when ANY
-    // premium fixing remains in the pool. Current behavior includes them
-    // when basics aren't preferred. This test is a regression backstop —
-    // if the count creeps above 3, something has gotten worse.
+  it('Najeela B5 deck includes ZERO weak guildgates — cEDH hard-rejects them', async () => {
+    // At B5 the mana solver hard-rejects weak-tier lands regardless of
+    // color count. cEDH manabases prefer a basic over a tapped guildgate
+    // because tempo > fixing at this bracket.
     const result = await buildDeck(NAJEELA, 5)
     const weakLandNames = new Set(['Izzet Guildgate', 'Akoum Refuge', 'Frontier Bivouac'])
     const weakLandsInDeck = result.mainDeck.filter(c => weakLandNames.has(c.name))
-    expect(weakLandsInDeck.length).toBeLessThanOrEqual(3)
+    expect(weakLandsInDeck.length).toBe(0)
   })
 })
 

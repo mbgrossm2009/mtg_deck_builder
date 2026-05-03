@@ -68,11 +68,19 @@ describe('cEDH B5 invariants — Najeela (B5-capable, not capped)', () => {
     expect(fastMana.length).toBeGreaterThanOrEqual(6)
   })
 
-  // TODO: Najeela's win plan (extra combat → infinite combats with 5-color
-  // mana) isn't detected by either single-card wincon tagging or the
-  // current multi-card patterns (aristocrats / etb-drain / combat-tribal).
-  // To assert "has a win plan" here we'd need a new pattern detector for
-  // extra-combat-loop commanders. Tracked as a known gap.
+  it('has a win plan — single-card wincon OR detected multi-card pattern', () => {
+    // Najeela's plan is the extra-combat loop: each Warrior attack creates
+    // a new Warrior, then her WUBRG ability grants additional combat. The
+    // detectMultiCardWincons function recognizes this as an "extra-combat
+    // loop" pattern (commander grants additional combat + makes tokens on
+    // attack).
+    const singleCardWincons = deck.filter(c =>
+      (c.roles ?? []).includes('win_condition') ||
+      (c.tags ?? []).includes('explosive_finisher')
+    )
+    const detectedPatterns = result.detectedWincons ?? []
+    expect(singleCardWincons.length + detectedPatterns.length).toBeGreaterThanOrEqual(1)
+  })
 
   // NOTE: We don't assert filler counts here. The fixture-based mock LLM
   // picks cards by a simple "has oracle text" rule, which means many

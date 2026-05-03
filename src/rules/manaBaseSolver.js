@@ -61,10 +61,15 @@ function targetNonBasicCount(bracket, totalLandCount, colorCount) {
 // don't reach for fast lands or premium fixing because the deck doesn't need
 // the speed AND the user usually doesn't own them anyway.
 //
-// 5-color decks ALWAYS allow weak-tier multi-color fixing — a guildgate
-// fixing 2 colors is strictly better than a basic at fixing color demand.
+// At B5 (cEDH) we HARD-REJECT weak-tier lands regardless of color count.
+// Real cEDH 5-color manabases run premium fixing only — every tapped
+// guildgate is a tempo loss the format won't tolerate. A basic Mountain
+// is faster than Izzet Guildgate even in a 5-color deck. Below B5 the
+// prior behavior holds: 5c accepts weak fixing because a guildgate IS
+// better than a basic at hitting color demand.
 function shouldUseTier(tier, bracket, colorCount = 2) {
-  if (colorCount >= 5) return true                                // 5c desperately needs fixing — accept weak tier
+  if (bracket >= 5 && tier === 'weak') return false               // cEDH: never weak, prefer basics
+  if (colorCount >= 5) return true                                // 5c at B≤4: accept weak tier for fixing
   if (colorCount === 4 && tier === 'weak') return bracket <= 4    // 4c at low/mid brackets accepts weak tier
   if (bracket >= 3) return tier !== 'weak'                        // B3+ avoid weak entirely (in 1-3 color)
   if (bracket === 2) return tier === 'good' || tier === 'mid'
