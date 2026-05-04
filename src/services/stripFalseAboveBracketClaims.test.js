@@ -126,6 +126,43 @@ describe('stripFalseAboveBracketClaims — only acts when bracket_fit verdict is
   })
 })
 
+// Phase 2.7: bracketFitVerdict coercion. The LLM keeps picking
+// 'over_target' even when bracket_fit.verdict === 'pass' (eval data
+// showed Karlach B3/B4, Feather B4/B5 all doing this despite explicit
+// prompt instruction). Coerce the misuse to 'high_end' since the model
+// is signaling "deck is on the spicy side" — that's just not the same
+// thing as "deck overshoots its target bracket."
+describe('stripFalseAboveBracketClaims — bracketFitVerdict coercion', () => {
+  it('coerces over_target → high_end when lens passes', () => {
+    const evalIn = {
+      ...baseEval,
+      bracketFitVerdict: 'over_target',
+    }
+    const out = stripFalseAboveBracketClaims(evalIn, passLens)
+    expect(out.bracketFitVerdict).toBe('high_end')
+    expect(out._stripped.verdictCoerced).toBe('over_target → high_end')
+  })
+
+  it('does NOT coerce over_target when lens fails', () => {
+    const evalIn = {
+      ...baseEval,
+      bracketFitVerdict: 'over_target',
+    }
+    const out = stripFalseAboveBracketClaims(evalIn, failLens)
+    expect(out.bracketFitVerdict).toBe('over_target')
+  })
+
+  it('leaves other verdicts untouched (high_end / within_band / etc.)', () => {
+    for (const verdict of ['within_band', 'low_end', 'high_end', 'needs_tuning']) {
+      const out = stripFalseAboveBracketClaims(
+        { ...baseEval, bracketFitVerdict: verdict },
+        passLens
+      )
+      expect(out.bracketFitVerdict).toBe(verdict)
+    }
+  })
+})
+
 // Phrase coverage from real eval-LLM output. Each entry below is a sentence
 // the LLM has actually emitted in production runs. When the model invents a
 // new euphemism for "above bracket," add the example here AND extend

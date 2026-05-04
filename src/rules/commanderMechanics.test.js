@@ -318,3 +318,92 @@ describe('Real commander mechanic tags — verbatim oracle text from Scryfall', 
     expect(tags.filter(t => t.startsWith('tribal_'))).toEqual([])
   })
 })
+
+// Phase 2.4: cares_about_activated_abilities. Eval data showed Zirda the
+// Dawnwaker shipping with 13 filler at B5 because the lens couldn't tell
+// which cards were on-plan — "activated abilities matter" wasn't modeled.
+// These tests pin the new mechanic detector + the card-tag mapping.
+describe('cares_about_activated_abilities mechanic', () => {
+  it('detects activation-cost-reduction commanders (Zirda-style)', () => {
+    const zirda = {
+      name: 'Zirda, the Dawnwaker',
+      type_line: 'Legendary Creature — Elemental Dog',
+      oracle_text:
+        'Activated abilities of creatures you control cost up to {2} less to activate. ' +
+        'This effect can\'t reduce the mana in that cost to less than one mana. ' +
+        '{X}{R}{W}, {T}: Up to one target creature gets +X/+X until end of turn.',
+    }
+    const tags = extractCommanderMechanicTags(zirda)
+    expect(tags).toContain('cares_about_activated_abilities')
+  })
+
+  it('detects untap-for-activation (Marwyn-style mana commanders)', () => {
+    const marwyn = {
+      name: 'Marwyn, the Nurturer',
+      type_line: 'Legendary Creature — Elf Druid',
+      oracle_text:
+        'Whenever another Elf enters the battlefield under your control, put a +1/+1 counter on Marwyn, the Nurturer. ' +
+        '{T}: Add an amount of {G} equal to Marwyn\'s power.',
+    }
+    const tags = extractCommanderMechanicTags(marwyn)
+    expect(tags).toContain('cares_about_activated_abilities')
+  })
+
+  it('does NOT tag a vanilla legendary creature with activated_abilities', () => {
+    const vanilla = {
+      name: 'Test Vanilla Commander',
+      type_line: 'Legendary Creature — Human',
+      oracle_text: 'Other creatures you control get +1/+1.',
+    }
+    const tags = extractCommanderMechanicTags(vanilla)
+    expect(tags).not.toContain('cares_about_activated_abilities')
+  })
+
+  it('cares_about_activated_abilities maps to activated_ability + untap + mana_doubler card tags', () => {
+    const boosts = commanderToCardTagBoosts(['cares_about_activated_abilities'])
+    expect(boosts.has('activated_ability')).toBe(true)
+    expect(boosts.has('untap')).toBe(true)
+    expect(boosts.has('mana_doubler')).toBe(true)
+  })
+})
+
+// Phase 2.4 (continued): the activated_ability card tag detection in
+// cardRoles.js. Pins what counts as "has an activated ability" so the
+// boost-mapping above actually finds candidates.
+describe('activated_ability card tag', () => {
+  it('tags Walking Ballista (activated +1/+1 ability)', async () => {
+    const { assignRoles } = await import('./cardRoles')
+    const walkingBallista = {
+      name: 'Walking Ballista',
+      type_line: 'Artifact Creature — Construct',
+      oracle_text: 'Walking Ballista enters the battlefield with X +1/+1 counters on it. ' +
+                   '{4}: Put a +1/+1 counter on Walking Ballista. ' +
+                   'Remove a +1/+1 counter from Walking Ballista: It deals 1 damage to any target.',
+    }
+    const { tags } = assignRoles(walkingBallista, { name: 'Cmd', oracle_text: '', type_line: 'Legendary Creature' })
+    expect(tags).toContain('activated_ability')
+  })
+
+  it('tags cards with cycling', async () => {
+    const { assignRoles } = await import('./cardRoles')
+    const eternalDragon = {
+      name: 'Eternal Dragon',
+      type_line: 'Creature — Dragon Spirit',
+      oracle_text: 'Flying. {3}{W}{W}: Return Eternal Dragon from your graveyard to your hand. ' +
+                   'Plainscycling {2}.',
+    }
+    const { tags } = assignRoles(eternalDragon, { name: 'Cmd', oracle_text: '', type_line: 'Legendary Creature' })
+    expect(tags).toContain('activated_ability')
+  })
+
+  it('does NOT tag a vanilla creature without activated abilities', async () => {
+    const { assignRoles } = await import('./cardRoles')
+    const grizzlyBears = {
+      name: 'Grizzly Bears',
+      type_line: 'Creature — Bear',
+      oracle_text: '',
+    }
+    const { tags } = assignRoles(grizzlyBears, { name: 'Cmd', oracle_text: '', type_line: 'Legendary Creature' })
+    expect(tags).not.toContain('activated_ability')
+  })
+})

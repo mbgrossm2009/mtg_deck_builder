@@ -228,6 +228,104 @@ describe('clampEvalScore — preserves other eval fields', () => {
 // Phase 2.6: deck viability flag aggregates the existing severity signals
 // into a single user-facing enum. Used by UI to render a status badge
 // without parsing the clamp-reasons array.
+// Phase 2.1: ramp / interaction / wincon score gates. Each new gate kind
+// gets its own test pinning the severity + cap behavior. Without these,
+// the gate definitions could silently drift (e.g. someone tightens the
+// ramp threshold and breaks a real-world commander's score).
+describe('classifyQualitySignals — Phase 2.1 ramp gates', () => {
+  it('ramp_runaway (FATAL) fires when ramp > cap × 1.5', () => {
+    const issues = classifyQualitySignals({
+      bracket: 4, fillerCount: 0, fillerCap: 5,
+      wincons: 3, detectedWincons: [],
+      rampCount: 25, rampCap: 16,   // 25 > 16 × 1.5 = 24
+    })
+    const ramp = issues.find(i => i.kind === 'ramp_runaway')
+    expect(ramp).toBeDefined()
+    expect(ramp.severity).toBe('fatal')
+  })
+
+  it('ramp_high (SEVERE) fires when ramp is over cap but ≤ 1.5×', () => {
+    const issues = classifyQualitySignals({
+      bracket: 4, fillerCount: 0, fillerCap: 5,
+      wincons: 3, detectedWincons: [],
+      rampCount: 19, rampCap: 16,   // 16 < 19 < 24
+    })
+    const ramp = issues.find(i => i.kind === 'ramp_high')
+    expect(ramp).toBeDefined()
+    expect(ramp.severity).toBe('severe')
+  })
+
+  it('no ramp issue fires when ramp is at cap', () => {
+    const issues = classifyQualitySignals({
+      bracket: 4, fillerCount: 0, fillerCap: 5,
+      wincons: 3, detectedWincons: [],
+      rampCount: 16, rampCap: 16,
+    })
+    expect(issues.find(i => i.kind?.startsWith('ramp_'))).toBeUndefined()
+  })
+
+  it('ramp gates only fire when both rampCount and rampCap are provided', () => {
+    const issues = classifyQualitySignals({
+      bracket: 4, fillerCount: 0, fillerCap: 5,
+      wincons: 3, detectedWincons: [],
+      // no rampCount/rampCap
+    })
+    expect(issues.find(i => i.kind?.startsWith('ramp_'))).toBeUndefined()
+  })
+})
+
+describe('classifyQualitySignals — Phase 2.1 interaction gate', () => {
+  it('interaction_low (SEVERE) fires when interaction < floor', () => {
+    const issues = classifyQualitySignals({
+      bracket: 4, fillerCount: 0, fillerCap: 5,
+      wincons: 3, detectedWincons: [],
+      interactionCount: 4, interactionFloor: 8,
+    })
+    const inter = issues.find(i => i.kind === 'interaction_low')
+    expect(inter).toBeDefined()
+    expect(inter.severity).toBe('severe')
+  })
+
+  it('does NOT fire when interaction is at floor', () => {
+    const issues = classifyQualitySignals({
+      bracket: 4, fillerCount: 0, fillerCap: 5,
+      wincons: 3, detectedWincons: [],
+      interactionCount: 8, interactionFloor: 8,
+    })
+    expect(issues.find(i => i.kind === 'interaction_low')).toBeUndefined()
+  })
+})
+
+describe('classifyQualitySignals — Phase 2.1 wincons gate', () => {
+  it('wincons_low (SEVERE) fires at B4 with 1 named wincon', () => {
+    // Floor for B4 is 3 named wincons.
+    const issues = classifyQualitySignals({
+      bracket: 4, fillerCount: 0, fillerCap: 5,
+      wincons: 1, detectedWincons: ['aristocrats: ...'],
+    })
+    const wc = issues.find(i => i.kind === 'wincons_low')
+    expect(wc).toBeDefined()
+    expect(wc.severity).toBe('severe')
+  })
+
+  it('does NOT fire when named wincons meet the bracket floor', () => {
+    // B5 floor is 2; 2 named wincons is at floor.
+    const issues = classifyQualitySignals({
+      bracket: 5, fillerCount: 0, fillerCap: 3,
+      wincons: 2, detectedWincons: [],
+    })
+    expect(issues.find(i => i.kind === 'wincons_low')).toBeUndefined()
+  })
+
+  it('B5 with 1 named wincon fires the gate (Daxos-style failure)', () => {
+    const issues = classifyQualitySignals({
+      bracket: 5, fillerCount: 0, fillerCap: 3,
+      wincons: 1, detectedWincons: ['lifegain alt-win: ...'],
+    })
+    expect(issues.find(i => i.kind === 'wincons_low')).toBeDefined()
+  })
+})
+
 describe('classifyDeckViability', () => {
   it('returns "valid" when no quality issues are detected', () => {
     const v = classifyDeckViability({
