@@ -916,6 +916,18 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       if (wantWincons)     pool.push(...sortByEdhrec(eligible.filter(isWinconC)).map(c => ({ card: c, why: 'wincon below floor' })))
       if (wantDraw)        pool.push(...sortByEdhrec(eligible.filter(isDraw)).map(c => ({ card: c, why: 'draw below target' })))
       if (wantSynergy)     pool.push(...sortByEdhrec(eligible.filter(isSynergyOnly)).map(c => ({ card: c, why: 'synergy below target' })))
+
+      // Phase 2.7 fix: even when all priority "wants" are met (deck is
+      // balanced except for over-cap ramp), still trade excess ramp for
+      // ANY on-theme synergy card. Without this, Rose B3 ships with 19
+      // ramp and the ceiling pass does nothing because synergy is at
+      // target — but a 14-ramp/19-synergy deck is plainly better than
+      // a 19-ramp/14-synergy deck. Synergy capacity isn't a hard cap.
+      if (pool.length === 0) {
+        pool.push(
+          ...sortByEdhrec(eligible.filter(isSynergyOnly)).map(c => ({ card: c, why: 'on-theme synergy (excess ramp swap)' }))
+        )
+      }
       return pool
     }
 

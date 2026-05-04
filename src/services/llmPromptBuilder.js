@@ -1244,6 +1244,31 @@ What to say ONLY when bracket_fit.verdict === 'fail' OR
 actualBracket > targetBracket:
   - "bracket_fit lens flags X cards bumping this to bracket Y"
   - "Tier-C count of N exceeds the B4 cap of 4"
+
+CONSISTENCY RULE — do NOT praise what the lenses flag.
+If a stat appears as a problem in any lens evidence (mana_base flags
+ramp count, win_plan flags missing wincons, commander_execution flags
+low on-plan %), you CANNOT describe that same stat as a strength.
+
+WRONG (do NOT do this):
+  mana_base lens evidence: "ramp_count: 22 (cap 16) — excess crowds out roles"
+  evaluator strength: "well-constructed mana base with 22 ramp sources" ❌
+  (Self-contradiction — the lens flagged 22 ramp as a problem, you can't
+   praise it as a strength a sentence later.)
+
+RIGHT:
+  Same lens evidence, evaluator weakness:
+    "22 ramp pieces vs cap 16 — 6 excess slots that should go to interaction"
+  evaluator strength elsewhere:
+    "well-tuned interaction package: Counterspell + Swords + Cyclonic Rift"
+  ✓ Praise things the lenses LIKE; describe flagged things as the
+    weaknesses they are.
+
+Specific anti-patterns to avoid:
+  - lens flags excess ramp → don't write "solid ramp package"
+  - lens flags low interaction → don't write "decent removal package"
+  - lens flags filler runaway → don't write "diverse card selection"
+  - lens flags low commander execution → don't write "high synergy"
   (Cite the lens evidence specifically, by name.)
 
 WRONG (do NOT do this):
