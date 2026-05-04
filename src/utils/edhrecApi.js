@@ -2,6 +2,11 @@
 // themes for the commander, used by the scorer (top-cards bonus) and archetype
 // detection (themes → archetype ids).
 //
+// Routes through our /api/edhrec serverless proxy because EDHREC returns 403
+// for browser-origin direct fetches (anti-scraping policy). Server-side
+// fetches with a stable User-Agent are honored. The proxy returns the same
+// JSON shape the upstream endpoint does, plus a _cached/_error flag.
+//
 // Endpoint shape (defensive — EDHREC's response is sprawling and not perfectly stable):
 //   GET https://json.edhrec.com/pages/commanders/<slug>.json
 //   Response (relevant fields):
@@ -100,9 +105,18 @@ export async function fetchEdhrecCommander(commander) {
 
   let data = { topCards: [], themes: [] }
   try {
-    const res = await fetch(`https://json.edhrec.com/pages/commanders/${slug}.json`)
-    if (!res.ok) throw new Error(`EDHREC ${res.status}`)
+    // Route through our serverless proxy — direct browser fetches to EDHREC
+    // get 403'd by their anti-scraping policy. The proxy passes through the
+    // upstream JSON unchanged and adds _cached / _error metadata. If the
+    // upstream itself returns a 4xx (404 for misspelled commander, etc.),
+    // the proxy returns 200 with empty topCards/themes plus _error, so the
+    // catch path below isn't triggered for that case.
+    const res = await fetch(`/api/edhrec?slug=${encodeURIComponent(slug)}`)
+    if (!res.ok) throw new Error(`Proxy ${res.status}`)
     const json = await res.json()
+    if (json?._error) {
+      console.warn('[edhrec] proxy returned error, no data for', slug, json._error)
+    }
     data = defensivelyParse(json)
   } catch (err) {
     console.warn('[edhrec] fetch failed, generator will run without EDHREC data:', err?.message ?? err)
