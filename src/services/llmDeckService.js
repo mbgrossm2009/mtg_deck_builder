@@ -366,11 +366,21 @@ export async function evaluateDeck({ commander, bracket, deck, lensResults, onPr
     const bracketLens = lensResults?.find(r => r.name === 'bracket_fit')
     const trueFiller = deck.filter(c => (c.roles ?? [])[0] === 'filler').length
 
-    // Phase 2.1: gather ramp + interaction counts for the new score gates.
-    // ramp counts cards whose primary role is 'ramp'. Interaction counts
-    // removal + wipe + counterspells (counterspells get the 'removal' role
-    // per cardRoles.js, so summing removal + wipe captures the full set).
-    const rampCount = deck.filter(c => (c.roles ?? []).includes('ramp')).length
+    // Phase 2.1 + 3.2: gather ramp + interaction counts for the score
+    // gates. Ramp is split into fast_mana (Sol Ring / Mana Crypt / Moxen)
+    // vs land-ramp (Cultivate / Talismans / Signets) so the cap math can
+    // tell "this deck is shaped like cEDH (lots of fast mana, few lands)"
+    // from "this deck just has too much ramp." A B5 deck with 12 fast
+    // mana + 8 land ramp is the cEDH shape (intentional); 20 land ramp
+    // is just over-ramping.
+    //
+    // For the gate, use LAND-RAMP only — fast mana is a deliberate B4/B5
+    // shape choice and shouldn't trigger the over-ramp clamp by itself.
+    // Total ramp count is still surfaced for visibility but isn't gated.
+    const allRampCards     = deck.filter(c => (c.roles ?? []).includes('ramp'))
+    const fastManaCount    = allRampCards.filter(c => (c.tags ?? []).includes('fast_mana')).length
+    const landRampCount    = allRampCards.length - fastManaCount
+    const rampCount        = landRampCount   // gate uses land-ramp only
     const interactionCount = deck.filter(c =>
       (c.roles ?? []).includes('removal') || (c.roles ?? []).includes('wipe')
     ).length

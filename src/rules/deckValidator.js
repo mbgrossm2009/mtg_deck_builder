@@ -139,14 +139,19 @@ export function validateDeckAtBracket(mainDeck, commander, bracket) {
     )
   }
 
-  // Ramp upper-cap warning. Excess ramp crowds out interaction/draw —
-  // typical eval failure mode where the deck has 19 ramp and 6 removal.
+  // Ramp upper-cap warning. Phase 3.2: split ramp into fast-mana vs
+  // land-ramp. Fast mana (Sol Ring / Crypt / Moxen) is a deliberate
+  // B4/B5 shape choice and doesn't crowd out interaction the way Cultivate
+  // + Signets do. Cap math uses land-ramp only; fast mana is reported
+  // separately so the user knows what they have.
   const rampCap = maxRampCount(bracket, commander)
-  if (rampCount > rampCap) {
+  const landRampCount = rampCount - fastManaCount
+  if (landRampCount > rampCap) {
     filtered.push(
-      `${rampCount} ramp pieces at B${bracket} (cap ≈ ${rampCap}). ` +
-      `Excess ramp crowds out interaction / draw / synergy — consider ` +
-      `swapping the weakest ramp slots for removal or wincon support.`
+      `${landRampCount} land-ramp pieces at B${bracket} (cap ≈ ${rampCap}; ` +
+      `${fastManaCount} fast-mana pieces additional). Excess land-ramp crowds ` +
+      `out interaction / draw / synergy — consider swapping the weakest ` +
+      `slots for removal or wincon support.`
     )
   }
 

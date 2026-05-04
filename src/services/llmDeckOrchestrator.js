@@ -882,9 +882,17 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   // staples, and tribal floor — but Talismans/Signets ARE bracket staples,
   // so we only swap NON-staple ramp. (Staples are bracket-aware; if you
   // own them at this bracket, you should run them.)
+  // Phase 3.2: ramp ceiling now uses LAND-RAMP count only (excludes
+  // fast_mana). Fast mana is the cEDH shape and shouldn't trigger the
+  // ceiling pass — a B5 deck with 12 fast-mana + 8 land-ramp = 20 total
+  // ramp shouldn't be "over cap" because the 12 fast-mana is intentional.
+  // The cap (16/18 at B4/B5) applies to land-ramp specifically.
   const rampCap = maxRampCount(bracket, commander)
   const isRamp = (c) => (c.roles ?? []).includes('ramp')
-  const rampInDeckCount = deck.filter(isRamp).length
+  const isFastMana = (c) => (c.tags ?? []).includes('fast_mana')
+  const isLandRamp = (c) => isRamp(c) && !isFastMana(c)
+  const landRampInDeckCount = deck.filter(isLandRamp).length
+  const rampInDeckCount = landRampInDeckCount   // gate uses land-ramp
   if (rampInDeckCount > rampCap) {
     const excess = rampInDeckCount - rampCap
     // Build priority-ordered candidate list of cards to swap IN.
@@ -949,13 +957,29 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       // invariants (Najeela B5 lost Mana Crypt). Sorin-style over-ramp
       // from heavy staple coverage is an accepted limitation; the warning
       // surfaces it but the deck composition stands.
+      // Phase 3.2: prefer swapping LAND-RAMP out (Cultivate, Talismans,
+      // Signets) before any fast-mana piece. Fast mana is the cEDH shape
+      // and shouldn't be the first thing trimmed. If no land-ramp is
+      // swappable, fall back to any non-locked ramp.
       let swapIdx = -1
       for (let i = deck.length - 1; i >= 0; i--) {
         const c = deck[i]
-        if (isLockedByFloor(c)) continue   // mana base / bracket staples / floors all locked
-        if (!isRamp(c)) continue
+        if (isLockedByFloor(c)) continue
+        if (!isLandRamp(c)) continue
         swapIdx = i
         break
+      }
+      if (swapIdx === -1) {
+        // Fallback: any non-locked ramp piece (would only fire if the
+        // deck is somehow over cap on fast-mana, which means a generous
+        // user collection pushed past even the high-CMC bonus).
+        for (let i = deck.length - 1; i >= 0; i--) {
+          const c = deck[i]
+          if (isLockedByFloor(c)) continue
+          if (!isRamp(c)) continue
+          swapIdx = i
+          break
+        }
       }
       if (swapIdx === -1) break
       const removed = deck[swapIdx]
