@@ -305,6 +305,7 @@ export async function critiqueDeck({
   availablePool,
   chosenStrategy,
   onProgress,
+  validationFindings = null,
 }) {
   if (currentMode === LLM_MODE.DISABLED) return null
   if (currentMode === LLM_MODE.MOCK) {
@@ -313,7 +314,7 @@ export async function critiqueDeck({
   }
 
   onProgress?.({ stage: 'critique' })
-  const prompt = buildCritiquePrompt({ commander, bracket, deck, availablePool, chosenStrategy })
+  const prompt = buildCritiquePrompt({ commander, bracket, deck, availablePool, chosenStrategy, validationFindings })
   try {
     const out = await callBackend(prompt)
     return { ...out, _meta: { promptTokens: estimatePromptTokens(prompt) } }

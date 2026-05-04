@@ -11,6 +11,7 @@ import { detectCombos, registerCombos, getAllCombos } from './comboRules'
 import { detectArchetypes, anchorNamesFor, themesToArchetypes, mergeArchetypes, cardMatchesArchetype } from './archetypeRules'
 import { extractCommanderMechanicTags, commanderToCardTagBoosts } from './commanderMechanics'
 import { validateDeckAtBracket, countRoles } from './deckValidator'
+import { optimizeDeckToValidation } from './deckOptimizer'
 
 export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
   const commander = getSelectedCommander()
@@ -255,6 +256,28 @@ export async function generateDeck(bracket = 3, primaryArchetypeId = null) {
       usedNames.add(replacement.name.toLowerCase())
     }
     if (pass > 1) explanation.push(`Replacement pass swapped ${pass - 1} card${pass - 1 !== 1 ? 's' : ''} for higher-priority EDHREC picks.`)
+  }
+
+  // ── Validation-driven optimization pass ──
+  // The bucket-fill above hits its targetRoleCounts, but those targets
+  // don't always honor the validator's bracket-scaled floors — e.g., B4
+  // wants 8+ removal but targetRoleCounts may only request 6. This loop
+  // closes the remaining role-count gaps (interaction floor, filler cap,
+  // land-ramp cap, role targets) by swapping the lowest-scored filler /
+  // excess-ramp slots for the highest-scored unused candidates carrying
+  // the missing role. Re-validates each pass; caps at 5 iterations.
+  const optimizerSwaps = optimizeDeckToValidation({
+    deck,
+    candidates,
+    commander,
+    bracket,
+    targetCounts,
+    rescore,
+    usedNames,
+    explanation,
+  })
+  if (optimizerSwaps > 0) {
+    explanation.push(`Validation optimizer ran ${optimizerSwaps} swap${optimizerSwaps !== 1 ? 's' : ''} to close role gaps.`)
   }
 
   // 8. Post-processing

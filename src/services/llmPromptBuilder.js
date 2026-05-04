@@ -1057,16 +1057,58 @@ export function buildCritiquePrompt({
   deck,                 // [{ name, role, locked: bool, source?: 'manaSolver'|'skeleton'|'llm'|'fallback' }]
   availablePool,        // cards in user's legal collection but NOT in the deck
   chosenStrategy = '',
+  validationFindings = null,   // { errors[], warnings[], deficits{}, surpluses{}, counts{} } or null
 }) {
   const bracketLabel   = BRACKET_LABELS[bracket] ?? 'Unknown'
   const bracketMeaning = BRACKET_DESCRIPTIONS[bracket] ?? ''
+
+  // When the orchestrator passes validation findings, the deck is failing
+  // structural checks (interaction floor, wincon floor, filler cap, etc.)
+  // and we need the LLM to PRIORITIZE fixing those. Without this, the
+  // critique optimizes for the model's qualitative judgment and ignores
+  // count-based bracket floors.
+  const hasFindings = validationFindings && (
+    (validationFindings.errors?.length ?? 0) > 0 ||
+    (validationFindings.warnings?.length ?? 0) > 0 ||
+    Object.keys(validationFindings.deficits ?? {}).length > 0 ||
+    Object.keys(validationFindings.surpluses ?? {}).length > 0
+  )
+
+  const validationSection = hasFindings ? `
+═══════════════════════════════════════════════════════════════════════════
+VALIDATION FINDINGS — the deck currently FAILS these mechanical checks. Your
+swaps MUST address these gaps. A critique that returns "approved: true" while
+these gaps remain is wrong; only approve when the gaps are gone.
+
+${(validationFindings.errors ?? []).length > 0
+  ? 'Errors (must fix):\n' + validationFindings.errors.map(e => `  - ${e}`).join('\n') + '\n'
+  : ''}${(validationFindings.warnings ?? []).length > 0
+  ? 'Count-based warnings (count below floor / above cap):\n' + validationFindings.warnings.map(w => `  - ${w}`).join('\n') + '\n'
+  : ''}${Object.keys(validationFindings.deficits ?? {}).length > 0
+  ? 'Role deficits (need MORE of these — swap weak/off-theme cards FOR these roles):\n' +
+    Object.entries(validationFindings.deficits).map(([role, n]) => `  - ${role}: need ${n} more`).join('\n') + '\n'
+  : ''}${Object.keys(validationFindings.surpluses ?? {}).length > 0
+  ? 'Role surpluses (need LESS of these — these are good "out" candidates for swaps):\n' +
+    Object.entries(validationFindings.surpluses).map(([role, n]) => `  - ${role}: ${n} over cap`).join('\n') + '\n'
+  : ''}
+HOW TO FIX:
+- For each deficit role, find the highest-impact card in available_pool with
+  that role and propose swapping it IN for a card in a surplus category
+  (filler-primary cards, or excess land-ramp pieces) that's currently in the deck.
+- Wincons include cards with role "win_condition" AND cards tagged as
+  explosive_finisher (Craterhoof Behemoth, Triumph of the Hordes, etc.).
+- Interaction = removal + wipe + counterspells. All count toward the floor.
+- Don't propose more than 5 swaps per response, but ensure every gap above
+  is addressed across the full set of swaps you propose.
+═══════════════════════════════════════════════════════════════════════════
+` : ''
 
   const system = `You are an expert Magic: The Gathering Commander deck evaluator.
 
 A 99-card deck has been built for the commander below. The mana base, EDHREC
 staples, and core role slots are already filled. Your job is to perform a
 final critique pass.
-
+${validationSection}
 EVALUATE THE DECK against these questions:
   1. Does this look like a strong, focused ${bracketLabel} deck for this commander?
   2. Are there low-impact filler cards that should be replaced with better picks

@@ -24,6 +24,7 @@ vi.mock('../utils/commanderSpellbook', () => ({
 }))
 
 import { generateDeck } from './deckGenerator'
+import { validateDeckAtBracket } from './deckValidator'
 import * as dataStore from '../lib/dataStore'
 
 // ─── Synthetic test collection ───────────────────────────────────────────────
@@ -411,4 +412,39 @@ describe('generateDeck — CMC curve enforcement', () => {
     const b5 = await generateDeck(5, null)
     expect(parseFloat(b5.stats.avgCmc)).toBeLessThan(parseFloat(b1.stats.avgCmc))
   })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// END-TO-END VALIDATION — generated decks must pass validateDeckAtBracket
+// ═════════════════════════════════════════════════════════════════════════════
+// These tests close the gap that existed between unit tests (which validated
+// hand-built decks) and the generator (which silently dropped validation
+// errors into a warnings array). With the optimizer pass wired in, generated
+// decks should now satisfy the validator's count-based floors and caps.
+//
+// Pattern matcher below targets the bracket-scaled count warnings only.
+// Lens / execution-score warnings are intentionally NOT asserted here —
+// they aren't fixable by mechanical role swaps and represent a separate
+// optimization concern.
+describe('generateDeck — generated decks pass validation at all brackets', () => {
+  const isCountWarning = (w) =>
+    /Only \d+ (lands|ramp|draw|removal|interaction|wipe)/i.test(w) ||
+    /filler cards at B/i.test(w) ||
+    /land-ramp pieces/i.test(w) ||
+    /No clear win conditions/i.test(w)
+
+  for (const bracket of [1, 2, 3, 4, 5]) {
+    it(`bracket ${bracket}: deck has no validation errors`, async () => {
+      const result = await generateDeck(bracket, null)
+      const v = validateDeckAtBracket(result.mainDeck, result.commander, bracket)
+      expect(v.errors).toEqual([])
+    })
+
+    it(`bracket ${bracket}: deck has no count-floor warnings`, async () => {
+      const result = await generateDeck(bracket, null)
+      const v = validateDeckAtBracket(result.mainDeck, result.commander, bracket)
+      const countWarnings = v.warnings.filter(isCountWarning)
+      expect(countWarnings).toEqual([])
+    })
+  }
 })

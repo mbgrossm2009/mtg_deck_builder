@@ -21,6 +21,7 @@ import { filterLegalCards } from '../rules/commanderRules'
 import { assignRoles } from '../rules/cardRoles'
 import { isBracketAllowed, targetLandCount, targetRoleCounts, computeActualBracket, BRACKET_LABELS, isSafeRock, isSoftTutor, isTierCCedhCore, TIER_C_B4_CAP, maxRampCount } from '../rules/bracketRules'
 import { validateDeckAtBracket, countRoles } from '../rules/deckValidator'
+import { optimizeDeckToValidation, computeValidationGaps } from '../rules/deckOptimizer'
 import { detectCombos, getAllCombos } from '../rules/comboRules'
 import { detectArchetypes, anchorNamesFor } from '../rules/archetypeRules'
 import { extractCommanderMechanicTags, commanderToCardTagBoosts } from '../rules/commanderMechanics'
@@ -1106,6 +1107,20 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       ).slice(0, 250)
       const chosenStrategy = llmResponse?.chosenStrategy ?? llmResponse?.strategySummary?.primaryStrategy ?? ''
 
+      // Compute validation findings each iteration so the LLM sees the
+      // CURRENT gap state, not stale info. The critique prompt uses these
+      // to prioritize swaps; the LLM is told to address every listed gap.
+      const iterValidation = validateDeckAtBracket(deck, commander, bracket)
+      const iterMinWincons = ({ 1: 1, 2: 2, 3: 2, 4: 3, 5: 2 }[bracket]) ?? 1
+      const iterGaps = computeValidationGaps(deck, commander, bracket, fullTargets, { winConFloor: iterMinWincons })
+      const validationFindings = {
+        errors: iterValidation.errors,
+        warnings: iterValidation.warnings,
+        deficits: iterGaps.deficits,
+        surpluses: iterGaps.surpluses,
+        counts: iterGaps.counts,
+      }
+
       const iterResult = await critiqueDeck({
         commander,
         bracket,
@@ -1113,6 +1128,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
         availablePool,
         chosenStrategy,
         onProgress,
+        validationFindings,
       })
       if (!iterResult) {
         // Critique call failed entirely — bail and ship the deck as-is.
@@ -1179,10 +1195,18 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   // run downgrade — optimization pushing actual bracket up is the goal.
   // Mana-base + bracket-staples are protected; skeleton CAN be swapped
   // (bracket fidelity > skeleton fidelity).
+  // Names removed by the bracket-downgrade pass. The validation optimizer
+  // below MUST NOT re-introduce these — they were taken out specifically
+  // because they push actualBracket above target (combo halves, soft
+  // tutors that aren't game_changer-tagged but bump bracket via combos).
+  const bracketDowngradeRemoved = new Set()
   if (bracket <= 4) {
     const downgradeSwaps = downgradeBracketIfOverShot({
       deck, targetBracket: bracket, legalNonLands, usedNames,
     })
+    for (const s of downgradeSwaps) {
+      bracketDowngradeRemoved.add(s.out.toLowerCase())
+    }
     if (downgradeSwaps.length > 0) {
       explanation.push(`Bracket-fit pass: applied ${downgradeSwaps.length} swap${downgradeSwaps.length === 1 ? '' : 's'} to bring actual bracket back to target B${bracket}.`)
       for (const s of downgradeSwaps) {
@@ -1226,6 +1250,137 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
         `Either the commander's color identity has limited wincon options, or critique passes replaced LLM-picked wincons with higher-scoring synergy cards. ` +
         `The detected win plan${multiCardWincons.length > 0 ? ` (${multiCardWincons.join('; ')})` : ''} still gives the deck a path to victory.`,
     })
+  }
+
+  // ── Validation-driven optimization pass ──
+  // Final cleanup that closes any remaining role-count gaps the validator
+  // would warn about (interaction floor, filler cap, ramp cap, role
+  // targets). The orchestrator's earlier passes (skeleton, staples,
+  // critique, ramp-ceiling, wincon-backstop) usually handle these, so this
+  // runs as a no-op when the deck is already on-target. When it does
+  // swap, picks come from legalCardPool — same source the LLM saw.
+  //
+  // Shares the swap algorithm with deckGenerator.js so heuristic and
+  // LLM-assisted decks both meet the same bar. Reuses MIN_WINCONS_BY_BRACKET
+  // declared at step 10b's wincon backstop.
+  const optimizerScoringCtx = {
+    archetypes: strategyContext.archetypes ?? [],
+    primaryArchetypeId: strategyContext.primaryArchetypeId ?? null,
+    commanderTagBoosts: strategyContext.commanderTagBoosts,
+    rampCap: maxRampCount(bracket, commander),
+  }
+  const optimizerRescore = (cards) => {
+    optimizerScoringCtx.rampInDeckCount = deck.filter(c => (c.roles ?? []).includes('ramp')).length
+    return cards.map(c => ({
+      ...c,
+      score: scoreCard(c, (c.roles ?? ['filler'])[0], commander, bracket, optimizerScoringCtx),
+    }))
+  }
+  const buildOptimizerPool = () => {
+    const inDeckNames = new Set(deck.map(c => c.name.toLowerCase()))
+    return legalCardPool.filter(c =>
+      !isLand(c) &&
+      !inDeckNames.has(c.name.toLowerCase()) &&
+      !bracketDowngradeRemoved.has(c.name.toLowerCase())
+    )
+  }
+  const runOptimizer = () => {
+    const swaps = optimizeDeckToValidation({
+      deck,
+      candidates: buildOptimizerPool(),
+      commander,
+      bracket,
+      targetCounts: fullTargets,
+      rescore: optimizerRescore,
+      usedNames,
+      explanation,
+      winConFloor: MIN_WINCONS_BY_BRACKET[bracket] ?? 1,
+    })
+    if (swaps > 0) explanation.push(`Validation optimizer ran ${swaps} swap${swaps !== 1 ? 's' : ''} to close role gaps.`)
+    return swaps
+  }
+  runOptimizer()
+
+  // ── Validation-driven LLM retry ──
+  // If the deck still fails validation after the optimizer, the gap is
+  // beyond what mechanical swaps can close — typically the deck genuinely
+  // needs a different card from the pool that the optimizer's role-tag
+  // filter missed. Hand it to the LLM with explicit validation findings
+  // so it can pick context-aware swaps. Optimizer runs between iterations
+  // to apply any mechanical wins the LLM exposes.
+  //
+  // Caps at MAX_VALIDATION_RETRIES because each call is ~30s and the
+  // collection's ceiling is fixed — beyond ~2 attempts the LLM can't help.
+  const MAX_VALIDATION_RETRIES = 2
+  const isCountFloorWarning = (w) =>
+    /Only \d+ (lands|ramp|draw|removal|interaction|wipe)/i.test(w) ||
+    /filler cards at B/i.test(w) ||
+    /land-ramp pieces/i.test(w) ||
+    /No clear win conditions/i.test(w)
+
+  if (!llmFailed) {
+    for (let attempt = 0; attempt < MAX_VALIDATION_RETRIES; attempt++) {
+      const v = validateDeckAtBracket(deck, commander, bracket)
+      const stillBad = v.errors.length > 0 || v.warnings.some(isCountFloorWarning)
+      if (!stillBad) break
+
+      const winConFloor = MIN_WINCONS_BY_BRACKET[bracket] ?? 1
+      const gaps = computeValidationGaps(deck, commander, bracket, fullTargets, { winConFloor })
+      if (Object.keys(gaps.deficits).length === 0 && Object.keys(gaps.surpluses).length === 0) {
+        // Validator complains but our gap math sees nothing actionable —
+        // likely a non-count check (color identity, banned). LLM can't fix
+        // that mechanically; bail out.
+        break
+      }
+
+      explanation.push(`Validation retry ${attempt + 1}/${MAX_VALIDATION_RETRIES}: deck still fails count checks; calling LLM critique with validation context.`)
+
+      const deckForRetry = deck.map(c => ({
+        name: c.name,
+        role: (c.roles ?? ['filler'])[0],
+        locked: !!c.fromManaSolver || !!c.fromSkeleton || !!c.fromBracketStaples || !!c.fromTribalFloor || !!c.fromTutorFloor || !!c.fromRemovalFloor || !!c.fromWinconBackstop,
+      }))
+      const inDeckNames = new Set(deck.map(c => c.name.toLowerCase()))
+      const retryPoolFull = legalNonLands.filter(c =>
+        !inDeckNames.has(c.name.toLowerCase()) &&
+        !swappedOutNames.has(c.name.toLowerCase()) &&
+        !bracketDowngradeRemoved.has(c.name.toLowerCase())
+      )
+      const retryPool = capPoolForLLM(retryPoolFull, commander, bracket, strategyContext).slice(0, 250)
+      const chosenStrategy = llmResponse?.chosenStrategy ?? llmResponse?.strategySummary?.primaryStrategy ?? ''
+
+      const retryResult = await critiqueDeck({
+        commander,
+        bracket,
+        deck: deckForRetry,
+        availablePool: retryPool,
+        chosenStrategy,
+        onProgress,
+        validationFindings: {
+          errors: v.errors,
+          warnings: v.warnings,
+          deficits: gaps.deficits,
+          surpluses: gaps.surpluses,
+          counts: gaps.counts,
+        },
+      })
+      if (!retryResult) {
+        explanation.push(`Validation retry ${attempt + 1}: LLM call failed; stopping retry loop.`)
+        break
+      }
+      const { applied: retryApplied } = applyCritiqueSwaps(deck, retryResult.swaps ?? [], retryPool, usedNames)
+      for (const s of retryApplied) {
+        swappedOutNames.add(s.out.toLowerCase())
+        explanation.push(`  Validation-retry swap: -${s.out} → +${s.in} (${s.reason})`)
+      }
+      // Re-run optimizer to clean up anything the LLM didn't catch.
+      runOptimizer()
+
+      if (retryApplied.length === 0) {
+        explanation.push(`Validation retry ${attempt + 1}: LLM proposed no usable swaps; stopping.`)
+        break
+      }
+    }
   }
 
   // 12. Post-processing — same as the heuristic generator does.
@@ -1312,6 +1467,22 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     { deck, commanderProfile, context: { targetBracket: bracket } }
   )
 
+  // Final validation status — honest about whether the deck cleared the
+  // hard floors. 'valid' = no errors and no count-floor warnings; the
+  // deck meets every mechanical bar. 'best_effort' = collection or
+  // lock-state genuinely couldn't fill the gap after all retry passes;
+  // ship the deck but flag it. 'failed' reserved for unrecoverable errors
+  // (currently we always ship something, so this isn't emitted yet).
+  const finalCountWarnings = validationWarnings.filter(w =>
+    /Only \d+ (lands|ramp|draw|removal|interaction|wipe)/i.test(w) ||
+    /filler cards at B/i.test(w) ||
+    /land-ramp pieces/i.test(w) ||
+    /No clear win conditions/i.test(w)
+  )
+  const validationStatus = errors.length === 0 && finalCountWarnings.length === 0
+    ? 'valid'
+    : 'best_effort'
+
   return {
     commander,
     mainDeck: deck,
@@ -1324,6 +1495,8 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     explanation,
     lensResults,
     commanderProfile,
+    validationStatus,
+    validationFailures: finalCountWarnings,
 
     // LLM-specific extras the UI can show but doesn't have to.
     generationMode: 'llm-assisted',
