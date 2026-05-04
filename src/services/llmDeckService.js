@@ -147,13 +147,32 @@ export function stripFalseAboveBracketClaims(evalResult, bracketLens) {
     (evalResult.weaknesses?.length ?? 0) - newWeaknesses.length +
     (evalResult.bracketFitNotes !== newBracketFit ? 1 : 0)
 
-  if (removedCount === 0) return evalResult
-  return {
+  // Phase 2.7: also coerce a misused bracketFitVerdict. The LLM keeps
+  // picking 'over_target' even when the lens says pass — that's wrong by
+  // definition (the lens math is authoritative). Coerce to 'high_end'
+  // because the model clearly thinks the deck is on the spicy side, just
+  // not actually over. Same belt-and-suspenders pattern as the strip.
+  let newVerdict = evalResult.bracketFitVerdict
+  let verdictCoerced = false
+  if (newVerdict === 'over_target') {
+    newVerdict = 'high_end'
+    verdictCoerced = true
+  }
+
+  if (removedCount === 0 && !verdictCoerced) return evalResult
+  const out = {
     ...evalResult,
     weaknesses: newWeaknesses,
     bracketFitNotes: newBracketFit || 'Deck is bracket-legal per the bracket_fit lens.',
-    _stripped: { aboveBracketClaims: removedCount },
+    bracketFitVerdict: newVerdict,
   }
+  if (removedCount > 0 || verdictCoerced) {
+    out._stripped = {
+      ...(removedCount > 0 ? { aboveBracketClaims: removedCount } : {}),
+      ...(verdictCoerced  ? { verdictCoerced: 'over_target → high_end' } : {}),
+    }
+  }
+  return out
 }
 
 // Bracket-scaled filler caps (kept in sync with deckValidator.js).
