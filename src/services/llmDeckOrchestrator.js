@@ -917,15 +917,23 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       if (wantDraw)        pool.push(...sortByEdhrec(eligible.filter(isDraw)).map(c => ({ card: c, why: 'draw below target' })))
       if (wantSynergy)     pool.push(...sortByEdhrec(eligible.filter(isSynergyOnly)).map(c => ({ card: c, why: 'synergy below target' })))
 
-      // Phase 2.7 fix: even when all priority "wants" are met (deck is
-      // balanced except for over-cap ramp), still trade excess ramp for
-      // ANY on-theme synergy card. Without this, Rose B3 ships with 19
-      // ramp and the ceiling pass does nothing because synergy is at
-      // target — but a 14-ramp/19-synergy deck is plainly better than
-      // a 19-ramp/14-synergy deck. Synergy capacity isn't a hard cap.
+      // Phase 2.8 fix: when all priority "wants" are met OR the deck is
+      // mono-color and the synergy pool is sparse, fall back to ANY
+      // non-ramp card from the eligible pool sorted by EDHREC rank.
+      //
+      // Eval data showed Rose mono-R B4 shipping with 23 ramp (cap 16)
+      // even after the ramp ceiling fired — because Rose has no detected
+      // archetype, isSynergyOnly was filtering most cards out and the
+      // priority pool came back nearly empty. EDHREC rank gives a sane
+      // ordering: high-rank cards (low rank number = popular) come first,
+      // so we trade excess ramp for the most-played non-ramp options
+      // available in the user's collection.
+      //
+      // This is intentionally permissive — better to ship a deck with
+      // some random EDHREC staples than over the ramp fatal-cap.
       if (pool.length === 0) {
         pool.push(
-          ...sortByEdhrec(eligible.filter(isSynergyOnly)).map(c => ({ card: c, why: 'on-theme synergy (excess ramp swap)' }))
+          ...sortByEdhrec(eligible.filter(c => !isRamp(c))).map(c => ({ card: c, why: 'any non-ramp swap (cap exceeded)' }))
         )
       }
       return pool
