@@ -466,6 +466,40 @@ describe('Bracket escalation — computeActualBracket', () => {
     expect(actualBracket).toBeGreaterThanOrEqual(4)
   })
 
+  it('B4 fast-mana cap: 7+ non-safe-rock fast mana escalates to B5', () => {
+    // Generic names so the Tier-C cap rule doesn't conflate with the new
+    // fast-mana rule. In production these would be fast-mana pieces that
+    // aren't on the Tier-C cEDH-core list (e.g. hypothetical newer cards).
+    const deck = []
+    for (let i = 0; i < 7; i++) deck.push(tagged(`Fast Mana ${i}`, ['fast_mana']))
+    const { actualBracket } = computeActualBracket(deck, [])
+    expect(actualBracket).toBe(5)
+  })
+
+  it('B4 fast-mana cap: 6 non-safe-rock fast mana stays at B4', () => {
+    // 6 is under the new 7+ threshold. Generic names avoid the Tier-C
+    // cap conflating the rules.
+    const deck = []
+    for (let i = 0; i < 6; i++) deck.push(tagged(`Fast Mana ${i}`, ['fast_mana']))
+    const { actualBracket } = computeActualBracket(deck, [])
+    expect(actualBracket).toBe(4)
+  })
+
+  it('B4 fast-mana cap: safe rocks do NOT count toward the 7+ cap', () => {
+    // Sol Ring + 4 safe-rock 2-mana stones + 6 generic non-safe-rock fast
+    // mana = 11 total fast_mana but only 6 non-safe → stays at B4.
+    const deck = [
+      tagged('Sol Ring',          ['fast_mana']),
+      tagged('Arcane Signet',     ['fast_mana']),
+      tagged('Mind Stone',        ['fast_mana']),
+      tagged('Fellwar Stone',     ['fast_mana']),
+      tagged('Thought Vessel',    ['fast_mana']),
+    ]
+    for (let i = 0; i < 6; i++) deck.push(tagged(`Fast Mana ${i}`, ['fast_mana']))
+    const { actualBracket } = computeActualBracket(deck, [])
+    expect(actualBracket).toBe(4)
+  })
+
   it('2+ combos escalates to bracket 5', () => {
     const combos = [
       { cards: ['A', 'B'], description: 'one', minimumBracket: 4 },

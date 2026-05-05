@@ -398,6 +398,10 @@ export async function evaluateDeck({ commander, bracket, deck, lensResults, onPr
       rampCap:            maxRampCount(bracket, commander),
       interactionCount,
       interactionFloor:   INTERACTION_FLOOR_BY_BRACKET[bracket],
+      // CMC bonus: commanders ≥7 CMC need more ramp; the clamp respects
+      // this so an 8-CMC deck running 18 land-ramp isn't dinged for
+      // executing its game plan correctly.
+      commanderCmc:       commander?.cmc ?? 0,
     })
     // Belt-and-suspenders: strip false "above bracket" claims when
     // bracket_fit verdict is 'pass'. The eval prompt forbids these phrases

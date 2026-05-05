@@ -158,6 +158,13 @@ export function computeActualBracket(mainDeck, combos) {
 
   const fastManaCount = mainDeck.filter(c => (c.tags ?? []).includes('fast_mana') && !isSafeRock(c.name)).length
   if (fastManaCount >= 3 && bracket < 4) { bracket = 4 }
+  // B4 fast-mana cap. The Tier-C cap (≤4) bounds the cEDH-core fast-mana
+  // pieces (Mana Crypt, Mox Diamond, etc.) but doesn't bound the rest:
+  // Grim Monolith / Mana Vault are also non-safe-rock fast mana, and at
+  // B4 they pile on top of Tier-C. Empirically a deck running 7+
+  // non-safe-rock fast-mana pieces plays at B5 power level even when the
+  // Tier-C count is exactly 4. Bump actual bracket to B5 in that case.
+  if (fastManaCount >= 7 && bracket < 5) { bracket = 5 }
 
   // WotC's bracket spec caps game-changer count at B3 (max 3). More than
   // that is a B4 signal regardless of which specific cards they are.

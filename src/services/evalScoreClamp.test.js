@@ -400,3 +400,62 @@ describe('clampEvalScore — surfaces deckViability', () => {
     expect(result.score).toBe(6)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CMC-aware ramp clamp — high-CMC commanders (Maelstrom Wanderer, Yidris,
+// Atraxa-GU) need MORE ramp to function than the bracket guideline assumes.
+// The clamp respects the same CMC bonus ladder as maxRampCount in
+// bracketRules.js: CMC ≥ 7 → +4, CMC ≥ 5 → +2.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('classifyQualitySignals — CMC-aware ramp', () => {
+  it('does NOT flag ramp_high when an 8-CMC commander runs land-ramp at base cap', () => {
+    // B4 base cap is 16; with +4 bonus the effective cap is 20. 18 land-ramp
+    // is over the base cap but under the effective cap → no clamp.
+    const issues = classifyQualitySignals({
+      bracket: 4, rampCount: 18, rampCap: 16, commanderCmc: 8,
+    })
+    expect(issues.find(i => i.kind === 'ramp_high' || i.kind === 'ramp_runaway')).toBeUndefined()
+  })
+
+  it('flags ramp_high when an 8-CMC commander exceeds even the bonused cap', () => {
+    // Bonused cap = 20; 22 land-ramp is over even that → severe clamp.
+    const issues = classifyQualitySignals({
+      bracket: 4, rampCount: 22, rampCap: 16, commanderCmc: 8,
+    })
+    const issue = issues.find(i => i.kind === 'ramp_high')
+    expect(issue).toBeDefined()
+    expect(issue.detail).toMatch(/with \+4 for 8-CMC commander/)
+  })
+
+  it('flags ramp_runaway only when ramp exceeds 1.5× the bonused cap', () => {
+    // Bonused cap = 20; runaway threshold = 30. 28 land-ramp = severe but
+    // not fatal.
+    const severeOnly = classifyQualitySignals({
+      bracket: 4, rampCount: 28, rampCap: 16, commanderCmc: 8,
+    })
+    expect(severeOnly.find(i => i.kind === 'ramp_runaway')).toBeUndefined()
+    expect(severeOnly.find(i => i.kind === 'ramp_high')).toBeDefined()
+
+    // 32 land-ramp clears the 1.5× = 30 threshold → fatal.
+    const fatal = classifyQualitySignals({
+      bracket: 4, rampCount: 32, rampCap: 16, commanderCmc: 8,
+    })
+    expect(fatal.find(i => i.kind === 'ramp_runaway')).toBeDefined()
+  })
+
+  it('CMC < 5 gets no bonus — original thresholds apply', () => {
+    // B4 cap 16, CMC 4 (no bonus). 18 land-ramp triggers severe.
+    const issues = classifyQualitySignals({
+      bracket: 4, rampCount: 18, rampCap: 16, commanderCmc: 4,
+    })
+    expect(issues.find(i => i.kind === 'ramp_high')).toBeDefined()
+  })
+
+  it('CMC 5-6 gets +2 bonus', () => {
+    // Bonused cap = 18; 17 ramp is now under cap → no flag.
+    const issues = classifyQualitySignals({
+      bracket: 4, rampCount: 17, rampCap: 16, commanderCmc: 5,
+    })
+    expect(issues.find(i => i.kind === 'ramp_high' || i.kind === 'ramp_runaway')).toBeUndefined()
+  })
+})

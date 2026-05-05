@@ -35,8 +35,17 @@ export function classifyQualitySignals({
   rampCap,
   interactionCount,
   interactionFloor,
+  // High-CMC commanders need more ramp to function — Maelstrom Wanderer
+  // (8 CMC) running 16 land-ramp is correct strategy, not a runaway.
+  // When commanderCmc is provided, we relax the ramp_high and
+  // ramp_runaway thresholds so the eval doesn't ding intentional shape.
+  commanderCmc = 0,
 }) {
   const issues = []
+  // Bonus headroom on ramp thresholds. Mirrors the maxRampCount bonus
+  // ladder in bracketRules.js: CMC ≥ 7 gets +4, CMC ≥ 5 gets +2.
+  const rampBonus = commanderCmc >= 7 ? 4 : commanderCmc >= 5 ? 2 : 0
+  const effectiveRampCap = (typeof rampCap === 'number') ? rampCap + rampBonus : rampCap
 
   // FATAL: true filler is more than 2× the bracket cap.
   if (typeof fillerCap === 'number' && fillerCount > fillerCap * 2) {
@@ -58,13 +67,15 @@ export function classifyQualitySignals({
   }
 
   // FATAL: ramp is more than 1.5× the cap. The LLM was scoring decks
-  // with 30 ramp (Slicer B5) at 9. Hard gate prevents that.
-  if (typeof rampCap === 'number' && typeof rampCount === 'number' &&
-      rampCount > rampCap * 1.5) {
+  // with 30 ramp (Slicer B5) at 9. Hard gate prevents that. Uses
+  // effectiveRampCap (with high-CMC bonus) so an 8-CMC commander isn't
+  // clamped for running 18 land-ramp.
+  if (typeof effectiveRampCap === 'number' && typeof rampCount === 'number' &&
+      rampCount > effectiveRampCap * 1.5) {
     issues.push({
       severity: 'fatal',
       kind: 'ramp_runaway',
-      detail: `${rampCount} ramp pieces (cap for B${bracket} is ~${rampCap}). Excess ramp crowds out interaction and wincons.`,
+      detail: `${rampCount} ramp pieces (cap for B${bracket} is ~${effectiveRampCap}${rampBonus > 0 ? ` with +${rampBonus} for ${commanderCmc}-CMC commander` : ''}). Excess ramp crowds out interaction and wincons.`,
     })
   }
 
@@ -92,13 +103,14 @@ export function classifyQualitySignals({
   }
 
   // SEVERE: ramp is over the cap but within 1.5×. Excess ramp = trust
-  // breakage but not a fully broken deck.
-  if (typeof rampCap === 'number' && typeof rampCount === 'number' &&
-      rampCount > rampCap && rampCount <= rampCap * 1.5) {
+  // breakage but not a fully broken deck. Uses effectiveRampCap so
+  // high-CMC commanders get the same bonus as the runaway gate above.
+  if (typeof effectiveRampCap === 'number' && typeof rampCount === 'number' &&
+      rampCount > effectiveRampCap && rampCount <= effectiveRampCap * 1.5) {
     issues.push({
       severity: 'severe',
       kind: 'ramp_high',
-      detail: `${rampCount} ramp pieces (cap for B${bracket} is ~${rampCap}). Excess ramp crowds out interaction and wincons.`,
+      detail: `${rampCount} ramp pieces (cap for B${bracket} is ~${effectiveRampCap}${rampBonus > 0 ? ` with +${rampBonus} for ${commanderCmc}-CMC commander` : ''}). Excess ramp crowds out interaction and wincons.`,
     })
   }
 

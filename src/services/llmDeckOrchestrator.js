@@ -2115,6 +2115,23 @@ function pickDowngradeSwap({ deck, combos, targetBracket, legalNonLands }) {
     }
   }
 
+  // PRIORITY 3d: too much non-safe-rock fast mana at B4. Tier-C bounds
+  // the cEDH-core fast-mana pieces, but Grim Monolith / Mana Vault /
+  // Dockside / etc. can stack on top of the Tier-C cap. 7+ non-safe-rock
+  // fast-mana pieces puts the deck at B5 power level — trim back.
+  if (targetBracket === 4) {
+    const fastCount = deck.filter(c => (c.tags ?? []).includes('fast_mana') && !isSafeRock(c.name)).length
+    if (fastCount >= 7) {
+      const swap = pickSwap(deck, legalNonLands, {
+        isOffender:    (c) => (c.tags ?? []).includes('fast_mana') && !isSafeRock(c.name),
+        isReplacement: (c) => isReplacementSafeAtBracket(c) && !(c.tags ?? []).includes('fast_mana'),
+        offenderRank:  () => 1,
+        reasonText:    () => 'excess fast mana at B4 (cap ~6 non-safe-rock pieces; 7+ plays at B5)',
+      })
+      if (swap) return swap
+    }
+  }
+
   // PRIORITY 4: at B1-B2 specifically, game_changer cards bump bracket to 3
   if (targetBracket <= 2) {
     const gcCount = deck.filter(c => (c.tags ?? []).includes('game_changer')).length
