@@ -108,6 +108,61 @@ describe('commanderToCardTagBoosts', () => {
     expect(boosts.has('token_producer')).toBe(true)
     // Sets dedupe inherently — just verify the set has the expected entries
   })
+
+  // Phase 1: trigger-family card tags should flow from the commander's
+  // cares_about_X mechanic tag.
+  it('cares_about_etb maps to etb_trigger (Phase 1 addition)', () => {
+    const boosts = commanderToCardTagBoosts(['cares_about_etb'])
+    expect(boosts.has('etb_trigger')).toBe(true)
+    expect(boosts.has('etb_payoff')).toBe(true)
+    expect(boosts.has('flicker')).toBe(true)
+    expect(boosts.has('token_producer')).toBe(true)
+  })
+
+  it('cares_about_sacrifice maps to death_trigger (Phase 1 addition)', () => {
+    const boosts = commanderToCardTagBoosts(['cares_about_sacrifice'])
+    expect(boosts.has('death_trigger')).toBe(true)
+  })
+
+  it('cares_about_spells maps to cast_payoff and cost_reduction', () => {
+    const boosts = commanderToCardTagBoosts(['cares_about_spells'])
+    expect(boosts.has('cast_payoff')).toBe(true)
+    expect(boosts.has('cost_reduction')).toBe(true)
+    expect(boosts.has('storm_enabler')).toBe(true)
+  })
+
+  it('cares_about_draw maps to draw_payoff', () => {
+    const boosts = commanderToCardTagBoosts(['cares_about_draw'])
+    expect(boosts.has('draw_payoff')).toBe(true)
+    expect(boosts.has('wheel')).toBe(true)
+  })
+
+  it('cares_about_lands maps to landfall_payoff', () => {
+    const boosts = commanderToCardTagBoosts(['cares_about_lands'])
+    expect(boosts.has('landfall_payoff')).toBe(true)
+    expect(boosts.has('ramp')).toBe(true)
+  })
+
+  it('cares_about_tokens maps to token_payoff', () => {
+    const boosts = commanderToCardTagBoosts(['cares_about_tokens'])
+    expect(boosts.has('token_payoff')).toBe(true)
+    expect(boosts.has('token_producer')).toBe(true)
+    expect(boosts.has('token_doubler')).toBe(true)
+  })
+
+  // Phase 2: resource-strategy tags
+  it('cares_about_graveyard maps to graveyard_fuel + graveyard_castable', () => {
+    const boosts = commanderToCardTagBoosts(['cares_about_graveyard'])
+    expect(boosts.has('graveyard_fuel')).toBe(true)
+    expect(boosts.has('graveyard_castable')).toBe(true)
+    expect(boosts.has('recursion')).toBe(true)
+  })
+
+  it('cares_about_mana maps to treasure_producer (Phase 2)', () => {
+    const boosts = commanderToCardTagBoosts(['cares_about_mana'])
+    expect(boosts.has('treasure_producer')).toBe(true)
+    expect(boosts.has('mana_doubler')).toBe(true)
+  })
 })
 
 describe('mechanicSynergyBonus', () => {

@@ -285,20 +285,25 @@ const COMMANDER_MECHANIC_PATTERNS = [
 // that produce/enable that mechanic. When a commander has X, cards tagged
 // with the mapped values get a synergy bonus.
 const COMMANDER_TAG_TO_CARD_TAGS = {
-  cares_about_sacrifice:     ['sac_outlet', 'sacrifice_payoff', 'token_producer', 'recursion'],
-  cares_about_tokens:        ['token_producer', 'token_doubler', 'attack_payoff', 'mass_pump'],
-  cares_about_draw:          ['wheel', 'lifegain_payoff'],
-  cares_about_spells:        ['storm_enabler', 'copy_effect', 'wheel'],
+  // Phase 1: triggered-ability families. The *_trigger tags identify
+  // cards whose OWN trigger fires (Mulldrifter has etb_trigger). The
+  // *_payoff tags identify cards that fire when OTHERS do the action
+  // (Soul Warden has etb_payoff). Both layers stack for commanders
+  // like Yarok that double anything's trigger.
+  cares_about_sacrifice:     ['sac_outlet', 'sacrifice_payoff', 'death_trigger', 'token_producer', 'recursion'],
+  cares_about_tokens:        ['token_producer', 'token_doubler', 'token_payoff', 'attack_payoff', 'mass_pump'],
+  cares_about_draw:          ['wheel', 'draw_payoff', 'lifegain_payoff'],
+  cares_about_spells:        ['storm_enabler', 'cast_payoff', 'cost_reduction', 'copy_effect', 'wheel'],
   cares_about_attacks:       ['attack_payoff', 'extra_combat', 'mass_pump', 'token_producer'],
   cares_about_counters:      ['counters_payoff', 'counters_doubler', 'proliferate'],
-  cares_about_graveyard:     ['recursion', 'sacrifice_payoff', 'mill', 'graveyard_hate'],
+  cares_about_graveyard:     ['recursion', 'graveyard_fuel', 'graveyard_castable', 'sacrifice_payoff', 'mill', 'graveyard_hate'],
   cares_about_lifegain:      ['lifegain', 'lifegain_payoff'],
   cares_about_lifeloss:      ['lifegain', 'lifegain_payoff', 'sacrifice_payoff'],
-  cares_about_etb:           ['etb_payoff', 'flicker', 'token_producer'],
-  cares_about_mana:          ['mana_doubler'],
+  cares_about_etb:           ['etb_trigger', 'etb_payoff', 'flicker', 'token_producer'],
+  cares_about_mana:          ['mana_doubler', 'treasure_producer'],
   cares_about_discard:       ['wheel'],
   cares_about_combat_phases: ['extra_combat', 'attack_payoff', 'token_producer'],
-  cares_about_artifacts:     ['artifact_payoff', 'token_producer'],
+  cares_about_artifacts:     ['artifact_payoff', 'token_producer', 'treasure_producer'],
   cares_about_enchantments:  ['enchantment_payoff'],
   cares_about_lands:         ['ramp', 'landfall_payoff'],
   cares_about_activated_abilities: ['activated_ability', 'untap', 'mana_doubler'],

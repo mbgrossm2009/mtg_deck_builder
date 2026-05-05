@@ -378,6 +378,151 @@ describe('assignRoles — mechanic tags', () => {
     const result = assignRoles(nonLand, VANILLA_COMMANDER)
     expect(result.tags).toContain('graveyard_hate')
   })
+
+  // ─── Phase 1: trigger-family tags ──────────────────────────────────────
+  it('tags etb_trigger on cards with own ETB ability', () => {
+    const mulldrifter = card({
+      name: 'Mulldrifter',
+      type_line: 'Creature — Elemental',
+      oracle_text: 'Flying. When Mulldrifter enters the battlefield, draw two cards. Evoke {2}{U}.',
+    })
+    const { tags } = assignRoles(mulldrifter, VANILLA_COMMANDER)
+    expect(tags).toContain('etb_trigger')
+    // Should NOT also be tagged etb_payoff (which is the Soul Warden shape)
+    expect(tags).not.toContain('etb_payoff')
+  })
+
+  it('does NOT tag etb_trigger on Soul Warden-style payoff cards', () => {
+    const soulWarden = card({
+      name: 'Soul Warden',
+      type_line: 'Creature — Human Cleric',
+      oracle_text: 'Whenever another creature enters the battlefield, you gain 1 life.',
+    })
+    const { tags } = assignRoles(soulWarden, VANILLA_COMMANDER)
+    expect(tags).toContain('etb_payoff')
+    expect(tags).not.toContain('etb_trigger')
+  })
+
+  it('tags death_trigger on cards with own dies trigger', () => {
+    const wurmcoil = card({
+      name: 'Wurmcoil Engine',
+      type_line: 'Artifact Creature — Wurm',
+      oracle_text: 'Deathtouch, lifelink. When Wurmcoil Engine dies, create two tokens.',
+    })
+    const { tags } = assignRoles(wurmcoil, VANILLA_COMMANDER)
+    expect(tags).toContain('death_trigger')
+  })
+
+  it('does NOT tag death_trigger on Blood Artist-style payoff cards', () => {
+    const bloodArtist = card({
+      name: 'Blood Artist',
+      type_line: 'Creature — Vampire',
+      oracle_text: 'Whenever Blood Artist or another creature dies, target player loses 1 life and you gain 1 life.',
+    })
+    const { tags } = assignRoles(bloodArtist, VANILLA_COMMANDER)
+    expect(tags).toContain('sacrifice_payoff')
+  })
+
+  it('tags cast_payoff on Talrand-style cards', () => {
+    const talrand = card({
+      name: 'Talrand, Sky Summoner',
+      type_line: 'Legendary Creature — Merfolk Wizard',
+      oracle_text: 'Whenever you cast an instant or sorcery spell, create a 2/2 blue Drake creature token with flying.',
+    })
+    const { tags } = assignRoles(talrand, VANILLA_COMMANDER)
+    expect(tags).toContain('cast_payoff')
+  })
+
+  it('tags landfall_payoff on Lotus Cobra', () => {
+    const lotusCobra = card({
+      name: 'Lotus Cobra',
+      type_line: 'Creature — Snake',
+      oracle_text: 'Landfall — Whenever a land you control enters, you may add one mana of any color.',
+    })
+    const { tags } = assignRoles(lotusCobra, VANILLA_COMMANDER)
+    expect(tags).toContain('landfall_payoff')
+  })
+
+  it('tags draw_payoff on Nekusar', () => {
+    const nekusar = card({
+      name: 'Nekusar, the Mindrazer',
+      type_line: 'Legendary Creature — Zombie Wizard',
+      oracle_text: 'At the beginning of each player\'s draw step, that player draws an additional card. Whenever an opponent draws a card, Nekusar deals 1 damage to that player.',
+    })
+    const { tags } = assignRoles(nekusar, VANILLA_COMMANDER)
+    expect(tags).toContain('draw_payoff')
+  })
+
+  it('tags token_payoff on Cathars\' Crusade', () => {
+    const cathars = card({
+      name: 'Cathars\' Crusade',
+      type_line: 'Enchantment',
+      oracle_text: 'Whenever a creature enters the battlefield under your control, put a +1/+1 counter on each creature you control.',
+    })
+    const { tags } = assignRoles(cathars, VANILLA_COMMANDER)
+    // This is etb_payoff via "whenever a creature enters" — token_payoff
+    // is for "whenever a token enters / whenever you create a token".
+    expect(tags).toContain('etb_payoff')
+
+    // Adrix and Nev style is the cleaner token_payoff hit.
+    const adrix = card({
+      name: 'Adrix and Nev, Twincasters',
+      type_line: 'Legendary Creature — Merfolk Wizard',
+      oracle_text: 'If one or more tokens would be created under your control, twice that many of those tokens are created instead.',
+    })
+    const adrixTags = assignRoles(adrix, VANILLA_COMMANDER).tags
+    expect(adrixTags).toContain('token_doubler')
+  })
+
+  // ─── Phase 2: resource-strategy tags ───────────────────────────────────
+  it('tags treasure_producer on Goldspan Dragon', () => {
+    const goldspan = card({
+      name: 'Goldspan Dragon',
+      type_line: 'Creature — Dragon',
+      oracle_text: 'Whenever Goldspan Dragon attacks or becomes the target of a spell, create a Treasure token.',
+    })
+    const { tags } = assignRoles(goldspan, VANILLA_COMMANDER)
+    expect(tags).toContain('treasure_producer')
+  })
+
+  it('tags graveyard_fuel on self-mill cards', () => {
+    const stitcher = card({
+      name: 'Stitcher\'s Supplier',
+      type_line: 'Creature — Zombie',
+      oracle_text: 'When Stitcher\'s Supplier enters the battlefield or dies, mill three cards.',
+    })
+    const { tags } = assignRoles(stitcher, VANILLA_COMMANDER)
+    expect(tags).toContain('graveyard_fuel')
+    // Stitcher also has BOTH etb_trigger AND death_trigger — combined trigger.
+    expect(tags).toContain('etb_trigger')
+    expect(tags).toContain('death_trigger')
+  })
+
+  it('tags graveyard_castable on flashback cards', () => {
+    const cremation = card({
+      name: 'Faithless Looting',
+      type_line: 'Sorcery',
+      oracle_text: 'Draw two cards, then discard two cards. Flashback {2}{R}.',
+    })
+    const { tags } = assignRoles(cremation, VANILLA_COMMANDER)
+    expect(tags).toContain('graveyard_castable')
+  })
+
+  it('tags cost_reduction on convoke / improvise / affinity / delve cards', () => {
+    const chord = card({
+      name: 'Chord of Calling',
+      type_line: 'Instant',
+      oracle_text: 'Convoke. Search your library for a creature card with mana value X or less.',
+    })
+    expect(assignRoles(chord, VANILLA_COMMANDER).tags).toContain('cost_reduction')
+
+    const tezzeret = card({
+      name: 'Tezzeret\'s Touch',
+      type_line: 'Enchantment — Aura',
+      oracle_text: 'Affinity for artifacts. Enchant artifact.',
+    })
+    expect(assignRoles(tezzeret, VANILLA_COMMANDER).tags).toContain('cost_reduction')
+  })
 })
 
 // ─── Tribal tag from commander subtypes ──────────────────────────────────────

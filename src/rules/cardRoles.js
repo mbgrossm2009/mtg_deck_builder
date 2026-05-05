@@ -373,6 +373,141 @@ const MECHANIC_TAG_RULES = [
     ],
   },
   {
+    // ETB trigger ON THIS CARD — "When CARDNAME enters, do X".
+    // Distinct from etb_payoff (which fires on OTHER cards entering).
+    // These are the cards Yarok, Panharmonicon, Brago want to play:
+    // Mulldrifter, Solemn Simulacrum, Reclamation Sage, Eternal Witness —
+    // each triggers on ITS OWN ETB. Doubling those triggers is the plan.
+    //
+    // Pattern uses "When ... enters" (one-shot self-trigger) vs
+    // "Whenever ... enters" (recurring trigger off others). The two
+    // shapes cleanly split etb_trigger vs etb_payoff.
+    tag: 'etb_trigger',
+    patterns: [
+      /\bwhen [^.]*?\benters\b/,
+    ],
+  },
+  {
+    // Death trigger ON THIS CARD — "When CARDNAME dies, do X".
+    // For Korvold, Marchesa, Karador-style commanders that want their own
+    // creatures to die for value (Reveillark, Solemn Simulacrum dies →
+    // draw, Wurmcoil Engine dies → tokens). Distinct from
+    // sacrifice_payoff (which fires on OTHER creatures dying).
+    tag: 'death_trigger',
+    patterns: [
+      /\bwhen [^.]*?\bdies\b/,
+      /\bwhen [^.]*?\bis put into a graveyard from the battlefield\b/,
+    ],
+  },
+  {
+    // Cast payoff — "Whenever you cast X, do Y" on the card.
+    // Talrand makes drakes when you cast instants/sorceries; Niv-Mizzet
+    // damages on draws-from-spells; Storm-Kiln Artist treasure-creates.
+    // For spellslinger commanders (Mizzix, Veyran, Krark, Talrand).
+    tag: 'cast_payoff',
+    patterns: [
+      /whenever you cast (?:a|an|your)/,
+      /whenever a player casts (?:a|an)/,
+      /whenever you copy (?:a|an|your)/,
+    ],
+  },
+  {
+    // Landfall payoff — card has landfall ability or "whenever a land
+    // enters" trigger. Lotus Cobra adds mana, Avenger of Zendikar makes
+    // plants, Retreat to Hagra drains. For Lord Windgrace, Omnath,
+    // Tatyova, Aesi.
+    tag: 'landfall_payoff',
+    patterns: [
+      /\blandfall\b/,
+      /whenever a land enters[^.]*under your control/,
+      /whenever a land you control enters/,
+    ],
+  },
+  {
+    // Draw payoff — card triggers when a player draws (you OR opponents).
+    // Nekusar damages on draws, Psychosis Crawler drains, Niv-Mizzet
+    // pings on draws. For Nekusar, Niv-Mizzet, Fynn-class commanders.
+    tag: 'draw_payoff',
+    patterns: [
+      /whenever you draw/,
+      /whenever a player draws/,
+      /whenever an opponent draws/,
+      /whenever .* draws? (?:a|one or more) cards?/,
+    ],
+  },
+  {
+    // Token payoff — card triggers when YOU create tokens, OR scales
+    // with token count. Cathars' Crusade puts +1/+1 counters, Adrix and
+    // Nev double tokens, Cryptolith Rite turns tokens into mana.
+    tag: 'token_payoff',
+    patterns: [
+      /whenever (?:a |one or more )?(?:creature )?tokens? (?:you control )?enters?/,
+      /whenever you create (?:a|one or more|that)/,
+      /for each (?:creature )?token (?:you control)/,
+    ],
+  },
+  {
+    // Treasure-token producer. Goldspan, Dockside, Brass's Bounty,
+    // Smothering Tithe. Useful for big-mana, storm, treasure-themed
+    // commanders.
+    tag: 'treasure_producer',
+    patterns: [
+      /create [^.]*\btreasure\b[^.]*tokens?/,
+      /create a treasure token/,
+    ],
+  },
+  {
+    // Treasure-token payoff — cards that get value from treasures
+    // beyond the mana (sacrifice for damage, count treasures for power).
+    tag: 'treasure_payoff',
+    patterns: [
+      /whenever .* treasure/,
+      /sacrifice a treasure[^:]*:/,
+      /for each treasure/,
+    ],
+  },
+  {
+    // Self-mill / self-discard for graveyard fuel. Stinkweed Imp,
+    // Hermit Druid, Stitcher's Supplier. Distinct from generic mill
+    // (which targets opponents) — this fills YOUR graveyard.
+    // For graveyard commanders: Karador, Muldrotha, Sidisi, Meren.
+    tag: 'graveyard_fuel',
+    patterns: [
+      /mill (?:a|two|three|four|five|six|seven|x|that many) cards?/,
+      /put (?:the )?top [\w\d ]* cards? of your library into your graveyard/,
+      /\bdredge \d+/,
+    ],
+  },
+  {
+    // Castable-from-graveyard. Flashback, escape, jump-start, unearth,
+    // disturb — all let cards cast from graveyard. Synergistic with
+    // graveyard fuel and recursion strategies.
+    tag: 'graveyard_castable',
+    patterns: [
+      /\bflashback\b/,
+      /\bescape\b—/,
+      /\bjump-start\b/,
+      /\bunearth\b/,
+      /\bdisturb\b/,
+      /\bembalm\b/,
+      /\beternalize\b/,
+    ],
+  },
+  {
+    // Cost reduction. "Spells cost {N} less", convoke, improvise,
+    // affinity, delve. For Mizzix, Urza, Emry, Animar — commanders
+    // that scale with cheap spells or alt-payment costs.
+    tag: 'cost_reduction',
+    patterns: [
+      /spells (?:you cast )?cost \{?[\dx]+\}? less/,
+      /(?:creature|instant|sorcery|noncreature|artifact|enchantment)[^.]*spells you cast cost \{?[\dx]+\}? less/,
+      /\bconvoke\b/,
+      /\bimprovise\b/,
+      /\baffinity for/,
+      /\bdelve\b/,
+    ],
+  },
+  {
     tag: 'lifegain',
     patterns: [
       /you gain \d+ life/,
