@@ -1421,6 +1421,20 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       }
       // Re-run optimizer to clean up anything the LLM didn't catch.
       runOptimizer()
+      // Re-run mechanical bracket-downgrade. The LLM may have introduced
+      // new combo halves or bracket-bumpers; the deterministic downgrade
+      // catches those even when the LLM doesn't realize the swap pushed
+      // actualBracket back over target.
+      if (bracket <= 4) {
+        const followupSwaps = downgradeBracketIfOverShot({
+          deck, targetBracket: bracket, legalNonLands, usedNames,
+        })
+        for (const s of followupSwaps) {
+          bracketDowngradeRemoved.add(s.out.toLowerCase())
+          explanation.push(`  Followup downgrade: -${s.out} → +${s.in} (${s.reason})`)
+        }
+        if (followupSwaps.length > 0) runOptimizer()
+      }
 
       if (retryApplied.length === 0) {
         explanation.push(`Validation retry ${attempt + 1}: LLM proposed no usable swaps; stopping.`)
@@ -1500,7 +1514,24 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   // removal. Drop count-based warnings whose claim is no longer true
   // against the final deck. Also drop "no clear win conditions" if a
   // multi-card pattern was detected.
-  const filteredWarnings = filterStaleCountWarnings(warnings, criticalCardCounts, detectedWincons)
+  // Pass winconFloor + landRamp/rampCap context so the filter can strip
+  // stale "named wincon", "filler cap", "land-ramp", and "interaction
+  // floor" warnings when the post-optimizer state actually meets the bar.
+  const finalFastMana = deck.filter(c => (c.tags ?? []).includes('fast_mana')).length
+  const finalLandRamp = (criticalCardCounts.ramp ?? 0) - finalFastMana
+  const finalRampCap = maxRampCount(bracket, commander)
+  const enhancedCounts = {
+    ...criticalCardCounts,
+    filler: countRoles(deck).filler,
+    landRamp: finalLandRamp,
+    rampCap: finalRampCap,
+  }
+  const filteredWarnings = filterStaleCountWarnings(
+    warnings,
+    enhancedCounts,
+    detectedWincons,
+    { winconFloor: MIN_WINCONS_BY_BRACKET[bracket] ?? 1 },
+  )
 
   // Knowledge-layer evaluation. Run all lenses against the finished deck
   // and surface their structured results in the return payload. Existing
@@ -1638,13 +1669,19 @@ function countCriticalCards(deck) {
 //      actual count above the threshold by the time we return.
 //   2. "No clear win conditions" — drop if a multi-card pattern was
 //      detected (Krenko + Impact Tremors IS a win plan).
-function filterStaleCountWarnings(warnings, counts, detectedWincons) {
+function filterStaleCountWarnings(warnings, counts, detectedWincons, opts = {}) {
   if (!counts) return warnings
   const RAMP_FLOOR = 6
   const REMOVAL_FLOOR = 5     // matches deckValidator threshold
   const DRAW_FLOOR = 6
   const hasMultiCardWincon = (detectedWincons?.length ?? 0) > 0
   const hasAnyWincon = (counts.wincons ?? 0) >= 1 || hasMultiCardWincon
+  // Wincon floor passed by caller — usually MIN_WINCONS_BY_BRACKET[bracket].
+  // Used to strip "Only N named wincon in final deck" warnings when the
+  // final wincon count is now at or above floor (the optimizer / validation
+  // retry added wincons after the warning was emitted).
+  const winconFloor = opts.winconFloor ?? 0
+  const namedWinconCount = counts.namedWincons ?? counts.wincons ?? 0
 
   return warnings.filter(w => {
     const msg = typeof w === 'object' ? w.message : w
@@ -1665,6 +1702,31 @@ function filterStaleCountWarnings(warnings, counts, detectedWincons) {
 
     // "No clear win conditions" — drop if any wincon (single-card OR pattern).
     if (/no clear win conditions/i.test(msg) && hasAnyWincon) return false
+
+    // "Only N named wincon in (deck|final deck)" — drop if final count is
+    // at floor. The wincon backstop emits this BEFORE the optimizer +
+    // validation-retry; if those passes added wincons, the warning is stale.
+    if (/named wincon.*in (final )?deck/i.test(msg) && namedWinconCount >= winconFloor) return false
+
+    // "N filler cards at B{x}" — drop if final filler count is at/under cap.
+    const fillerMatch = msg.match(/(\d+) filler cards at B(\d)/i)
+    if (fillerMatch) {
+      const FILLER_CAPS = { 1: 12, 2: 9, 3: 6, 4: 5, 5: 3 }
+      const cap = FILLER_CAPS[parseInt(fillerMatch[2], 10)] ?? Infinity
+      if ((counts.filler ?? 0) <= cap) return false
+    }
+
+    // "N land-ramp pieces at B{x}" — drop if final land-ramp count is at/under cap.
+    const landRampMatch = msg.match(/(\d+) land-ramp pieces at B/i)
+    if (landRampMatch && (counts.landRamp ?? Infinity) <= (counts.rampCap ?? -1)) return false
+
+    // "Only N interaction pieces at B{x}" — drop if final count is at floor.
+    const interactionMatch = msg.match(/Only (\d+) interaction pieces at B(\d)/i)
+    if (interactionMatch) {
+      const FLOORS = { 1: 4, 2: 5, 3: 7, 4: 8, 5: 10 }
+      const floor = FLOORS[parseInt(interactionMatch[2], 10)] ?? 0
+      if ((counts.interaction ?? 0) >= floor) return false
+    }
 
     return true
   })
