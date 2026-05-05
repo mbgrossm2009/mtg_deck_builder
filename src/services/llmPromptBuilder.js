@@ -75,7 +75,7 @@ function compactCommander(commander) {
 // With these, every tribal lord becomes a global anthem — Lord of Atlantis is
 // "Other creatures you control get +1/+1" because every creature is a Merfolk.
 // We surface this to the LLM as a flag so it knows to abuse tribal_lord cards.
-function isTypeChangingCommander(commander) {
+export function isTypeChangingCommander(commander) {
   const text = (commander?.oracle_text ?? '').toLowerCase()
   return (
     /are every creature type/.test(text) ||
@@ -1071,7 +1071,8 @@ export function buildCritiquePrompt({
     (validationFindings.errors?.length ?? 0) > 0 ||
     (validationFindings.warnings?.length ?? 0) > 0 ||
     Object.keys(validationFindings.deficits ?? {}).length > 0 ||
-    Object.keys(validationFindings.surpluses ?? {}).length > 0
+    Object.keys(validationFindings.surpluses ?? {}).length > 0 ||
+    !!validationFindings.bracketOvershoot
   )
 
   const validationSection = hasFindings ? `
@@ -1090,14 +1091,24 @@ ${(validationFindings.errors ?? []).length > 0
   : ''}${Object.keys(validationFindings.surpluses ?? {}).length > 0
   ? 'Role surpluses (need LESS of these — these are good "out" candidates for swaps):\n' +
     Object.entries(validationFindings.surpluses).map(([role, n]) => `  - ${role}: ${n} over cap`).join('\n') + '\n'
+  : ''}${validationFindings.bracketOvershoot
+  ? `Bracket overshoot — deck is computed at bracket ${validationFindings.bracketOvershoot.actual} but the user targeted ${validationFindings.bracketOvershoot.target}. The following cards are flagged as bracket-bumpers and should be swapped OUT for non-bumpers:\n` +
+    (validationFindings.bracketOvershoot.flaggedCards ?? []).map(n => `  - ${n}`).join('\n') + '\n' +
+    `Replacements MUST NOT be tutors (above soft tutors), fast mana (above safe rocks), or game-changers when targeting B${validationFindings.bracketOvershoot.target} or below. Don't swap one bracket-bumper for another.\n`
   : ''}
 HOW TO FIX:
 - For each deficit role, find the highest-impact card in available_pool with
   that role and propose swapping it IN for a card in a surplus category
-  (filler-primary cards, or excess land-ramp pieces) that's currently in the deck.
+  (filler-primary cards, excess land-ramp pieces, or excess tribal_lord
+  pieces) that's currently in the deck.
 - Wincons include cards with role "win_condition" AND cards tagged as
   explosive_finisher (Craterhoof Behemoth, Triumph of the Hordes, etc.).
 - Interaction = removal + wipe + counterspells. All count toward the floor.
+- For NON-type-changing tribal commanders (regular zombie/elf/goblin
+  tribal), cap tribal_lord cards at ~5. Lords stack but face diminishing
+  returns past 5; further lords compete with more tribe members,
+  reanimation, and removal. Type-changing commanders (Omo, Maskwood Nexus,
+  Mistform Ultimus, Arcane Adaptation) are exempt — load up on lords there.
 - Don't propose more than 5 swaps per response, but ensure every gap above
   is addressed across the full set of swaps you propose.
 ═══════════════════════════════════════════════════════════════════════════

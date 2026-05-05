@@ -7,6 +7,16 @@ import { countRoles } from './deckValidator'
 const INTERACTION_FLOOR = { 1: 4, 2: 5, 3: 7, 4: 8, 5: 10 }
 const FILLER_THRESHOLD  = { 1: 12, 2: 9, 3: 6, 4: 5, 5: 3 }
 
+// Lord cap for non-type-changing tribal commanders. Lords stack
+// (Zombie Master + Lord of the Undead = +2/+2 to every zombie), but
+// after ~5 lords the marginal lord competes with: more tribe members
+// to buff, reanimation, and removal. 5 is the standard sweet spot.
+//
+// Type-changing commanders (Omo, Maskwood Nexus, Mistform Ultimus)
+// are exempt — every lord is a global anthem there, so loading up is
+// the abuse plan. The orchestrator passes typeChanging: true to skip.
+const LORD_CAP_NON_TYPE_CHANGING = 5
+
 // Default lock flags. Cards carrying any of these were placed by an
 // upstream backstop (mana solver, bracket staples, tribal floor, wincon
 // floor) and must not be removed by the optimizer — doing so would
@@ -73,6 +83,15 @@ export function computeValidationGaps(deck, commander, bracket, targetCounts = {
   const rampOverCap = Math.max(0, landRamp - rampCap)
   if (rampOverCap > 0) surpluses.land_ramp = rampOverCap
 
+  // Lord surplus only applies when the caller declares this is a tribal
+  // commander AND it's NOT type-changing. Without that context we assume
+  // lord count is irrelevant (e.g. a non-tribal deck with 1-2 anthems).
+  if (options.tribalContext?.tribe && !options.tribalContext?.typeChanging) {
+    const cap = options.tribalContext.lordCap ?? LORD_CAP_NON_TYPE_CHANGING
+    const lordCount = deck.filter(c => (c.tags ?? []).includes('tribal_lord')).length
+    if (lordCount > cap) surpluses.tribal_lord = lordCount - cap
+  }
+
   return { deficits, surpluses, counts }
 }
 
@@ -109,10 +128,12 @@ export function optimizeDeckToValidation({
   maxPasses = 5,
   lockFlags = [],
   winConFloor,
+  tribalContext = null,
 }) {
   const allLockFlags = [...DEFAULT_LOCK_FLAGS, ...lockFlags]
   const isLocked = (card) => allLockFlags.some(f => card[f])
   const isLandLike = (card) => card.isBasicLand || (card.roles ?? []).includes('land')
+  const isLord = (card) => (card.tags ?? []).includes('tribal_lord')
 
   let totalSwaps = 0
 
@@ -128,7 +149,7 @@ export function optimizeDeckToValidation({
 
   for (let pass = 0; pass < maxPasses; pass++) {
     const { deficits, surpluses } = computeValidationGaps(
-      deck, commander, bracket, targetCounts, { winConFloor }
+      deck, commander, bracket, targetCounts, { winConFloor, tribalContext }
     )
     if (Object.keys(deficits).length === 0 && Object.keys(surpluses).length === 0) break
 
@@ -157,12 +178,21 @@ export function optimizeDeckToValidation({
 
       const indexed = scoredDeck.map((c, i) => ({ c, i, score: c.score ?? 0 }))
       const tier1 = indexed.filter(x => baseFilter(x) && (x.c.roles?.[0] ?? 'filler') === 'filler')
-      const tier2 = surpluses.land_ramp > 0
+      const tier2land = surpluses.land_ramp > 0
         ? indexed.filter(x => baseFilter(x)
             && (x.c.roles?.[0] ?? 'filler') !== 'filler'
             && (x.c.roles ?? []).includes('ramp')
             && !(x.c.tags ?? []).includes('fast_mana'))
         : []
+      // Excess lords are also Tier-2 removable when the tribal context
+      // declares a cap. Combat-tribal needs ~5 lords; further lords
+      // compete with tribe members + reanimation + interaction.
+      const tier2lord = surpluses.tribal_lord > 0
+        ? indexed.filter(x => baseFilter(x)
+            && (x.c.roles?.[0] ?? 'filler') !== 'filler'
+            && isLord(x.c))
+        : []
+      const tier2 = [...tier2land, ...tier2lord]
       const tier12Set = new Set([...tier1, ...tier2].map(x => x.i))
       const tier3 = indexed.filter(x => baseFilter(x) && !tier12Set.has(x.i))
 
@@ -199,7 +229,7 @@ export function optimizeDeckToValidation({
 
     // ─── Phase B: trim surpluses standalone ──────────────────────────
     // Recompute gaps after Phase A — surpluses may have shrunk.
-    const postA = computeValidationGaps(deck, commander, bracket, targetCounts, { winConFloor })
+    const postA = computeValidationGaps(deck, commander, bracket, targetCounts, { winConFloor, tribalContext })
 
     if (Object.keys(postA.surpluses).length > 0) {
       const scoredAfterA = rescore(deck)
@@ -231,8 +261,15 @@ export function optimizeDeckToValidation({
             .sort((a, b) => a.score - b.score)
             .slice(0, postA.surpluses.land_ramp)
         : []
+      // Excess lords (over the tribal lord cap), lowest score first.
+      const excessLords = postA.surpluses.tribal_lord > 0
+        ? indexedA
+            .filter(x => !isLandLike(x.c) && !isLocked(x.c) && isLord(x.c))
+            .sort((a, b) => a.score - b.score)
+            .slice(0, postA.surpluses.tribal_lord)
+        : []
 
-      const trimSlots = [...excessFiller, ...excessLandRamp]
+      const trimSlots = [...excessFiller, ...excessLandRamp, ...excessLords]
       let candidateIdx = 0
       for (const slot of trimSlots) {
         if (candidateIdx >= candidatePool.length) break
@@ -241,8 +278,10 @@ export function optimizeDeckToValidation({
         // swapping land-ramp for more land-ramp is a no-op.
         const isLandRampCand = (inc.roles ?? []).includes('ramp') && !(inc.tags ?? []).includes('fast_mana')
         const isFillerCand = (inc.roles?.[0] ?? 'filler') === 'filler'
+        const isLordCand = isLord(inc)
         if (isFillerCand) { candidateIdx++; continue }
         if ((slot.c.roles ?? []).includes('ramp') && isLandRampCand) { candidateIdx++; continue }
+        if (isLord(slot.c) && isLordCand) { candidateIdx++; continue }
         commitSwap(inc, slot.c, slot.i, 'trim', slot.score)
         candidateIdx++
         swappedThisPass++

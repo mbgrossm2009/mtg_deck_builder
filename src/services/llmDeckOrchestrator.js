@@ -37,6 +37,7 @@ import { generateDeck } from '../rules/deckGenerator'
 import { scoreCard } from '../rules/deckScorer'
 import { cardMatchesArchetype } from '../rules/archetypeRules'
 import { generateDeckWithLLM, critiqueDeck } from './llmDeckService'
+import { isTypeChangingCommander } from './llmPromptBuilder'
 import { validateLLMDeckResponse } from '../rules/llmDeckValidator'
 import { solveManaBase } from '../rules/manaBaseSolver'
 import { buildSkeleton, buildSkeletonFromMoxfield, mergeSkeletons, skeletonRoleCounts } from '../rules/deckSkeleton'
@@ -823,10 +824,18 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     if (inDeckTribal < TRIBAL_FLOOR) {
       const needed = TRIBAL_FLOOR - inDeckTribal
       const inDeckNames = new Set(deck.map(c => c.name.toLowerCase()))
-      // On-tribe candidates from the legal pool not yet in deck.
-      const tribalCandidates = legalNonLands.filter(c =>
+      // On-tribe candidates from the legal pool not yet in deck. For
+      // non-type-changing commanders, prefer non-lord tribe members
+      // first — the deck's existing lord count usually doesn't need
+      // more anthems, just more bodies to buff.
+      const allTribalCandidates = legalNonLands.filter(c =>
         isOnTribe(c) && !inDeckNames.has(c.name.toLowerCase())
       )
+      const isLord = (c) => (c.tags ?? []).includes('tribal_lord')
+      const inDeckLordCount = deck.filter(c => isLord(c)).length
+      const tribalCandidates = (!isTypeChangingCommander(commander) && inDeckLordCount >= 5)
+        ? [...allTribalCandidates.filter(c => !isLord(c)), ...allTribalCandidates.filter(c => isLord(c))]
+        : allTribalCandidates
 
       let added = 0
       for (const tribal of tribalCandidates) {
@@ -1112,13 +1121,22 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       // to prioritize swaps; the LLM is told to address every listed gap.
       const iterValidation = validateDeckAtBracket(deck, commander, bracket)
       const iterMinWincons = ({ 1: 1, 2: 2, 3: 2, 4: 3, 5: 2 }[bracket]) ?? 1
-      const iterGaps = computeValidationGaps(deck, commander, bracket, fullTargets, { winConFloor: iterMinWincons })
+      const iterTribalArch = strategyContext.archetypes?.find(a => a.tribe)
+      const iterTribalContext = iterTribalArch
+        ? { tribe: iterTribalArch.tribe, typeChanging: isTypeChangingCommander(commander) }
+        : null
+      const iterGaps = computeValidationGaps(deck, commander, bracket, fullTargets, { winConFloor: iterMinWincons, tribalContext: iterTribalContext })
+      const iterCombosForCritique = detectCombos(deck.map(c => c.name))
+      const iterBracketCheck = computeActualBracket(deck, iterCombosForCritique)
       const validationFindings = {
         errors: iterValidation.errors,
         warnings: iterValidation.warnings,
         deficits: iterGaps.deficits,
         surpluses: iterGaps.surpluses,
         counts: iterGaps.counts,
+        bracketOvershoot: iterBracketCheck.actualBracket > bracket
+          ? { actual: iterBracketCheck.actualBracket, target: bracket, flaggedCards: iterBracketCheck.flaggedCards }
+          : null,
       }
 
       const iterResult = await critiqueDeck({
@@ -1284,6 +1302,16 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       !bracketDowngradeRemoved.has(c.name.toLowerCase())
     )
   }
+  // Tribal context for the lord-cap surplus check. Only fires when the
+  // commander has a tribal archetype AND isn't type-changing — Omo /
+  // Maskwood-style commanders WANT lots of lords (every lord becomes a
+  // global anthem there).
+  const optimizerTribalContext = (() => {
+    const tribalArch = strategyContext.archetypes?.find(a => a.tribe)
+    if (!tribalArch) return null
+    if (isTypeChangingCommander(commander)) return { tribe: tribalArch.tribe, typeChanging: true }
+    return { tribe: tribalArch.tribe, typeChanging: false }
+  })()
   const runOptimizer = () => {
     const swaps = optimizeDeckToValidation({
       deck,
@@ -1295,6 +1323,7 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
       usedNames,
       explanation,
       winConFloor: MIN_WINCONS_BY_BRACKET[bracket] ?? 1,
+      tribalContext: optimizerTribalContext,
     })
     if (swaps > 0) explanation.push(`Validation optimizer ran ${swaps} swap${swaps !== 1 ? 's' : ''} to close role gaps.`)
     return swaps
@@ -1321,19 +1350,33 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
   if (!llmFailed) {
     for (let attempt = 0; attempt < MAX_VALIDATION_RETRIES; attempt++) {
       const v = validateDeckAtBracket(deck, commander, bracket)
-      const stillBad = v.errors.length > 0 || v.warnings.some(isCountFloorWarning)
+      // Compute current actual bracket — if the deck overshoots target,
+      // count it as a validation failure even when count floors are met.
+      // The LLM critique gets the flagged cards in its context so it can
+      // suggest swaps the mechanical downgrade pass missed (e.g. when
+      // the offender is locked by bracket-staples like Sensei's Top, or
+      // when a combo formed only after the downgrade pass ran).
+      const iterCombos = detectCombos(deck.map(c => c.name))
+      const iterActualBracket = computeActualBracket(deck, iterCombos).actualBracket
+      const iterFlaggedCards  = computeActualBracket(deck, iterCombos).flaggedCards
+      const overshoot = iterActualBracket > bracket
+      const stillBad = v.errors.length > 0 || v.warnings.some(isCountFloorWarning) || overshoot
       if (!stillBad) break
 
       const winConFloor = MIN_WINCONS_BY_BRACKET[bracket] ?? 1
-      const gaps = computeValidationGaps(deck, commander, bracket, fullTargets, { winConFloor })
-      if (Object.keys(gaps.deficits).length === 0 && Object.keys(gaps.surpluses).length === 0) {
-        // Validator complains but our gap math sees nothing actionable —
-        // likely a non-count check (color identity, banned). LLM can't fix
-        // that mechanically; bail out.
+      const gaps = computeValidationGaps(deck, commander, bracket, fullTargets, { winConFloor, tribalContext: optimizerTribalContext })
+      const noActionable =
+        Object.keys(gaps.deficits).length === 0 &&
+        Object.keys(gaps.surpluses).length === 0 &&
+        !overshoot
+      if (noActionable) {
+        // Validator complains but our gap math AND bracket math see
+        // nothing actionable — likely a non-fixable check (color identity,
+        // banned). LLM can't fix that mechanically; bail out.
         break
       }
 
-      explanation.push(`Validation retry ${attempt + 1}/${MAX_VALIDATION_RETRIES}: deck still fails count checks; calling LLM critique with validation context.`)
+      explanation.push(`Validation retry ${attempt + 1}/${MAX_VALIDATION_RETRIES}: deck still fails ${overshoot ? `bracket fit (actualBracket ${iterActualBracket} > target ${bracket})` : 'count checks'}; calling LLM critique with validation context.`)
 
       const deckForRetry = deck.map(c => ({
         name: c.name,
@@ -1362,6 +1405,9 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
           deficits: gaps.deficits,
           surpluses: gaps.surpluses,
           counts: gaps.counts,
+          bracketOvershoot: overshoot
+            ? { actual: iterActualBracket, target: bracket, flaggedCards: iterFlaggedCards }
+            : null,
         },
       })
       if (!retryResult) {
@@ -1479,7 +1525,8 @@ export async function generateDeckWithLLMAssist(bracket = 3, primaryArchetypeId 
     /land-ramp pieces/i.test(w) ||
     /No clear win conditions/i.test(w)
   )
-  const validationStatus = errors.length === 0 && finalCountWarnings.length === 0
+  const bracketOvershoot = actualBracket > bracket
+  const validationStatus = errors.length === 0 && finalCountWarnings.length === 0 && !bracketOvershoot
     ? 'valid'
     : 'best_effort'
 
